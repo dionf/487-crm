@@ -23,6 +23,7 @@ export async function GET(request) {
   console.log(`[poll-inbox] Starting IMAP poll... host=${imapHost} user=${imapUser} port=${imapPort} pass=${imapPass ? `SET(${imapPass.length}chars)` : "MISSING"}`);
 
   const results = [];
+  const imapLogs = [];
   let client;
 
   try {
@@ -36,19 +37,17 @@ export async function GET(request) {
         pass: imapPass,
       },
       logger: {
-        debug: (info) => console.log("[IMAP debug]", info?.message || info),
-        info: (info) => console.log("[IMAP info]", info?.message || info),
-        warn: (info) => console.warn("[IMAP warn]", info?.message || info),
-        error: (info) => console.error("[IMAP error]", info?.message || info),
+        debug: (info) => imapLogs.push({ level: "debug", msg: info?.message || String(info) }),
+        info: (info) => imapLogs.push({ level: "info", msg: info?.message || String(info) }),
+        warn: (info) => imapLogs.push({ level: "warn", msg: info?.message || String(info) }),
+        error: (info) => imapLogs.push({ level: "error", msg: info?.message || String(info) }),
       },
       tls: { rejectUnauthorized: false },
       connectTimeout: 30000,
       greetingTimeout: 15000,
     });
 
-    console.log("[poll-inbox] Connecting to IMAP...");
     await client.connect();
-    console.log("[poll-inbox] Connected!");
 
     // Open INBOX
     const lock = await client.getMailboxLock("INBOX");
@@ -251,7 +250,7 @@ export async function GET(request) {
     });
 
     return Response.json(
-      { error: "IMAP verbinding mislukt", detail: connError.message, code: connError.code, responseCode: connError.responseCode },
+      { error: "IMAP verbinding mislukt", detail: connError.message, code: connError.code, responseCode: connError.responseCode, imapLogs: imapLogs.slice(-10) },
       { status: 500 }
     );
   }

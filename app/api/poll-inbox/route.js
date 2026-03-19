@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 // Protect endpoint: only callable via cron secret or internal
 const CRON_SECRET = process.env.CRON_SECRET;
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Allow up to 60s for IMAP polling
 
 export async function GET(request) {
@@ -250,7 +251,7 @@ export async function GET(request) {
     });
 
     return Response.json(
-      { error: "IMAP verbinding mislukt", detail: connError.message },
+      { error: "IMAP verbinding mislukt", detail: connError.message, code: connError.code, responseCode: connError.responseCode },
       { status: 500 }
     );
   }

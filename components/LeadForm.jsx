@@ -20,9 +20,10 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Pre-fill when editing
+  // Pre-fill when editing, auto-extract website from email if empty
   useEffect(() => {
     if (lead) {
+      const suggestedUrl = !lead.website_url ? extractUrlFromEmail(lead.email) : "";
       setForm({
         company_name: lead.company_name || "",
         contact_person: lead.contact_person || "",
@@ -31,7 +32,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         service_type: lead.service_type || "",
         estimated_value: lead.estimated_value || "",
         source: lead.source || "",
-        website_url: lead.website_url || "",
+        website_url: lead.website_url || suggestedUrl || "",
       });
     } else {
       setForm({
@@ -45,6 +46,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         website_url: "",
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead, open]);
 
   // Personal/free email domains to exclude from URL extraction

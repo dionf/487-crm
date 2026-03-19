@@ -8,11 +8,18 @@ const CRON_SECRET = process.env.CRON_SECRET;
 export const maxDuration = 60; // Allow up to 60s for IMAP polling
 
 export async function GET(request) {
+  try {
   // Auth check
   const authHeader = request.headers.get("authorization");
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const imapHost = process.env.LEAD_INBOX_HOST || "mail.48-7.nl";
+  const imapUser = process.env.LEAD_INBOX_USER || "leads@48-7.nl";
+  const imapPass = process.env.LEAD_INBOX_PASSWORD;
+  const imapPort = parseInt(process.env.LEAD_INBOX_PORT || "993");
+  console.log(`[poll-inbox] Starting IMAP poll... host=${imapHost} user=${imapUser} port=${imapPort} pass=${imapPass ? "SET" : "MISSING"}`);
 
   const results = [];
   let client;
@@ -20,14 +27,15 @@ export async function GET(request) {
   try {
     // Connect to IMAP
     client = new ImapFlow({
-      host: process.env.LEAD_INBOX_HOST || "48-7.nl",
-      port: parseInt(process.env.LEAD_INBOX_PORT || "993"),
+      host: imapHost,
+      port: imapPort,
       secure: true,
       auth: {
-        user: process.env.LEAD_INBOX_USER || "leads@48-7.nl",
-        pass: process.env.LEAD_INBOX_PASSWORD,
+        user: imapUser,
+        pass: imapPass,
       },
       logger: false,
+      tls: { rejectUnauthorized: false },
     });
 
     await client.connect();
@@ -243,12 +251,24 @@ export async function GET(request) {
     processed: results.length,
     results,
   });
+
+  } catch (topError) {
+    console.error("[poll-inbox] Top-level error:", topError);
+    return Response.json(
+      { error: "Onverwachte fout", detail: topError.message, stack: topError.stack },
+      { status: 500 }
+    );
+  }
 }
 
 // ---- Helper functions ----
 
 async function insertLog(entry) {
-  await supabase.from("lead_inbox_log").insert(entry).catch(() => {});
+  try {
+    await supabase.from("lead_inbox_log").insert(entry);
+  } catch {
+    // Silently fail — logging should never break the main flow
+  }
 }
 
 function stripHtml(html) {

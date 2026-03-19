@@ -4,24 +4,43 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground: #0D0D0F;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Kanban column drop zone highlight */
+.drop-active {
+  background-color: rgba(250, 184, 104, 0.08);
+  border-color: #FAB868;
+}
+
+/* Badge animations */
+@keyframes pulse-amber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 184, 104, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(250, 184, 104, 0); }
+}
+.animate-pulse-amber {
+  animation: pulse-amber 2s infinite;
 }

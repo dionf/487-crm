@@ -1,4 +1,4 @@
-import { ImapFlow } from "imapflow";
+import * as tls from "node:tls";
 
 export const maxDuration = 30;
 
@@ -15,45 +15,50 @@ export async function GET() {
     user: imapUser,
     port: imapPort,
     passLength: imapPass?.length || 0,
-    passSet: !!imapPass,
-    passFirst3: imapPass?.substring(0, 3) || "N/A",
   });
 
-  let client;
+  // Test raw TLS connection first
   try {
-    client = new ImapFlow({
-      host: imapHost,
-      port: imapPort,
-      secure: true,
-      auth: { user: imapUser, pass: imapPass },
-      logger: false,
-      tls: { rejectUnauthorized: false },
-      connectTimeout: 15000,
+    const result = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("TLS connect timeout 10s")), 10000);
+      const socket = tls.connect({
+        host: imapHost,
+        port: imapPort,
+        rejectUnauthorized: false,
+      }, () => {
+        clearTimeout(timeout);
+        steps.push({ step: "tls_connected", authorized: socket.authorized });
+
+        let data = "";
+        socket.on("data", (chunk) => {
+          data += chunk.toString();
+          // After greeting, try LOGIN
+          if (data.includes("OK") && !data.includes("LOGIN")) {
+            const loginCmd = `a001 LOGIN ${imapUser} ${imapPass}\r\n`;
+            socket.write(loginCmd);
+          }
+          // After LOGIN response
+          if (data.includes("a001")) {
+            socket.destroy();
+            resolve(data.substring(0, 500));
+          }
+        });
+        socket.on("error", (e) => reject(e));
+      });
+      socket.on("error", (e) => {
+        clearTimeout(timeout);
+        reject(e);
+      });
     });
 
-    steps.push({ step: "created_client" });
+    // Check if login succeeded or failed
+    const loginOk = result.includes("a001 OK");
+    const loginFail = result.includes("a001 NO") || result.includes("a001 BAD");
+    steps.push({ step: "imap_response", loginOk, loginFail, raw: result.substring(0, 300) });
 
-    await client.connect();
-    steps.push({ step: "connected" });
-
-    const lock = await client.getMailboxLock("INBOX");
-    steps.push({ step: "mailbox_locked", exists: client.mailbox?.exists });
-
-    let unseen = 0;
-    for await (const msg of client.fetch({ seen: false }, { uid: true, envelope: true })) {
-      unseen++;
-      steps.push({ step: "unseen_msg", subject: msg.envelope?.subject });
-    }
-    steps.push({ step: "fetch_done", unseen });
-
-    lock.release();
-    await client.logout();
-    steps.push({ step: "done" });
-
-    return Response.json({ success: true, steps });
+    return Response.json({ success: loginOk, steps });
   } catch (e) {
-    steps.push({ step: "error", message: e.message, code: e.code, stack: e.stack?.split("\n").slice(0, 5) });
-    try { await client?.logout(); } catch {}
+    steps.push({ step: "error", message: e.message });
     return Response.json({ success: false, steps }, { status: 500 });
   }
 }

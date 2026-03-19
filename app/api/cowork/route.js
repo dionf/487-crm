@@ -16,6 +16,7 @@ Beschikbare acties die je kunt uitvoeren:
 - get_stats: Toon pipeline statistieken
 - create_quote: Maak een offerte aan voor een lead
 - get_open_todos: Toon alle open to-do's over alle leads
+- check_inbox: Check de email inbox (leads@48-7.nl) voor nieuwe leads
 
 Statussen: nieuw, gekwalificeerd, inventarisatie, offerte_verstuurd, onderhandeling, gewonnen, verloren
 Service types: cowork_setup, training, maatwerk, support_contract, partner
@@ -34,7 +35,10 @@ Voorbeelden:
 - "rapportage" → {"action": "get_stats", "params": {}, "message": "Pipeline statistieken ophalen..."}
 - "notitie Enablemi: demo was succesvol" → {"action": "add_note", "params": {"company_name": "Enablemi", "content": "demo was succesvol", "note_type": "gesprek"}, "message": "Notitie toegevoegd aan Enablemi"}
 - "maak offerte voor Enablemi van 5000 voor Cowork setup" → {"action": "create_quote", "params": {"company_name": "Enablemi", "amount": 5000, "description": "Cowork setup"}, "message": "Offerte aanmaken voor Enablemi..."}
-- "offerte 2M Recruitment 12000 RADAR platform" → {"action": "create_quote", "params": {"company_name": "2M Recruitment", "amount": 12000, "description": "RADAR platform"}, "message": "Offerte aanmaken voor 2M Recruitment..."}`;
+- "offerte 2M Recruitment 12000 RADAR platform" → {"action": "create_quote", "params": {"company_name": "2M Recruitment", "amount": 12000, "description": "RADAR platform"}, "message": "Offerte aanmaken voor 2M Recruitment..."}
+- "check inbox" → {"action": "check_inbox", "params": {}, "message": "Email inbox checken voor nieuwe leads..."}
+- "update mailbox" → {"action": "check_inbox", "params": {}, "message": "Mailbox updaten..."}`;
+
 
 // Fallback regex parser when no API key
 function parseCommand(command) {
@@ -103,6 +107,10 @@ function parseCommand(command) {
 
   if (/^(open todo|todo'?s|welke todo|taken|open taken)/i.test(lower)) {
     return { action: "get_open_todos", params: {}, message: "Open to-do's ophalen..." };
+  }
+
+  if (/^(check inbox|update mailbox|check mail|nieuwe mails|inbox checken|mail checken|update inbox)/i.test(lower)) {
+    return { action: "check_inbox", params: {}, message: "Email inbox checken..." };
   }
 
   return { action: "unknown", params: {}, message: "Ik begreep je commando niet. Probeer: 'toon leads', 'status [bedrijf] naar [status]', 'notitie [bedrijf]: [tekst]', 'open todo\\'s', of 'rapportage'." };
@@ -336,6 +344,42 @@ export async function POST(request) {
           result: todos,
           message: `${todos.length} open to-do's:\n${lines.join("\n")}`,
         });
+      }
+
+      case "check_inbox": {
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://487crm.vercel.app";
+          const cronSecret = process.env.CRON_SECRET;
+          const res = await fetch(`${baseUrl}/api/poll-inbox`, {
+            headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : {},
+          });
+          const result = await res.json();
+
+          if (result.success) {
+            const count = result.processed || 0;
+            if (count === 0) {
+              return Response.json({
+                action: "check_inbox",
+                message: "Inbox gecheckt — geen nieuwe emails gevonden.",
+              });
+            }
+            const leads = result.results?.map((r) => `• ${r.email_subject} (${r.status})`).join("\n") || "";
+            return Response.json({
+              action: "check_inbox",
+              result: result.results,
+              message: `${count} nieuwe email(s) verwerkt:\n${leads}`,
+            });
+          }
+          return Response.json({
+            action: "check_inbox",
+            message: `Inbox check mislukt: ${result.error || "onbekende fout"}`,
+          });
+        } catch (e) {
+          return Response.json({
+            action: "check_inbox",
+            message: `Fout bij inbox check: ${e.message}`,
+          });
+        }
       }
 
       case "get_stats": {

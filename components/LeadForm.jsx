@@ -47,6 +47,48 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     }
   }, [lead, open]);
 
+  // Personal/free email domains to exclude from URL extraction
+  const freeEmailDomains = [
+    "gmail.com", "googlemail.com", "hotmail.com", "hotmail.nl",
+    "outlook.com", "outlook.nl", "live.com", "live.nl",
+    "yahoo.com", "yahoo.nl", "icloud.com", "me.com", "mac.com",
+    "msn.com", "ziggo.nl", "kpnmail.nl", "xs4all.nl", "planet.nl",
+    "casema.nl", "home.nl", "upcmail.nl", "hetnet.nl",
+    "protonmail.com", "proton.me", "aol.com",
+  ];
+
+  // Extract website URL from email domain
+  function extractUrlFromEmail(email) {
+    if (!email || !email.includes("@")) return "";
+    const domain = email.split("@")[1]?.toLowerCase();
+    if (!domain || freeEmailDomains.includes(domain)) return "";
+    return domain;
+  }
+
+  // Normalize URL: add https:// if missing
+  function normalizeUrl(url) {
+    if (!url) return "";
+    url = url.trim();
+    if (!url) return "";
+    if (!/^https?:\/\//i.test(url)) {
+      return `https://${url}`;
+    }
+    return url;
+  }
+
+  // Auto-fill website when email changes
+  function handleEmailChange(email) {
+    const updates = { email };
+    // Only auto-fill website if it's currently empty
+    if (!form.website_url) {
+      const extracted = extractUrlFromEmail(email);
+      if (extracted) {
+        updates.website_url = extracted;
+      }
+    }
+    setForm({ ...form, ...updates });
+  }
+
   function getCurrentUser() {
     if (typeof window !== "undefined") {
       return localStorage.getItem("crm-user") || "Dion";
@@ -63,7 +105,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
       const payload = {
         ...form,
         estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
-        website_url: form.website_url || null,
+        website_url: normalizeUrl(form.website_url) || null,
       };
 
       const url = isEdit ? `/api/leads/${lead.id}` : "/api/leads";
@@ -175,7 +217,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
               type="email"
               required
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(e) => handleEmailChange(e.target.value)}
               className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
             />
           </div>
@@ -185,11 +227,11 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
               Website
             </label>
             <input
-              type="url"
+              type="text"
               value={form.website_url}
               onChange={(e) => setForm({ ...form, website_url: e.target.value })}
               className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-              placeholder="https://..."
+              placeholder="www.voorbeeld.nl"
             />
           </div>
 

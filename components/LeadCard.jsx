@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, FileText, MessageSquare, CircleDot } from "lucide-react";
+import { GripVertical, FileText, MessageSquare, CircleDot, AlertCircle } from "lucide-react";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES } from "@/lib/constants";
 
@@ -25,6 +25,14 @@ export default function LeadCard({ lead, isDragging }) {
   const serviceLabel = SERVICE_TYPES.find(
     (s) => s.id === lead.service_type
   )?.label;
+
+  // Count missing fields
+  const missing = [];
+  if (!lead.phone) missing.push("Tel");
+  if (!lead.service_type) missing.push("Service");
+  if (!lead.estimated_value) missing.push("Waarde");
+  if (!lead.source) missing.push("Bron");
+  if (!lead.website_url) missing.push("Website");
 
   return (
     <div
@@ -59,6 +67,16 @@ export default function LeadCard({ lead, isDragging }) {
               </span>
             )}
           </div>
+
+          {/* Missing fields indicator */}
+          {missing.length > 0 && (
+            <div className="flex items-center gap-1 mt-2">
+              <AlertCircle className="w-3 h-3 text-amber-400 flex-shrink-0" />
+              <span className="text-[10px] text-amber-500 truncate">
+                {missing.length} veld{missing.length > 1 ? "en" : ""} ontbreekt
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 mt-2 text-gray-400">
             {lead.quote_count > 0 && (

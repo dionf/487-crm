@@ -7,6 +7,7 @@ import StatusBadge from "@/components/StatusBadge";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import QuoteForm from "@/components/QuoteForm";
 import NoteForm from "@/components/NoteForm";
+import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
@@ -29,6 +30,10 @@ import {
   Pencil,
   X,
   Save,
+  Link2,
+  ExternalLink,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
 
 export default function LeadDetailPage() {
@@ -38,6 +43,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [showLeadForm, setShowLeadForm] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
@@ -50,6 +56,9 @@ export default function LeadDetailPage() {
   const [editNoteContent, setEditNoteContent] = useState("");
   const [editingQuoteId, setEditingQuoteId] = useState(null);
   const [editQuoteDesc, setEditQuoteDesc] = useState("");
+
+  // AI summary
+  const [aiLoading, setAiLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -134,6 +143,18 @@ export default function LeadDetailPage() {
     fetchData();
   }
 
+  async function generateAiSummary() {
+    setAiLoading(true);
+    try {
+      const res = await fetch(`/api/leads/${params.id}/summary`, { method: "POST" });
+      const result = await res.json();
+      if (result.summary) {
+        fetchData();
+      }
+    } catch {}
+    setAiLoading(false);
+  }
+
   if (loading || !data) {
     return (
       <AppShell>
@@ -146,6 +167,14 @@ export default function LeadDetailPage() {
 
   const { lead, quotes, notes, activities, attachments } = data;
   const serviceLabel = SERVICE_TYPES.find((s) => s.id === lead.service_type)?.label;
+
+  // Find missing/empty fields
+  const missingFields = [];
+  if (!lead.phone) missingFields.push("Telefoon");
+  if (!lead.service_type) missingFields.push("Service type");
+  if (!lead.estimated_value) missingFields.push("Geschatte waarde");
+  if (!lead.source) missingFields.push("Bron");
+  if (!lead.website_url) missingFields.push("Website");
 
   const filteredNotes =
     activeTab === "all"
@@ -174,9 +203,22 @@ export default function LeadDetailPage() {
             </h1>
             <StatusBadge status={lead.status} size="md" />
           </div>
-          <p className="text-sm text-gray-500 mt-1">
-            {lead.contact_person} &middot; Aangemaakt {formatRelativeTime(lead.created_at)}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-gray-500">
+              {lead.contact_person} &middot; Aangemaakt {formatRelativeTime(lead.created_at)}
+            </p>
+            {lead.website_url && (
+              <a
+                href={lead.website_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-brand-orange hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Website
+              </a>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -228,9 +270,18 @@ export default function LeadDetailPage() {
         <div className="lg:col-span-2 space-y-4">
           {/* Contact info */}
           <div className="bg-white border border-gray-100 rounded-card p-5">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Contactgegevens
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Contactgegevens
+              </h3>
+              <button
+                onClick={() => setShowLeadForm(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                Bewerken
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-gray-400" />
@@ -238,32 +289,71 @@ export default function LeadDetailPage() {
                   {lead.email}
                 </a>
               </div>
-              {lead.phone && (
+              {lead.phone ? (
                 <div className="flex items-center gap-2">
                   <Phone className="w-4 h-4 text-gray-400" />
                   <a href={`tel:${lead.phone}`} className="text-sm hover:underline">
                     {lead.phone}
                   </a>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm text-gray-300 italic">Geen telefoon</span>
+                </div>
               )}
-              {serviceLabel && (
+              {serviceLabel ? (
                 <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">{serviceLabel}</span>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm text-gray-300 italic">Geen service type</span>
+                </div>
               )}
-              {lead.estimated_value && (
+              {lead.estimated_value ? (
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-gray-400" />
                   <span className="text-sm font-medium">
                     {formatCurrency(lead.estimated_value)}
                   </span>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm text-gray-300 italic">Geen waarde</span>
+                </div>
               )}
-              {lead.source && (
+              {lead.source ? (
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-gray-400" />
                   <span className="text-sm capitalize">{lead.source}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm text-gray-300 italic">Geen bron</span>
+                </div>
+              )}
+              {lead.website_url ? (
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-gray-400" />
+                  <a
+                    href={lead.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-brand-orange hover:underline flex items-center gap-1 truncate"
+                  >
+                    {lead.website_url.replace(/^https?:\/\/(www\.)?/, "")}
+                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-gray-300" />
+                  <span className="text-sm text-gray-300 italic">Geen website</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -273,6 +363,61 @@ export default function LeadDetailPage() {
                 </span>
               </div>
             </div>
+
+            {/* Missing fields warning */}
+            {missingFields.length > 0 && (
+              <div className="mt-3 flex items-start gap-2 px-3 py-2 bg-amber-50 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-amber-700">Ontbrekende gegevens</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    {missingFields.join(", ")}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowLeadForm(true)}
+                  className="ml-auto text-xs font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                >
+                  Aanvullen →
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* AI Summary */}
+          <div className="bg-white border border-gray-100 rounded-card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                AI Bedrijfsanalyse
+              </h3>
+              <button
+                onClick={generateAiSummary}
+                disabled={aiLoading}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
+                    Analyseren...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3 h-3" />
+                    {lead.ai_summary ? "Opnieuw analyseren" : "Genereer analyse"}
+                  </>
+                )}
+              </button>
+            </div>
+            {lead.ai_summary ? (
+              <p className="text-sm text-brand-dark-gray leading-relaxed whitespace-pre-line">
+                {lead.ai_summary}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">
+                Klik op &quot;Genereer analyse&quot; voor een AI-samenvatting van dit bedrijf en kansen voor 48-7.
+              </p>
+            )}
           </div>
 
           {/* Quotes - Collapsible */}
@@ -351,7 +496,6 @@ export default function LeadDetailPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* Quote status dropdown */}
                               <select
                                 value={q.status}
                                 onChange={(e) => updateQuoteStatus(q.id, e.target.value)}
@@ -369,8 +513,6 @@ export default function LeadDetailPage() {
                                   <option key={s.id} value={s.id}>{s.label}</option>
                                 ))}
                               </select>
-
-                              {/* Edit / Delete */}
                               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => {
@@ -392,7 +534,6 @@ export default function LeadDetailPage() {
                               </div>
                             </div>
                           </div>
-                          {/* Attachments per quote */}
                           <div className="px-3 pb-3">
                             <AttachmentUpload
                               leadId={params.id}
@@ -443,7 +584,6 @@ export default function LeadDetailPage() {
               </h3>
             </div>
 
-            {/* Tabs + Add button */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex gap-1">
                 {[
@@ -571,7 +711,6 @@ export default function LeadDetailPage() {
                           </div>
                         </div>
 
-                        {/* Edit / Delete buttons */}
                         {!isEditing && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -625,6 +764,12 @@ export default function LeadDetailPage() {
         onClose={() => setShowNoteForm(false)}
         leadId={params.id}
         onSaved={fetchData}
+      />
+      <LeadForm
+        open={showLeadForm}
+        onClose={() => setShowLeadForm(false)}
+        onSaved={fetchData}
+        lead={lead}
       />
       <CoworkBar onResult={() => fetchData()} />
     </AppShell>

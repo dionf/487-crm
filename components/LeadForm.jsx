@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { SERVICE_TYPES, SOURCES } from "@/lib/constants";
 
-export default function LeadForm({ open, onClose, onSaved }) {
+export default function LeadForm({ open, onClose, onSaved, lead }) {
+  const isEdit = !!lead;
+
   const [form, setForm] = useState({
     company_name: "",
     contact_person: "",
@@ -13,9 +15,37 @@ export default function LeadForm({ open, onClose, onSaved }) {
     service_type: "",
     estimated_value: "",
     source: "",
+    website_url: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Pre-fill when editing
+  useEffect(() => {
+    if (lead) {
+      setForm({
+        company_name: lead.company_name || "",
+        contact_person: lead.contact_person || "",
+        email: lead.email || "",
+        phone: lead.phone || "",
+        service_type: lead.service_type || "",
+        estimated_value: lead.estimated_value || "",
+        source: lead.source || "",
+        website_url: lead.website_url || "",
+      });
+    } else {
+      setForm({
+        company_name: "",
+        contact_person: "",
+        email: "",
+        phone: "",
+        service_type: "",
+        estimated_value: "",
+        source: "",
+        website_url: "",
+      });
+    }
+  }, [lead, open]);
 
   function getCurrentUser() {
     if (typeof window !== "undefined") {
@@ -30,14 +60,23 @@ export default function LeadForm({ open, onClose, onSaved }) {
     setError("");
 
     try {
-      const res = await fetch("/api/leads", {
-        method: "POST",
+      const payload = {
+        ...form,
+        estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
+        website_url: form.website_url || null,
+      };
+
+      const url = isEdit ? `/api/leads/${lead.id}` : "/api/leads";
+      const method = isEdit ? "PATCH" : "POST";
+
+      if (!isEdit) {
+        payload.created_by = getCurrentUser();
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
-          created_by: getCurrentUser(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -45,15 +84,18 @@ export default function LeadForm({ open, onClose, onSaved }) {
         throw new Error(data.error || "Fout bij opslaan");
       }
 
-      setForm({
-        company_name: "",
-        contact_person: "",
-        email: "",
-        phone: "",
-        service_type: "",
-        estimated_value: "",
-        source: "",
-      });
+      if (!isEdit) {
+        setForm({
+          company_name: "",
+          contact_person: "",
+          email: "",
+          phone: "",
+          service_type: "",
+          estimated_value: "",
+          source: "",
+          website_url: "",
+        });
+      }
 
       onSaved?.();
       onClose();
@@ -70,7 +112,7 @@ export default function LeadForm({ open, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-lg">Nieuwe Lead</h2>
+          <h2 className="font-semibold text-lg">{isEdit ? "Lead bewerken" : "Nieuwe Lead"}</h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400"
@@ -135,6 +177,19 @@ export default function LeadForm({ open, onClose, onSaved }) {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Website
+            </label>
+            <input
+              type="url"
+              value={form.website_url}
+              onChange={(e) => setForm({ ...form, website_url: e.target.value })}
+              className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+              placeholder="https://..."
             />
           </div>
 
@@ -203,7 +258,7 @@ export default function LeadForm({ open, onClose, onSaved }) {
               disabled={loading}
               className="flex-1 py-2.5 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black transition-colors disabled:opacity-50"
             >
-              {loading ? "Opslaan..." : "Lead aanmaken"}
+              {loading ? "Opslaan..." : isEdit ? "Opslaan" : "Lead aanmaken"}
             </button>
           </div>
         </form>

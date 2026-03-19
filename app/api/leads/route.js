@@ -43,7 +43,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { company_name, contact_person, email, phone, service_type, estimated_value, source } = body;
+  const { company_name, contact_person, email, phone, service_type, estimated_value, source, website_url } = body;
 
   if (!company_name || !contact_person || !email) {
     return Response.json(
@@ -62,6 +62,7 @@ export async function POST(request) {
       service_type: service_type || null,
       estimated_value: estimated_value || null,
       source: source || null,
+      website_url: website_url || null,
     })
     .select()
     .single();

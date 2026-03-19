@@ -19,7 +19,7 @@ export async function GET(request) {
   const imapUser = process.env.LEAD_INBOX_USER || "leads@48-7.nl";
   const imapPass = process.env.LEAD_INBOX_PASSWORD;
   const imapPort = parseInt(process.env.LEAD_INBOX_PORT || "993");
-  console.log(`[poll-inbox] Starting IMAP poll... host=${imapHost} user=${imapUser} port=${imapPort} pass=${imapPass ? "SET" : "MISSING"}`);
+  console.log(`[poll-inbox] Starting IMAP poll... host=${imapHost} user=${imapUser} port=${imapPort} pass=${imapPass ? `SET(${imapPass.length}chars)` : "MISSING"}`);
 
   const results = [];
   let client;
@@ -34,11 +34,20 @@ export async function GET(request) {
         user: imapUser,
         pass: imapPass,
       },
-      logger: false,
+      logger: {
+        debug: (info) => console.log("[IMAP debug]", info?.message || info),
+        info: (info) => console.log("[IMAP info]", info?.message || info),
+        warn: (info) => console.warn("[IMAP warn]", info?.message || info),
+        error: (info) => console.error("[IMAP error]", info?.message || info),
+      },
       tls: { rejectUnauthorized: false },
+      connectTimeout: 30000,
+      greetingTimeout: 15000,
     });
 
+    console.log("[poll-inbox] Connecting to IMAP...");
     await client.connect();
+    console.log("[poll-inbox] Connected!");
 
     // Open INBOX
     const lock = await client.getMailboxLock("INBOX");

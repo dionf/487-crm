@@ -16,6 +16,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     estimated_value: "",
     source: "",
     website_url: "",
+    commission_partner_percentage: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +34,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         estimated_value: lead.estimated_value || "",
         source: lead.source || "",
         website_url: lead.website_url || suggestedUrl || "",
+        commission_partner_percentage: lead.commission_partner_percentage || "",
       });
     } else {
       setForm({
@@ -44,6 +46,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         estimated_value: "",
         source: "",
         website_url: "",
+        commission_partner_percentage: "",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,6 +111,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         ...form,
         estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
         website_url: normalizeUrl(form.website_url) || null,
+        commission_partner_percentage: form.commission_partner_percentage ? parseFloat(form.commission_partner_percentage) : null,
       };
 
       const url = isEdit ? `/api/leads/${lead.id}` : "/api/leads";
@@ -274,19 +278,36 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Geschatte waarde
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.estimated_value}
-              onChange={(e) => setForm({ ...form, estimated_value: e.target.value })}
-              className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-              placeholder="0.00"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Geschatte waarde
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.estimated_value}
+                onChange={(e) => setForm({ ...form, estimated_value: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Commissie %
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={form.commission_partner_percentage}
+                onChange={(e) => setForm({ ...form, commission_partner_percentage: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                placeholder="0"
+              />
+            </div>
           </div>
 
           <div className="flex gap-3 pt-2">

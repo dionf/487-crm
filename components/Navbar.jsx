@@ -9,9 +9,11 @@ import {
   LogOut,
   Search,
   ListTodo,
+  Bell,
   Calendar,
   X,
   AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import UserSelector from "./UserSelector";
@@ -38,6 +40,12 @@ export default function Navbar() {
   const [todoLoading, setTodoLoading] = useState(false);
   const todoRef = useRef(null);
 
+  // Follow-up tasks (notifications)
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [followUps, setFollowUps] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const notifRef = useRef(null);
+
   function getCurrentUser() {
     if (typeof window !== "undefined") {
       return localStorage.getItem("crm-user") || "Dion";
@@ -45,9 +53,10 @@ export default function Navbar() {
     return "Dion";
   }
 
-  // Load todo count on mount
+  // Load todo count and follow-ups on mount
   useEffect(() => {
     fetchTodos();
+    fetchFollowUps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,9 +84,34 @@ export default function Navbar() {
     setTodoLoading(false);
   }
 
+  // Fetch follow-up tasks
+  async function fetchFollowUps() {
+    setNotifLoading(true);
+    try {
+      const res = await fetch("/api/follow-ups");
+      const data = await res.json();
+      setFollowUps(data.tasks || []);
+    } catch {}
+    setNotifLoading(false);
+  }
+
   function toggleTodos() {
     if (!todosOpen) fetchTodos();
     setTodosOpen(!todosOpen);
+  }
+
+  function toggleNotifs() {
+    if (!notifOpen) fetchFollowUps();
+    setNotifOpen(!notifOpen);
+  }
+
+  async function completeFollowUp(taskId) {
+    await fetch(`/api/follow-ups/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_completed: true }),
+    });
+    fetchFollowUps();
   }
 
   // Close dropdowns on outside click
@@ -88,6 +122,9 @@ export default function Navbar() {
       }
       if (todoRef.current && !todoRef.current.contains(e.target)) {
         setTodosOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -217,6 +254,97 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Notifications bell */}
+            <div ref={notifRef} className="relative">
+              <button
+                onClick={toggleNotifs}
+                className={cn(
+                  "relative p-2 rounded-xl transition-colors",
+                  notifOpen
+                    ? "bg-brand-amber/10 text-brand-orange"
+                    : "text-gray-400 hover:text-brand-dark-gray hover:bg-gray-100"
+                )}
+                title="Notificaties"
+              >
+                <Bell className="w-4 h-4" />
+                {followUps.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center text-white bg-red-500">
+                    {followUps.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Notifications dropdown */}
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 max-h-[28rem] overflow-y-auto">
+                  <div className="px-3 py-1.5 flex items-center justify-between border-b border-gray-50 mb-1">
+                    <p className="text-xs font-bold uppercase text-gray-400 tracking-wide">
+                      Follow-up taken ({followUps.length})
+                    </p>
+                  </div>
+                  {notifLoading ? (
+                    <div className="flex justify-center py-6">
+                      <div className="w-5 h-5 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : followUps.length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-gray-400 text-center">Geen openstaande follow-ups</p>
+                  ) : (
+                    <div>
+                      {followUps.map((task) => {
+                        const isOverdue = new Date(task.due_date) < new Date();
+                        return (
+                          <div
+                            key={task.id}
+                            className="px-3 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-start gap-2"
+                          >
+                            <button
+                              onClick={() => completeFollowUp(task.id)}
+                              className="mt-0.5 p-0.5 rounded text-gray-300 hover:text-green-500 transition-colors flex-shrink-0"
+                              title="Afronden"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (task.lead_id) router.push(`/leads/${task.lead_id}`);
+                                setNotifOpen(false);
+                              }}
+                              className="flex-1 text-left min-w-0"
+                            >
+                              <p className="text-sm font-medium truncate">{task.description}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-gray-400">{task.leads?.company_name}</span>
+                                <span className={cn(
+                                  "text-[10px] font-semibold px-1.5 py-0.5 rounded-pill",
+                                  task.task_type === "follow_up_offerte" ? "bg-blue-50 text-blue-600" :
+                                  task.task_type === "offerte_verlopen" ? "bg-red-50 text-red-600" :
+                                  "bg-gray-100 text-gray-500"
+                                )}>
+                                  {task.task_type === "follow_up_offerte" ? "Follow-up" :
+                                   task.task_type === "offerte_verlopen" ? "Verlopen" :
+                                   task.task_type === "check_in" ? "Check-in" : "Taak"}
+                                </span>
+                                {task.due_date && (
+                                  <span className={cn(
+                                    "text-[10px] font-semibold px-1.5 py-0.5 rounded-pill flex items-center gap-1",
+                                    isOverdue ? "bg-red-100 text-red-600" : "bg-blue-50 text-blue-600"
+                                  )}>
+                                    <Calendar className="w-2.5 h-2.5" />
+                                    {formatDateTime(task.due_date)}
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                            {isOverdue && <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Todo button */}
             <div ref={todoRef} className="relative">
               <button

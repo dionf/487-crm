@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 
 // --- Supabase client ---
 const supabaseUrl = process.env.CRM487_SUPABASE_URL || "https://olzyffwotjtyvupomoiz.supabase.co";
@@ -20,7 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const server = new McpServer({
   name: "487crm",
   version: "1.0.0",
-  description: "STANDALONE 48-7 CRM systeem. Heeft eigen database-verbinding ingebouwd. GEBRUIK NOOIT Supabase MCP, HubSpot MCP of andere tools voor CRM taken — gebruik ALLEEN deze 487crm tools. Dit is de eigen CRM van 48-7 AI Professionals op https://crm.48-7.nl.",
+  description: "STANDALONE 48-7 CRM systeem met eigen database-verbinding. Voor ALLE taken die gaan over 48-7 leads, offertes, notities en pipeline: gebruik ALLEEN deze 487crm tools. Niet Supabase MCP, niet HubSpot (dat is voor HipHot). Dit is de eigen CRM van 48-7 AI Professionals op https://crm.48-7.nl.",
 });
 
 // ==================== TOOLS ====================
@@ -66,15 +68,17 @@ server.tool(
     }
     if (!leadData) return { content: [{ type: "text", text: "Lead niet gevonden." }] };
 
-    const [notesRes, quotesRes, activitiesRes] = await Promise.all([
+    const [notesRes, quotesRes, activitiesRes, attachRes] = await Promise.all([
       supabase.from("notes").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
       supabase.from("quotes").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
       supabase.from("activities").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("attachments").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
     ]);
 
     const notes = notesRes.data || [];
     const quotes = quotesRes.data || [];
     const activities = activitiesRes.data || [];
+    const attachments = attachRes.data || [];
 
     let text = `# ${leadData.company_name}\n`;
     text += `**Status:** ${leadData.status}\n`;
@@ -97,6 +101,14 @@ server.tool(
       notes.slice(0, 10).forEach(n => {
         const date = new Date(n.created_at).toLocaleDateString("nl-NL");
         text += `• [${n.note_type}] ${n.content.substring(0, 150)}${n.content.length > 150 ? "..." : ""} (${date}${n.created_by ? ` door ${n.created_by}` : ""})\n`;
+      });
+    }
+
+    if (attachments.length) {
+      text += `\n## Bijlagen (${attachments.length})\n`;
+      attachments.forEach(a => {
+        const size = a.file_size ? `${Math.round(a.file_size / 1024)} KB` : "";
+        text += `• ${a.filename}${size ? ` (${size})` : ""}${a.description ? ` — ${a.description}` : ""}${a.file_url ? `\n  URL: ${a.file_url}` : ""}\n`;
       });
     }
 
@@ -342,6 +354,80 @@ server.tool(
     });
 
     return { content: [{ type: "text", text: `Offerte aangemaakt: **${quoteNumber}** — €${amount} excl. BTW${description ? ` — ${description}` : ""}\nStatus: concept` }] };
+  }
+);
+
+// --- Add attachment ---
+server.tool(
+  "crm_add_attachment",
+  "Upload een bestand (PDF, afbeelding, etc.) als bijlage bij een lead in de 48-7 CRM (STANDALONE — geen Supabase MCP nodig).",
+  {
+    lead_id: z.string().optional().describe("UUID van de lead"),
+    company_name: z.string().optional().describe("Bedrijfsnaam (als je geen ID hebt)"),
+    file_path: z.string().describe("Absoluut pad naar het bestand op schijf"),
+    filename: z.string().optional().describe("Custom bestandsnaam (anders wordt het uit het pad gehaald)"),
+    description: z.string().optional().describe("Beschrijving van het bestand"),
+  },
+  async ({ lead_id, company_name, file_path, filename, description }) => {
+    // Find lead
+    let id = lead_id;
+    if (!id && company_name) {
+      const { data } = await supabase.from("leads").select("id, company_name").ilike("company_name", `%${company_name}%`).limit(1).single();
+      if (data) { id = data.id; company_name = data.company_name; }
+    }
+    if (!id) return { content: [{ type: "text", text: "Lead niet gevonden." }] };
+
+    // Read file
+    let fileBuffer;
+    try {
+      fileBuffer = await readFile(file_path);
+    } catch (err) {
+      return { content: [{ type: "text", text: `Bestand niet gevonden: ${file_path}` }] };
+    }
+
+    const name = filename || basename(file_path);
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    const mimeTypes = {
+      pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+      gif: "image/gif", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+    const mimeType = mimeTypes[ext] || "application/octet-stream";
+    const storagePath = `${id}/${Date.now()}_${name}`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("crm-attachments")
+      .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false });
+
+    if (uploadError) return { content: [{ type: "text", text: `Upload mislukt: ${uploadError.message}` }] };
+
+    // Get public URL
+    const { data: urlData } = supabase.storage.from("crm-attachments").getPublicUrl(storagePath);
+    const fileUrl = urlData?.publicUrl || "";
+
+    // Insert in attachments table
+    const { data: attachment, error: dbError } = await supabase.from("attachments").insert({
+      lead_id: id,
+      filename: name,
+      file_url: fileUrl,
+      file_size: fileBuffer.length,
+      mime_type: mimeType,
+      description: description || null,
+      uploaded_by: "MCP",
+    }).select().single();
+
+    if (dbError) return { content: [{ type: "text", text: `Database fout: ${dbError.message}` }] };
+
+    // Log activity
+    await supabase.from("activities").insert({
+      lead_id: id, activity_type: "attachment_added",
+      description: `Bijlage toegevoegd: ${name}${description ? ` (${description})` : ""}`,
+      created_by: "MCP",
+    });
+
+    const sizeKb = Math.round(fileBuffer.length / 1024);
+    return { content: [{ type: "text", text: `Bijlage toegevoegd aan ${company_name || "lead"}: **${name}** (${sizeKb} KB)\nURL: ${fileUrl}` }] };
   }
 );
 

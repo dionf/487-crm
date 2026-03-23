@@ -360,15 +360,16 @@ server.tool(
 // --- Add attachment ---
 server.tool(
   "crm_add_attachment",
-  "Upload een bestand (PDF, afbeelding, etc.) als bijlage bij een lead in de 48-7 CRM (STANDALONE — geen Supabase MCP nodig).",
+  "Upload een bestand (PDF, afbeelding, etc.) als bijlage bij een lead in de 48-7 CRM (STANDALONE — geen Supabase MCP nodig). Accepteert zowel een lokaal file_path als base64 file_content.",
   {
     lead_id: z.string().optional().describe("UUID van de lead"),
     company_name: z.string().optional().describe("Bedrijfsnaam (als je geen ID hebt)"),
-    file_path: z.string().describe("Absoluut pad naar het bestand op schijf"),
-    filename: z.string().optional().describe("Custom bestandsnaam (anders wordt het uit het pad gehaald)"),
+    file_path: z.string().optional().describe("Absoluut pad naar het bestand op schijf (voor lokale MCP)"),
+    file_content: z.string().optional().describe("Base64-encoded bestandsinhoud (voor remote/Claude Chat)"),
+    filename: z.string().optional().describe("Bestandsnaam incl. extensie (verplicht bij file_content)"),
     description: z.string().optional().describe("Beschrijving van het bestand"),
   },
-  async ({ lead_id, company_name, file_path, filename, description }) => {
+  async ({ lead_id, company_name, file_path, file_content, filename, description }) => {
     // Find lead
     let id = lead_id;
     if (!id && company_name) {
@@ -377,15 +378,26 @@ server.tool(
     }
     if (!id) return { content: [{ type: "text", text: "Lead niet gevonden." }] };
 
-    // Read file
+    // Get file buffer from either base64 content or file path
     let fileBuffer;
-    try {
-      fileBuffer = await readFile(file_path);
-    } catch (err) {
-      return { content: [{ type: "text", text: `Bestand niet gevonden: ${file_path}` }] };
+    if (file_content) {
+      try {
+        fileBuffer = Buffer.from(file_content, "base64");
+      } catch {
+        return { content: [{ type: "text", text: "Ongeldige base64 content." }] };
+      }
+      if (!filename) return { content: [{ type: "text", text: "filename is verplicht bij file_content." }] };
+    } else if (file_path) {
+      try {
+        fileBuffer = await readFile(file_path);
+      } catch {
+        return { content: [{ type: "text", text: `Bestand niet gevonden: ${file_path}` }] };
+      }
+    } else {
+      return { content: [{ type: "text", text: "Geef file_path of file_content (base64) mee." }] };
     }
 
-    const name = filename || basename(file_path);
+    const name = filename || basename(file_path || "bestand");
     const ext = name.split(".").pop()?.toLowerCase() || "";
     const mimeTypes = {
       pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",

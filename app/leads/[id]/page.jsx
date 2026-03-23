@@ -176,6 +176,25 @@ export default function LeadDetailPage() {
   if (!lead.source) missingFields.push("Bron");
   if (!lead.website_url) missingFields.push("Website");
 
+  // Convert markdown-style AI summary to HTML
+  function formatAiSummary(text) {
+    return text
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/^/, '<p>')
+      .replace(/$/, '</p>')
+      .replace(/<p><h/g, '<h')
+      .replace(/<\/h([234])><\/p>/g, '</h$1>')
+      .replace(/<p><ul>/g, '<ul>')
+      .replace(/<\/ul><\/p>/g, '</ul>');
+  }
+
   const filteredNotes =
     activeTab === "all"
       ? notes
@@ -410,9 +429,10 @@ export default function LeadDetailPage() {
               </button>
             </div>
             {lead.ai_summary ? (
-              <p className="text-sm text-brand-dark-gray leading-relaxed whitespace-pre-line">
-                {lead.ai_summary}
-              </p>
+              <div
+                className="text-sm text-brand-dark-gray leading-relaxed prose prose-sm prose-headings:text-brand-black prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 max-w-none"
+                dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
+              />
             ) : (
               <p className="text-sm text-gray-400 text-center py-4">
                 Klik op &quot;Genereer analyse&quot; voor een AI-samenvatting van dit bedrijf en kansen voor 48-7.
@@ -675,7 +695,7 @@ export default function LeadDetailPage() {
                             </div>
                           ) : (
                             <p
-                              className={`text-sm ${
+                              className={`text-sm whitespace-pre-line ${
                                 note.note_type === "todo" && note.is_completed
                                   ? "line-through text-gray-400"
                                   : "text-brand-dark-gray"

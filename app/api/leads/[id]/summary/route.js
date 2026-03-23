@@ -81,15 +81,29 @@ export async function POST(request, { params }) {
 
   const prompt = `Je bent een sales intelligence assistent voor 48-7 AI Professionals, een bedrijf dat AI-oplossingen, Cowork (AI werkplekken), trainingen en maatwerk software levert aan bedrijven.
 
-Analyseer het volgende bedrijf en geef een korte samenvatting (max 200 woorden) in het Nederlands met deze structuur:
+Analyseer het volgende bedrijf en geef een korte samenvatting (max 200 woorden) in het Nederlands. Gebruik deze EXACTE structuur met HTML-achtige koppen:
 
-**Wat ze doen:** [korte omschrijving gebaseerd op de ECHTE website content]
-**Sector:** [sector/branche]
-**Omvang:** [inschatting indien mogelijk]
-**Kansen voor 48-7:** [concrete kansen voor AI automatisering, efficiëntie, data-analyse etc.]
-**Gesprekstip:** [concrete suggestie voor eerste contact]
+## Wat doet het bedrijf
+[korte omschrijving gebaseerd op de ECHTE website content — GEEN markdown sterretjes gebruiken]
 
-BELANGRIJK: Baseer je analyse ALLEEN op de meegeleverde website content en notities. Verzin NIETS. Als je iets niet weet, zeg dat dan.
+## Sector
+[sector/branche]
+
+## Omvang
+[inschatting indien mogelijk, anders weglaten]
+
+## Kansen voor 48-7
+- [kans 1: concrete kans voor AI automatisering, efficiëntie, data-analyse etc.]
+- [kans 2]
+- [kans 3]
+
+## Gesprekstip
+[concrete suggestie voor eerste contact]
+
+REGELS:
+- Gebruik GEEN markdown sterretjes (**) voor vetgedrukt. Gebruik ## voor koppen en - voor bulletpoints.
+- Baseer je analyse ALLEEN op de meegeleverde website content en notities. Verzin NIETS. Als je iets niet weet, zeg dat dan.
+- Als er CRM notities zijn met gespreksinfo, gebruik die voor context bij kansen en gesprekstip.
 
 Bedrijf: ${lead.company_name}
 ${lead.website_url ? `Website: ${lead.website_url}` : ""}

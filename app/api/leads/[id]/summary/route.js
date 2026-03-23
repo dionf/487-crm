@@ -17,9 +17,8 @@ async function scrapeWebsite(url) {
     let text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
-      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
-      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, " ")
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, " ")
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, " ")
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/g, " ")
       .replace(/&amp;/g, "&")

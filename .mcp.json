@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "487crm": {
+      "command": "node",
+      "args": ["/Users/dion/Documents/Dev/487crm/mcp-server/index.js"],
+      "env": {
+        "CRM487_SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9senlmZndvdGp0eXZ1cG9tb2l6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MzYxNzIsImV4cCI6MjA4MzIxMjE3Mn0.qXt97wiQrrnD6UruBW_j6VnHhbwXTnagCygGHEPBTjk",
+        "CRM487_APP_URL": "https://487crm.vercel.app",
+        "CRM487_CRON_SECRET": "a8c307c5fbb2a274337165b64815a47f"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "487crm-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server voor 48-7 CRM - onafhankelijk van Supabase MCP",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "487crm-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@supabase/supabase-js": "^2.49.8"
+  }
+}

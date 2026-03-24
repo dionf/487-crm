@@ -489,199 +489,6 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* AI Summary */}
-          <div className="bg-white border border-gray-100 rounded-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
-                AI Bedrijfsanalyse
-              </h3>
-              <button
-                onClick={generateAiSummary}
-                disabled={aiLoading}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors disabled:opacity-50"
-              >
-                {aiLoading ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
-                    Analyseren...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    {lead.ai_summary ? "Opnieuw analyseren" : "Genereer analyse"}
-                  </>
-                )}
-              </button>
-            </div>
-            {lead.ai_summary ? (
-              <div
-                className="text-sm text-brand-dark-gray leading-relaxed prose prose-sm prose-headings:text-brand-black prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 max-w-none"
-                dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
-              />
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-4">
-                Klik op &quot;Genereer analyse&quot; voor een AI-samenvatting van dit bedrijf en kansen voor 48-7.
-              </p>
-            )}
-          </div>
-
-          {/* Quotes - Collapsible */}
-          <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
-            <button
-              onClick={() => setQuotesOpen(!quotesOpen)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${quotesOpen ? "rotate-90" : ""}`} />
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Offertes ({quotes.length})
-                </h3>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowQuoteForm(true);
-                }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                Toevoegen
-              </button>
-            </button>
-
-            {quotesOpen && (
-              <div className="px-5 pb-4">
-                {quotes.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">
-                    Nog geen offertes
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {quotes.map((q) => {
-                      const qStatus = QUOTE_STATUSES.find((s) => s.id === q.status);
-                      const isEditing = editingQuoteId === q.id;
-                      return (
-                        <div key={q.id} className="bg-brand-light-gray rounded-xl overflow-hidden group">
-                          <div className="flex items-center justify-between px-3 py-2.5">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-semibold">{q.quote_number}</span>
-                                <span className="text-sm font-medium text-brand-dark-gray">
-                                  {formatCurrency(q.amount_excl_vat)}
-                                </span>
-                              </div>
-                              {isEditing ? (
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <input
-                                    type="text"
-                                    value={editQuoteDesc}
-                                    onChange={(e) => setEditQuoteDesc(e.target.value)}
-                                    className="flex-1 text-xs px-2 py-1 rounded-lg border border-brand-amber bg-white focus:outline-none"
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={() => saveQuoteEdit(q.id)}
-                                    className="p-1 rounded-lg text-green-600 hover:bg-green-50"
-                                  >
-                                    <Save className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingQuoteId(null)}
-                                    className="p-1 rounded-lg text-gray-400 hover:bg-gray-100"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                q.description && (
-                                  <p className="text-xs text-gray-500 mt-0.5 truncate max-w-sm">
-                                    {q.description}
-                                  </p>
-                                )
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={q.status}
-                                onChange={(e) => updateQuoteStatus(q.id, e.target.value)}
-                                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border-0 cursor-pointer appearance-none text-center ${
-                                  q.status === "geaccepteerd"
-                                    ? "bg-green-100 text-green-700"
-                                    : q.status === "verstuurd"
-                                    ? "bg-blue-100 text-blue-700"
-                                    : q.status === "afgewezen"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-gray-100 text-gray-600"
-                                }`}
-                              >
-                                {QUOTE_STATUSES.map((s) => (
-                                  <option key={s.id} value={s.id}>{s.label}</option>
-                                ))}
-                              </select>
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => {
-                                    setEditingQuoteId(q.id);
-                                    setEditQuoteDesc(q.description || "");
-                                  }}
-                                  className="p-1 rounded-lg text-gray-400 hover:text-brand-orange hover:bg-white transition-colors"
-                                  title="Bewerken"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => deleteQuote(q.id)}
-                                  className="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-white transition-colors"
-                                  title="Verwijderen"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="px-3 pb-3">
-                            <AttachmentUpload
-                              leadId={params.id}
-                              quoteId={q.id}
-                              attachments={attachments}
-                              onUploaded={fetchData}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Attachments - Collapsible */}
-          <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
-            <button
-              onClick={() => setAttachmentsOpen(!attachmentsOpen)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${attachmentsOpen ? "rotate-90" : ""}`} />
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Bijlagen ({attachments.length})
-                </h3>
-              </div>
-            </button>
-
-            {attachmentsOpen && (
-              <div className="px-5 pb-4">
-                <AttachmentUpload
-                  leadId={params.id}
-                  attachments={attachments}
-                  onUploaded={fetchData}
-                />
-              </div>
-            )}
-          </div>
-
           {/* Notes */}
           <div className="bg-white border border-gray-100 rounded-card p-5">
             <div className="flex items-center justify-between mb-3">
@@ -847,9 +654,131 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
-        {/* Right column: Activity Timeline */}
-        <div>
-          <div className="bg-white border border-gray-100 rounded-card p-5 sticky top-20">
+        {/* Right column */}
+        <div className="space-y-4">
+          {/* AI Summary */}
+          <div className="bg-white border border-gray-100 rounded-card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                AI Bedrijfsanalyse
+              </h3>
+              <button
+                onClick={generateAiSummary}
+                disabled={aiLoading}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-brand-orange border-t-transparent rounded-full animate-spin" />
+                    Analyseren...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3 h-3" />
+                    {lead.ai_summary ? "Opnieuw" : "Analyseer"}
+                  </>
+                )}
+              </button>
+            </div>
+            {lead.ai_summary ? (
+              <div
+                className="text-sm text-brand-dark-gray leading-relaxed prose prose-sm prose-headings:text-brand-black prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 max-w-none"
+                dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
+              />
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-3">
+                Klik &quot;Analyseer&quot; voor AI-samenvatting
+              </p>
+            )}
+          </div>
+
+          {/* Quotes - Collapsible */}
+          <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
+            <button
+              onClick={() => setQuotesOpen(!quotesOpen)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${quotesOpen ? "rotate-90" : ""}`} />
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Offertes ({quotes.length})
+                </h3>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowQuoteForm(true); }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </button>
+            {quotesOpen && (
+              <div className="px-5 pb-4">
+                {quotes.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">Nog geen offertes</p>
+                ) : (
+                  <div className="space-y-2">
+                    {quotes.map((q) => {
+                      const isEditing = editingQuoteId === q.id;
+                      return (
+                        <div key={q.id} className="bg-brand-light-gray rounded-xl p-2.5 group">
+                          <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold">{q.quote_number}</span>
+                              <span className="text-xs text-brand-dark-gray ml-1.5">{formatCurrency(q.amount_excl_vat)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <select
+                                value={q.status}
+                                onChange={(e) => updateQuoteStatus(q.id, e.target.value)}
+                                className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-pill border-0 cursor-pointer ${
+                                  q.status === "geaccepteerd" ? "bg-green-100 text-green-700"
+                                  : q.status === "verstuurd" ? "bg-blue-100 text-blue-700"
+                                  : q.status === "afgewezen" ? "bg-red-100 text-red-700"
+                                  : "bg-gray-100 text-gray-600"
+                                }`}
+                              >
+                                {QUOTE_STATUSES.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.label}</option>
+                                ))}
+                              </select>
+                              <button onClick={() => deleteQuote(q.id)} className="p-0.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {q.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{q.description}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Attachments - Collapsible */}
+          <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
+            <button
+              onClick={() => setAttachmentsOpen(!attachmentsOpen)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${attachmentsOpen ? "rotate-90" : ""}`} />
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Bijlagen ({attachments.length})
+                </h3>
+              </div>
+            </button>
+            {attachmentsOpen && (
+              <div className="px-5 pb-4">
+                <AttachmentUpload leadId={params.id} attachments={attachments} onUploaded={fetchData} />
+              </div>
+            )}
+          </div>
+
+          {/* Activity Timeline */}
+          <div className="bg-white border border-gray-100 rounded-card p-5">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
               Activiteiten
             </h3>

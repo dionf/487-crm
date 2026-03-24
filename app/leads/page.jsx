@@ -9,7 +9,7 @@ import CoworkBar from "@/components/CoworkBar";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
-import { apiFetch, getTenantFromSession, isAdminFromSession } from "@/lib/api";
+import { apiFetch, getTenantFromSession, isAdminFromSession, getUserIdFromSession } from "@/lib/api";
 import {
   Plus,
   Search,
@@ -59,8 +59,9 @@ export default function LeadsPage() {
     // Agents only see their own leads, admins can filter
     if (agentFilter) {
       params.set("assigned_to", agentFilter);
-    } else if (isHipHot && !effectiveAdmin && user?.id) {
-      params.set("assigned_to", user.id);
+    } else if (isHipHot && !effectiveAdmin) {
+      const userId = user?.id || getUserIdFromSession();
+      if (userId) params.set("assigned_to", userId);
     }
 
     try {

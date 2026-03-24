@@ -28,16 +28,19 @@ export default function StatsPanel({ leads }) {
     }
   }, [metricsOpen, metrics]);
 
+  const wonStatuses = ["gewonnen", "offerte_gewonnen"];
+  const lostStatuses = ["verloren", "offerte_verloren"];
+
   const activePipeline = leads.filter(
-    (l) => !["gewonnen", "verloren"].includes(l.status)
+    (l) => !wonStatuses.includes(l.status) && !lostStatuses.includes(l.status)
   );
   const pipelineValue = activePipeline.reduce(
     (sum, l) => sum + (parseFloat(l.estimated_value) || 0),
     0
   );
 
-  const won = leads.filter((l) => l.status === "gewonnen");
-  const lost = leads.filter((l) => l.status === "verloren");
+  const won = leads.filter((l) => wonStatuses.includes(l.status));
+  const lost = leads.filter((l) => lostStatuses.includes(l.status));
   const winRate =
     won.length + lost.length > 0
       ? Math.round((won.length / (won.length + lost.length)) * 100)

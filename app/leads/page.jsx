@@ -9,7 +9,7 @@ import CoworkBar from "@/components/CoworkBar";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getTenantFromSession } from "@/lib/api";
 import {
   Plus,
   Search,
@@ -33,8 +33,9 @@ const CALL_OUTCOME_LABELS = {
 
 export default function LeadsPage() {
   const { tenant, user, isAdmin } = useOrg();
-  const isHipHot = tenant === "hiphot";
-  const statuses = getLeadStatuses(tenant);
+  const effectiveTenant = tenant || getTenantFromSession();
+  const isHipHot = effectiveTenant === "hiphot";
+  const statuses = getLeadStatuses(effectiveTenant);
 
   const [leads, setLeads] = useState([]);
   const [agents, setAgents] = useState([]);

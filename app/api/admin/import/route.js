@@ -35,12 +35,22 @@ export async function POST(request) {
         }
       }
 
+      // Extract website from email if not provided
+      let websiteUrl = lead.website_url || null;
+      if (!websiteUrl && lead.email?.includes("@")) {
+        const domain = lead.email.split("@")[1]?.toLowerCase();
+        const freeDomains = ["gmail.com","hotmail.com","hotmail.nl","outlook.com","outlook.nl","live.com","live.nl","yahoo.com","yahoo.nl","icloud.com","ziggo.nl","kpnmail.nl","xs4all.nl","protonmail.com"];
+        if (domain && !freeDomains.includes(domain)) {
+          websiteUrl = `https://${domain}`;
+        }
+      }
+
       const { error } = await supabase.from("leads").insert({
         company_name: lead.company_name || "Onbekend",
         contact_person: lead.contact_person || "-",
         email: lead.email || null,
         phone: lead.phone || null,
-        website_url: lead.website_url || null,
+        website_url: websiteUrl,
         city: lead.city || null,
         category: lead.category || null,
         industry: lead.industry || null,

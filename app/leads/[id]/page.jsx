@@ -11,7 +11,8 @@ import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
-import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES } from "@/lib/constants";
+import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses } from "@/lib/constants";
+import { useOrg } from "@/lib/org-context";
 import {
   ArrowLeft,
   Mail,
@@ -34,12 +35,27 @@ import {
   ExternalLink,
   Sparkles,
   AlertCircle,
+  PhoneCall,
+  PhoneOff,
+  PhoneForwarded,
+  MailPlus,
+  UserX,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+
+const CALL_OUTCOMES = [
+  { id: "voorstel_mailen", label: "Voorstel mailen", icon: MailPlus, color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" },
+  { id: "terugbellen_5_dagen", label: "Terugbellen (5 dagen)", icon: PhoneForwarded, color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
+  { id: "geen_gehoor_terugbellen", label: "Geen gehoor", icon: PhoneOff, color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100" },
+  { id: "niet_geinteresseerd", label: "Niet geïnteresseerd", icon: UserX, color: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" },
+  { id: "vraag_opvolgen_collega", label: "Collega opvolgen", icon: PhoneCall, color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" },
+];
 
 export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { tenant, user } = useOrg();
+  const isHipHot = tenant === "hiphot";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -47,6 +63,8 @@ export default function LeadDetailPage() {
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [callNote, setCallNote] = useState("");
+  const [callingOutcome, setCallingOutcome] = useState(null);
 
   // Collapsible sections
   const [quotesOpen, setQuotesOpen] = useState(false);
@@ -142,6 +160,25 @@ export default function LeadDetailPage() {
       body: JSON.stringify({ status: newStatus }),
     });
     fetchData();
+  }
+
+  async function submitCallOutcome(outcomeId) {
+    setCallingOutcome(outcomeId);
+    try {
+      await apiFetch(`/api/leads/${params.id}/call-outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          outcome: outcomeId,
+          note: callNote || null,
+          user_id: user?.id,
+          user_name: user?.name,
+        }),
+      });
+      setCallNote("");
+      fetchData();
+    } catch {}
+    setCallingOutcome(null);
   }
 
   async function generateAiSummary() {
@@ -252,7 +289,7 @@ export default function LeadDetailPage() {
             </button>
             {showStatusMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-lg border border-gray-100 py-1 z-50">
-                {LEAD_STATUSES.map((s) => (
+                {getLeadStatuses(tenant).map((s) => (
                   <button
                     key={s.id}
                     onClick={() => updateStatus(s.id)}
@@ -403,6 +440,54 @@ export default function LeadDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Call Outcome Panel (HipHot only) */}
+          {isHipHot && (
+            <div className="bg-white border border-gray-100 rounded-card p-5">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <PhoneCall className="w-3.5 h-3.5 text-green-600" />
+                Bel-uitkomst registreren
+              </h3>
+
+              {lead.call_outcome && (
+                <div className="mb-3 px-3 py-2 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500">Laatste uitkomst:</p>
+                  <p className="text-sm font-medium">
+                    {CALL_OUTCOMES.find((c) => c.id === lead.call_outcome)?.label || lead.call_outcome}
+                  </p>
+                  {lead.last_called_at && (
+                    <p className="text-xs text-gray-400 mt-0.5">{formatRelativeTime(lead.last_called_at)}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Optional note */}
+              <textarea
+                value={callNote}
+                onChange={(e) => setCallNote(e.target.value)}
+                placeholder="Optionele notitie bij gesprek..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber resize-none mb-3"
+              />
+
+              {/* Outcome buttons */}
+              <div className="grid grid-cols-1 gap-2">
+                {CALL_OUTCOMES.map((outcome) => (
+                  <button
+                    key={outcome.id}
+                    onClick={() => submitCallOutcome(outcome.id)}
+                    disabled={callingOutcome === outcome.id}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${outcome.color} ${
+                      callingOutcome === outcome.id ? "opacity-50" : ""
+                    }`}
+                  >
+                    <outcome.icon className="w-4 h-4" />
+                    {outcome.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* AI Summary */}
           <div className="bg-white border border-gray-100 rounded-card p-5">

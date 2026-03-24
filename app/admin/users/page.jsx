@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, X, Save, Shield, User, ArrowLeft } from "lucide-react";
 
 export default function UserManagementPage() {
-  const { isAdmin, loading: authLoading, organization } = useOrg();
+  const { isAdmin, organization } = useOrg();
   const router = useRouter();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,13 +20,8 @@ export default function UserManagementPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (authLoading) return; // Wait for session to load
-    if (!isAdmin) {
-      router.push("/");
-      return;
-    }
     fetchUsers();
-  }, [isAdmin, authLoading, router]);
+  }, []);
 
   async function fetchUsers() {
     const res = await apiFetch("/api/admin/users");

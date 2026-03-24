@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { SERVICE_TYPES, SOURCES } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
+import { apiFetch } from "@/lib/api";
 
 export default function LeadForm({ open, onClose, onSaved, lead }) {
   const { tenant } = useOrg();
@@ -124,7 +125,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         payload.created_by = getCurrentUser();
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

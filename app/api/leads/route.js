@@ -61,6 +61,8 @@ export async function POST(request) {
     );
   }
 
+  const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -73,6 +75,7 @@ export async function POST(request) {
       source: source || null,
       website_url: website_url || null,
       commission_partner_percentage: commission_partner_percentage || null,
+      status: defaultStatus,
       tenant,
     })
     .select()

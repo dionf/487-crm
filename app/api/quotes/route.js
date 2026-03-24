@@ -1,12 +1,18 @@
 import { supabase } from "@/lib/supabase";
 
+function getTenant(request) {
+  return request.headers.get("x-tenant") || "48-7";
+}
+
 export async function GET(request) {
+  const tenant = getTenant(request);
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
   let query = supabase
     .from("quotes")
     .select("*, leads(company_name, contact_person)")
+    .eq("tenant", tenant)
     .order("created_at", { ascending: false });
 
   if (lead_id) query = query.eq("lead_id", lead_id);
@@ -21,6 +27,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const tenant = getTenant(request);
   const body = await request.json();
   const { lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by } = body;
 
@@ -45,6 +52,7 @@ export async function POST(request) {
       description: description || null,
       valid_until: valid_until || null,
       created_by: created_by || null,
+      tenant,
     })
     .select()
     .single();
@@ -60,6 +68,7 @@ export async function POST(request) {
     description: `Offerte ${quote_number} aangemaakt (${new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount_excl_vat)} excl. BTW)`,
     metadata: { quote_id: data.id, quote_number },
     created_by: created_by || null,
+    tenant,
   });
 
   return Response.json({ quote: data }, { status: 201 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,8 +13,9 @@ import KanbanColumn from "./KanbanColumn";
 import LeadCard from "./LeadCard";
 import { LEAD_STATUSES } from "@/lib/constants";
 
-export default function KanbanBoard({ leads, onStatusChange }) {
+export default function KanbanBoard({ leads, onStatusChange, statuses }) {
   const [activeId, setActiveId] = useState(null);
+  const pipelineStatuses = statuses || LEAD_STATUSES;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -40,10 +41,8 @@ export default function KanbanBoard({ leads, onStatusChange }) {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead) return;
 
-    // Determine target status - over.id could be a column id or another lead id
     let targetStatus = over.id;
-    if (!LEAD_STATUSES.find((s) => s.id === over.id)) {
-      // Dropped on a lead card - find which column it's in
+    if (!pipelineStatuses.find((s) => s.id === over.id)) {
       const targetLead = leads.find((l) => l.id === over.id);
       if (targetLead) {
         targetStatus = targetLead.status;
@@ -65,7 +64,7 @@ export default function KanbanBoard({ leads, onStatusChange }) {
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {LEAD_STATUSES.map((status) => (
+        {pipelineStatuses.map((status) => (
           <KanbanColumn
             key={status.id}
             status={status}

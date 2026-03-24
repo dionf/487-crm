@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  Settings,
   LogOut,
   Search,
   ListTodo,
@@ -20,7 +21,7 @@ import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
 import StatusBadge from "./StatusBadge";
 
-const navItems = [
+const baseNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
 ];
@@ -28,7 +29,7 @@ const navItems = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, organization, logout } = useOrg();
+  const { user, organization, isAdmin, logout } = useOrg();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,7 +160,7 @@ export default function Navbar() {
 
           {/* Nav links */}
           <div className="flex items-center gap-1">
-            {navItems.map((item) => {
+            {[...baseNavItems, ...(isAdmin ? [{ href: "/admin/users", label: "Users", icon: Settings }] : [])].map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/" && pathname.startsWith(item.href));

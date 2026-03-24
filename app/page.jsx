@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/AppShell";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -8,8 +10,12 @@ import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
 import { Plus, RefreshCw, LayoutGrid, List } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useOrg } from "@/lib/org-context";
+import { getLeadStatuses } from "@/lib/constants";
 
 export default function DashboardPage() {
+  const { tenant, organization } = useOrg();
+  const pipelineStatuses = getLeadStatuses(tenant);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -90,7 +96,7 @@ export default function DashboardPage() {
           <div className="w-8 h-8 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <KanbanBoard leads={leads} onStatusChange={handleStatusChange} />
+        <KanbanBoard leads={leads} onStatusChange={handleStatusChange} statuses={pipelineStatuses} />
       )}
 
       {/* Lead Form Modal */}

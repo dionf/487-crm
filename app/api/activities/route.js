@@ -1,12 +1,18 @@
 import { supabase } from "@/lib/supabase";
 
+function getTenant(request) {
+  return request.headers.get("x-tenant") || "48-7";
+}
+
 export async function GET(request) {
+  const tenant = getTenant(request);
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
   let query = supabase
     .from("activities")
     .select("*")
+    .eq("tenant", tenant)
     .order("created_at", { ascending: false })
     .limit(50);
 

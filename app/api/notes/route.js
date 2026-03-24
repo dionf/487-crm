@@ -1,12 +1,18 @@
 import { supabase } from "@/lib/supabase";
 
+function getTenant(request) {
+  return request.headers.get("x-tenant") || "48-7";
+}
+
 export async function GET(request) {
+  const tenant = getTenant(request);
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
   let query = supabase
     .from("notes")
     .select("*")
+    .eq("tenant", tenant)
     .order("created_at", { ascending: false });
 
   if (lead_id) query = query.eq("lead_id", lead_id);
@@ -21,6 +27,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const tenant = getTenant(request);
   const body = await request.json();
   const { lead_id, content, note_type, created_by, due_date } = body;
 
@@ -39,6 +46,7 @@ export async function POST(request) {
       note_type: note_type || "intern",
       created_by: created_by || null,
       due_date: due_date || null,
+      tenant,
     })
     .select()
     .single();
@@ -54,6 +62,7 @@ export async function POST(request) {
     description: `Notitie toegevoegd (${note_type || "intern"})`,
     metadata: { note_id: data.id, note_type: note_type || "intern" },
     created_by: created_by || null,
+    tenant,
   });
 
   return Response.json({ note: data }, { status: 201 });

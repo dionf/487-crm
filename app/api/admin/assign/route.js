@@ -20,28 +20,34 @@ export async function POST(request) {
       .is("assigned_to", null)
       .order("created_at");
 
-    // Get all active agents
-    const { data: org } = await supabase.from("organizations").select("id").eq("slug", tenant).single();
-    const { data: agents } = await supabase
-      .from("users")
-      .select("id")
-      .eq("organization_id", org.id)
-      .eq("is_active", true)
-      .order("name");
+    // Use specified agent IDs or all active agents
+    let agentList;
+    if (body.agent_ids?.length) {
+      agentList = body.agent_ids.map((id) => ({ id }));
+    } else {
+      const { data: org } = await supabase.from("organizations").select("id").eq("slug", tenant).single();
+      const { data: agents } = await supabase
+        .from("users")
+        .select("id")
+        .eq("organization_id", org.id)
+        .eq("is_active", true)
+        .order("name");
+      agentList = agents;
+    }
 
-    if (!agents?.length || !unassigned?.length) {
+    if (!agentList?.length || !unassigned?.length) {
       return Response.json({ error: "Geen agents of leads om te verdelen" }, { status: 400 });
     }
 
     // Round-robin assign
     let assigned = 0;
     for (let i = 0; i < unassigned.length; i++) {
-      const agent = agents[i % agents.length];
+      const agent = agentList[i % agentList.length];
       await supabase.from("leads").update({ assigned_to: agent.id }).eq("id", unassigned[i].id);
       assigned++;
     }
 
-    return Response.json({ success: true, assigned, agents: agents.length });
+    return Response.json({ success: true, assigned, agents: agentList.length });
   }
 
   // Manual assign

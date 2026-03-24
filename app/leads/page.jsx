@@ -31,7 +31,7 @@ const CALL_OUTCOME_LABELS = {
 };
 
 export default function LeadsPage() {
-  const { tenant, user, isAdmin } = useOrg();
+  const { tenant, user, isAdmin, loading: authLoading } = useOrg();
   const isHipHot = tenant === "hiphot";
   const statuses = getLeadStatuses(tenant);
 
@@ -45,6 +45,8 @@ export default function LeadsPage() {
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [assigning, setAssigning] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignAgents, setAssignAgents] = useState(new Set());
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -104,13 +106,22 @@ export default function LeadsPage() {
 
   async function handleAutoAssign() {
     setAssigning(true);
+    const agentIds = [...assignAgents];
     await apiFetch("/api/admin/assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "auto" }),
+      body: JSON.stringify({ mode: "auto", agent_ids: agentIds.length ? agentIds : undefined }),
     });
     setAssigning(false);
+    setShowAssignModal(false);
+    setAssignAgents(new Set());
     fetchLeads();
+  }
+
+  function toggleAssignAgent(id) {
+    const next = new Set(assignAgents);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setAssignAgents(next);
   }
 
   function toggleSelect(id) {
@@ -128,6 +139,17 @@ export default function LeadsPage() {
   }
 
   const nextLead = isHipHot ? getNextToBell() : null;
+
+  // Wait for auth to determine tenant before rendering tenant-specific UI
+  if (authLoading || !tenant) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -153,7 +175,7 @@ export default function LeadsPage() {
           )}
           {isAdmin && isHipHot && (
             <button
-              onClick={handleAutoAssign}
+              onClick={() => setShowAssignModal(true)}
               disabled={assigning}
               className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:border-brand-amber transition-colors disabled:opacity-50"
             >
@@ -381,6 +403,45 @@ export default function LeadsPage() {
 
       <LeadForm open={showLeadForm} onClose={() => setShowLeadForm(false)} onSaved={fetchLeads} />
       <CoworkBar onResult={() => fetchLeads()} />
+
+      {/* Auto-assign modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <h2 className="font-semibold text-lg mb-1">Leads verdelen</h2>
+            <p className="text-sm text-gray-500 mb-4">Selecteer welke agents leads moeten krijgen</p>
+            <div className="space-y-2 mb-4">
+              {agents.map((a) => (
+                <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={assignAgents.has(a.id)}
+                    onChange={() => toggleAssignAgent(a.id)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm font-medium">{a.name}</span>
+                  <span className="text-xs text-gray-400 capitalize">{a.role}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-pill text-sm font-medium hover:bg-gray-50"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleAutoAssign}
+                disabled={assigning || assignAgents.size === 0}
+                className="flex-1 py-2.5 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black disabled:opacity-50"
+              >
+                {assigning ? "Verdelen..." : `Verdeel over ${assignAgents.size || "alle"} agents`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

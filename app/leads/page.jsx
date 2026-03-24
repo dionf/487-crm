@@ -9,7 +9,7 @@ import CoworkBar from "@/components/CoworkBar";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
-import { apiFetch, getTenantFromSession } from "@/lib/api";
+import { apiFetch, getTenantFromSession, isAdminFromSession } from "@/lib/api";
 import {
   Plus,
   Search,
@@ -34,6 +34,7 @@ const CALL_OUTCOME_LABELS = {
 export default function LeadsPage() {
   const { tenant, user, isAdmin } = useOrg();
   const effectiveTenant = tenant || getTenantFromSession();
+  const effectiveAdmin = isAdmin || isAdminFromSession();
   const isHipHot = effectiveTenant === "hiphot";
   const statuses = getLeadStatuses(effectiveTenant);
 
@@ -75,13 +76,13 @@ export default function LeadsPage() {
 
   // Fetch agents for filter/assign
   useEffect(() => {
-    if (isAdmin) {
+    if (effectiveAdmin) {
       apiFetch("/api/admin/users")
         .then((r) => r.json())
         .then((d) => setAgents(d.users || []))
         .catch(() => {});
     }
-  }, [isAdmin]);
+  }, [effectiveAdmin]);
 
   // Find next uncalled lead
   function getNextToBell() {
@@ -175,7 +176,7 @@ export default function LeadsPage() {
               Volgende bellen
             </Link>
           )}
-          {isAdmin && isHipHot && (
+          {effectiveAdmin && isHipHot && (
             <button
               onClick={() => setShowAssignModal(true)}
               disabled={assigning}
@@ -199,7 +200,7 @@ export default function LeadsPage() {
       {selectedLeads.size > 0 && (
         <div className="flex items-center gap-3 mb-4 p-3 bg-brand-amber/10 rounded-xl">
           <span className="text-sm font-medium">{selectedLeads.size} geselecteerd</span>
-          {isAdmin && (
+          {effectiveAdmin && (
             <>
               <ArrowRight className="w-4 h-4 text-gray-400" />
               <select
@@ -261,7 +262,7 @@ export default function LeadsPage() {
           </select>
         )}
 
-        {isAdmin && agents.length > 0 && (
+        {effectiveAdmin && agents.length > 0 && (
           <select
             value={agentFilter}
             onChange={(e) => setAgentFilter(e.target.value)}

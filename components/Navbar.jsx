@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   Settings,
+  Upload,
   LogOut,
   Search,
   ListTodo,
@@ -160,7 +161,7 @@ export default function Navbar() {
 
           {/* Nav links */}
           <div className="flex items-center gap-1">
-            {[...baseNavItems, ...(isAdmin ? [{ href: "/admin/users", label: "Users", icon: Settings }] : [])].map((item) => {
+            {[...baseNavItems, ...(isAdmin ? [{ href: "/admin/users", label: "Users", icon: Settings }, { href: "/admin/import", label: "Import", icon: Upload }] : [])].map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/" && pathname.startsWith(item.href));

@@ -497,19 +497,23 @@ export default function LeadDetailPage() {
 
               {/* Outcome buttons */}
               <div className="grid grid-cols-1 gap-2">
-                {CALL_OUTCOMES.map((outcome) => (
+                {CALL_OUTCOMES.map((outcome) => {
+                  const isActive = lead.call_outcome === outcome.id;
+                  return (
                   <button
                     key={outcome.id}
                     onClick={() => submitCallOutcome(outcome.id)}
                     disabled={callingOutcome === outcome.id}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${outcome.color} ${
-                      callingOutcome === outcome.id ? "opacity-50" : ""
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-colors ${outcome.color} ${
+                      isActive ? "!border-brand-black ring-1 ring-brand-black/20" : ""
+                    } ${callingOutcome === outcome.id ? "opacity-50" : ""}`}
                   >
                     <outcome.icon className="w-4 h-4" />
                     {outcome.label}
+                    {isActive && <Check className="w-4 h-4 ml-auto" />}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -48,7 +48,7 @@ const CALL_OUTCOMES = [
   { id: "terugbellen_5_dagen", label: "Terugbellen (5 dagen)", icon: PhoneForwarded, color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
   { id: "geen_gehoor_terugbellen", label: "Geen gehoor", icon: PhoneOff, color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100" },
   { id: "niet_geinteresseerd", label: "Niet geïnteresseerd", icon: UserX, color: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" },
-  { id: "vraag_opvolgen_collega", label: "Collega opvolgen", icon: PhoneCall, color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" },
+  { id: "vraag_opvolgen_collega", label: "Interne collega opvolgen", icon: PhoneCall, color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" },
 ];
 
 export default function LeadDetailPage() {

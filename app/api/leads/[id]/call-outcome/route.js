@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
     terugbellen_5_dagen: "Terugbellen over 5 dagen",
     geen_gehoor_terugbellen: "Geen gehoor — terugbellen",
     niet_geinteresseerd: "Niet geïnteresseerd",
-    vraag_opvolgen_collega: "Vraag opvolgen door collega",
+    vraag_opvolgen_collega: "Interne collega opvolgen",
   };
 
   let noteContent = `Bel-uitkomst: ${outcomeLabels[outcome]}`;

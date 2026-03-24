@@ -28,7 +28,7 @@ const CALL_OUTCOME_LABELS = {
   terugbellen_5_dagen: { label: "Terugbellen 5d", color: "bg-amber-100 text-amber-700" },
   geen_gehoor_terugbellen: { label: "Geen gehoor", color: "bg-orange-100 text-orange-700" },
   niet_geinteresseerd: { label: "Niet geïnteresseerd", color: "bg-red-100 text-red-700" },
-  vraag_opvolgen_collega: { label: "Collega", color: "bg-purple-100 text-purple-700" },
+  vraag_opvolgen_collega: { label: "Int. collega", color: "bg-purple-100 text-purple-700" },
 };
 
 export default function LeadsPage() {
@@ -77,15 +77,15 @@ export default function LeadsPage() {
     return () => clearTimeout(timeout);
   }, [mounted, fetchLeads]);
 
-  // Fetch agents for filter/assign
+  // Fetch agents for filter/assign (always for HipHot to show agent names, admin for all tenants)
   useEffect(() => {
-    if (effectiveAdmin) {
+    if (effectiveAdmin || isHipHot) {
       apiFetch("/api/admin/users")
         .then((r) => r.json())
         .then((d) => setAgents(d.users || []))
         .catch(() => {});
     }
-  }, [effectiveAdmin]);
+  }, [effectiveAdmin, isHipHot]);
 
   // Find next uncalled lead
   function getNextToBell() {
@@ -301,6 +301,7 @@ export default function LeadsPage() {
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Branche</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Telefoon</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Uitkomst</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Agent</th>
                   </>
                 ) : (
                   <>
@@ -370,6 +371,9 @@ export default function LeadsPage() {
                               <span className="text-xs text-gray-300">Nog niet gebeld</span>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {agents.find(a => a.id === lead.assigned_to)?.name || "—"}
+                          </td>
                         </>
                       ) : (
                         <>
@@ -422,7 +426,14 @@ export default function LeadsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
             <h2 className="font-semibold text-lg mb-1">Leads verdelen</h2>
-            <p className="text-sm text-gray-500 mb-4">Selecteer welke agents leads moeten krijgen</p>
+            {(() => {
+              const unassignedCount = leads.filter(l => !l.assigned_to).length;
+              return unassignedCount > 0 ? (
+                <p className="text-sm text-gray-500 mb-4"><strong>{unassignedCount} onverdeelde leads</strong> verdelen over:</p>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">Alle leads zijn al verdeeld</p>
+              );
+            })()}
             <div className="space-y-2 mb-4">
               {agents.map((a) => (
                 <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer">

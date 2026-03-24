@@ -55,7 +55,6 @@ export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { tenant, user } = useOrg();
-  const isHipHot = tenant === "hiphot";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -204,6 +203,7 @@ export default function LeadDetailPage() {
   }
 
   const { lead, quotes, notes, activities, attachments } = data;
+  const isHipHot = lead.tenant === "hiphot";
   const serviceLabel = SERVICE_TYPES.find((s) => s.id === lead.service_type)?.label;
 
   // Find missing/empty fields

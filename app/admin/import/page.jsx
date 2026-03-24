@@ -125,6 +125,7 @@ export default function ImportPage() {
     let totalImported = 0;
     let totalDuplicates = 0;
     let totalErrors = 0;
+    let allDetails = [];
 
     for (let i = 0; i < leads.length; i += batchSize) {
       const batch = leads.slice(i, i + batchSize);
@@ -138,11 +139,12 @@ export default function ImportPage() {
         totalImported += data.results.imported;
         totalDuplicates += data.results.duplicates;
         totalErrors += data.results.errors;
+        if (data.results.details) allDetails = [...allDetails, ...data.results.details.filter(d => d.status !== "imported")];
       }
       setProgress(Math.min(100, Math.round(((i + batchSize) / leads.length) * 100)));
     }
 
-    setResult({ imported: totalImported, duplicates: totalDuplicates, errors: totalErrors, total: leads.length });
+    setResult({ imported: totalImported, duplicates: totalDuplicates, errors: totalErrors, total: leads.length, details: allDetails });
     setStep("done");
     setImporting(false);
   }
@@ -313,6 +315,20 @@ export default function ImportPage() {
               <p><span className="font-semibold text-red-600">{result.errors}</span> fouten</p>
             )}
           </div>
+          {result.details?.length > 0 && (
+            <div className="mt-4 text-left max-w-md mx-auto max-h-48 overflow-y-auto bg-gray-50 rounded-xl p-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Details</p>
+              {result.details.map((d, i) => (
+                <div key={i} className="text-xs py-1 border-b border-gray-100 last:border-0">
+                  <span className="font-medium">{d.company || "?"}</span>
+                  <span className={`ml-2 ${d.status === "error" ? "text-red-600" : d.status === "duplicate" ? "text-amber-600" : "text-gray-500"}`}>
+                    {d.status === "error" ? `Fout: ${d.error}` : d.status === "duplicate" ? "Duplicaat" : d.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button
             onClick={() => router.push("/leads")}
             className="mt-6 px-6 py-2 rounded-pill text-sm font-semibold text-white"

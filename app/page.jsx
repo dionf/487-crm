@@ -32,9 +32,12 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Only fetch after mount (client-side) to ensure localStorage session is available
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+    if (mounted) fetchLeads();
+  }, [mounted, fetchLeads]);
 
   async function handleStatusChange(leadId, newStatus) {
     // Optimistic update

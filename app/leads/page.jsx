@@ -69,10 +69,13 @@ export default function LeadsPage() {
     }
   }, [search, statusFilter, serviceFilter, agentFilter]);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
+    if (!mounted) return;
     const timeout = setTimeout(fetchLeads, 300);
     return () => clearTimeout(timeout);
-  }, [fetchLeads]);
+  }, [mounted, fetchLeads]);
 
   // Fetch agents for filter/assign
   useEffect(() => {

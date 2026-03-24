@@ -57,6 +57,9 @@ export default function PinGate({ children }) {
       }
 
       login(data.session);
+      // Force reload to ensure all components pick up the new session/tenant
+      window.location.href = "/";
+      return;
     } catch {
       setError("Verbindingsfout");
     }

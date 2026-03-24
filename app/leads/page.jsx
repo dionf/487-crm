@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Users,
   Shuffle,
+  Trash2,
 } from "lucide-react";
 
 const CALL_OUTCOME_LABELS = {
@@ -124,6 +125,16 @@ export default function LeadsPage() {
     setAssignAgents(next);
   }
 
+  async function handleBulkDelete() {
+    const count = selectedLeads.size;
+    if (!confirm(`Weet je zeker dat je ${count} lead${count > 1 ? "s" : ""} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    for (const id of selectedLeads) {
+      await apiFetch(`/api/leads/${id}`, { method: "DELETE" });
+    }
+    setSelectedLeads(new Set());
+    fetchLeads();
+  }
+
   function toggleSelect(id) {
     const next = new Set(selectedLeads);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -184,20 +195,31 @@ export default function LeadsPage() {
       </div>
 
       {/* Bulk assign bar */}
-      {isAdmin && selectedLeads.size > 0 && (
+      {selectedLeads.size > 0 && (
         <div className="flex items-center gap-3 mb-4 p-3 bg-brand-amber/10 rounded-xl">
           <span className="text-sm font-medium">{selectedLeads.size} geselecteerd</span>
-          <ArrowRight className="w-4 h-4 text-gray-400" />
-          <select
-            onChange={(e) => e.target.value && handleBulkAssign(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-gray-200 text-sm bg-white"
-            defaultValue=""
+          {isAdmin && (
+            <>
+              <ArrowRight className="w-4 h-4 text-gray-400" />
+              <select
+                onChange={(e) => e.target.value && handleBulkAssign(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-sm bg-white"
+                defaultValue=""
+              >
+                <option value="">Toewijzen aan...</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </>
+          )}
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ml-auto"
           >
-            <option value="">Toewijzen aan...</option>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
+            <Trash2 className="w-3.5 h-3.5" />
+            Verwijderen
+          </button>
         </div>
       )}
 
@@ -258,16 +280,14 @@ export default function LeadsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
-                {isAdmin && (
-                  <th className="px-3 py-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={selectedLeads.size === leads.length && leads.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-300"
-                    />
-                  </th>
-                )}
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={selectedLeads.size === leads.length && leads.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300"
+                  />
+                </th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Bedrijf</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Status</th>
                 {isHipHot ? (
@@ -305,16 +325,14 @@ export default function LeadsPage() {
                   const outcomeInfo = CALL_OUTCOME_LABELS[lead.call_outcome];
                   return (
                     <tr key={lead.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      {isAdmin && (
-                        <td className="px-3 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedLeads.has(lead.id)}
-                            onChange={() => toggleSelect(lead.id)}
-                            className="rounded border-gray-300"
-                          />
-                        </td>
-                      )}
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeads.has(lead.id)}
+                          onChange={() => toggleSelect(lead.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <Link href={`/leads/${lead.id}`} className="block">
                           <p className="font-semibold text-sm text-brand-black">{lead.company_name}</p>

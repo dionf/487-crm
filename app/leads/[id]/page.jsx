@@ -209,9 +209,13 @@ export default function LeadDetailPage() {
   // Find missing/empty fields
   const missingFields = [];
   if (!lead.phone) missingFields.push("Telefoon");
-  if (!lead.service_type) missingFields.push("Service type");
-  if (!lead.estimated_value) missingFields.push("Geschatte waarde");
-  if (!lead.source) missingFields.push("Bron");
+  if (isHipHot) {
+    if (!lead.industry && !lead.category) missingFields.push("Branche");
+  } else {
+    if (!lead.service_type) missingFields.push("Service type");
+    if (!lead.estimated_value) missingFields.push("Geschatte waarde");
+    if (!lead.source) missingFields.push("Bron");
+  }
   if (!lead.website_url) missingFields.push("Website");
 
   // Convert markdown-style AI summary to HTML
@@ -359,7 +363,28 @@ export default function LeadDetailPage() {
                   <span className="text-sm text-gray-300 italic">Geen telefoon</span>
                 </div>
               )}
-              {serviceLabel ? (
+              {isHipHot ? (
+                <>
+                  {lead.industry && (
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm">{lead.industry}</span>
+                    </div>
+                  )}
+                  {lead.category && (
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500">{lead.category}</span>
+                    </div>
+                  )}
+                  {!lead.industry && !lead.category && (
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-gray-300" />
+                      <span className="text-sm text-gray-300 italic">Geen branche</span>
+                    </div>
+                  )}
+                </>
+              ) : serviceLabel ? (
                 <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-gray-400" />
                   <span className="text-sm">{serviceLabel}</span>

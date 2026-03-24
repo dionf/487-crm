@@ -37,7 +37,7 @@ export async function POST(request) {
 
       const { error } = await supabase.from("leads").insert({
         company_name: lead.company_name || "Onbekend",
-        contact_person: lead.contact_person || null,
+        contact_person: lead.contact_person || "-",
         email: lead.email || null,
         phone: lead.phone || null,
         website_url: lead.website_url || null,

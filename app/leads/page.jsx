@@ -31,7 +31,7 @@ const CALL_OUTCOME_LABELS = {
 };
 
 export default function LeadsPage() {
-  const { tenant, user, isAdmin, loading: authLoading } = useOrg();
+  const { tenant, user, isAdmin } = useOrg();
   const isHipHot = tenant === "hiphot";
   const statuses = getLeadStatuses(tenant);
 
@@ -140,16 +140,6 @@ export default function LeadsPage() {
 
   const nextLead = isHipHot ? getNextToBell() : null;
 
-  // Wait for auth to determine tenant before rendering tenant-specific UI
-  if (authLoading) {
-    return (
-      <AppShell>
-        <div className="flex items-center justify-center py-20">
-          <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppShell>
-    );
-  }
 
   return (
     <AppShell>

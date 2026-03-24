@@ -1,17 +1,26 @@
 import { supabase } from "@/lib/supabase";
 
 async function scrapeWebsite(url) {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; 487CRM/1.0)",
-        Accept: "text/html",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
+  // Try multiple URL variations
+  const urls = [url];
+  if (!url.includes("www.")) {
+    urls.push(url.replace("https://", "https://www."));
+  }
 
-    const html = await res.text();
+  for (const tryUrl of urls) {
+    try {
+      const res = await fetch(tryUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      if (!html || html.length < 100) continue;
 
     // Strip scripts, styles, tags — keep text content
     let text = html
@@ -34,10 +43,12 @@ async function scrapeWebsite(url) {
       text = text.substring(0, 3000) + "...";
     }
 
-    return text;
-  } catch {
-    return null;
+      return text;
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 export async function POST(request, { params }) {

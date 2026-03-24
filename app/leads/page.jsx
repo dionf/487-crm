@@ -56,7 +56,12 @@ export default function LeadsPage() {
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
     if (serviceFilter) params.set("service_type", serviceFilter);
-    if (agentFilter) params.set("assigned_to", agentFilter);
+    // Agents only see their own leads, admins can filter
+    if (agentFilter) {
+      params.set("assigned_to", agentFilter);
+    } else if (isHipHot && !effectiveAdmin && user?.id) {
+      params.set("assigned_to", user.id);
+    }
 
     try {
       const res = await apiFetch(`/api/leads?${params}`);
@@ -67,7 +72,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, serviceFilter, agentFilter]);
+  }, [search, statusFilter, serviceFilter, agentFilter, isHipHot, effectiveAdmin, user]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);

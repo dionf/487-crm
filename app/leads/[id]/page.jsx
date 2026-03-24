@@ -515,6 +515,28 @@ export default function LeadDetailPage() {
                   );
                 })}
               </div>
+
+              {/* Volgende bellen button */}
+              {lead.call_outcome && (
+                <button
+                  onClick={async () => {
+                    const res = await apiFetch("/api/leads?sort=created_at&order=asc");
+                    const data = await res.json();
+                    const next = data.leads?.find((l) =>
+                      l.id !== lead.id &&
+                      !l.call_outcome &&
+                      l.status !== "offerte_verloren" &&
+                      l.status !== "offerte_gewonnen"
+                    );
+                    if (next) router.push(`/leads/${next.id}`);
+                    else alert("Geen ongebelde leads meer!");
+                  }}
+                  className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  Volgende bellen
+                </button>
+              )}
             </div>
           )}
 

@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 
 const FILE_ICONS = {
   "application/pdf": FileText,
@@ -57,7 +58,7 @@ export default function AttachmentUpload({
         if (quoteId) formData.append("quote_id", quoteId);
         formData.append("uploaded_by", getCurrentUser());
 
-        await fetch("/api/attachments", {
+        await apiFetch("/api/attachments", {
           method: "POST",
           body: formData,
         });
@@ -83,7 +84,7 @@ export default function AttachmentUpload({
 
   async function handleDownload(attachmentId, fileName) {
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`);
+      const res = await apiFetch(`/api/attachments/${attachmentId}`);
       const data = await res.json();
       if (data.download_url) {
         window.open(data.download_url, "_blank");
@@ -93,7 +94,7 @@ export default function AttachmentUpload({
 
   async function handleDelete(attachmentId) {
     try {
-      await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+      await apiFetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
       onUploaded?.();
     } catch {}
   }

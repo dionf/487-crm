@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Calendar } from "lucide-react";
 import { NOTE_TYPES } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
 
 export default function NoteForm({ open, onClose, leadId, onSaved }) {
   const [form, setForm] = useState({
@@ -32,7 +33,7 @@ export default function NoteForm({ open, onClose, leadId, onSaved }) {
     }
 
     try {
-      const res = await fetch("/api/notes", {
+      const res = await apiFetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

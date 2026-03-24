@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MessageSquare, Send, Loader2, X } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function CoworkBar({ onResult }) {
   const [open, setOpen] = useState(false);
@@ -44,7 +45,7 @@ export default function CoworkBar({ onResult }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/cowork", {
+      const res = await apiFetch("/api/cowork", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: userMessage }),

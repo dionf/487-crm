@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function StatsPanel({ leads }) {
   const [metrics, setMetrics] = useState(null);
@@ -20,7 +21,7 @@ export default function StatsPanel({ leads }) {
 
   useEffect(() => {
     if (metricsOpen && !metrics) {
-      fetch("/api/metrics")
+      apiFetch("/api/metrics")
         .then((r) => r.json())
         .then((data) => setMetrics(data.metrics || []))
         .catch(() => setMetrics([]));

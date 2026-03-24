@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
+import { apiFetch } from "@/lib/api";
 import StatusBadge from "./StatusBadge";
 
 const navItems = [
@@ -65,7 +66,7 @@ export default function Navbar() {
       return;
     }
     const timer = setTimeout(async () => {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
       const data = await res.json();
       setSearchResults(data.results);
     }, 300);
@@ -76,7 +77,7 @@ export default function Navbar() {
   async function fetchTodos() {
     setTodoLoading(true);
     const user = getCurrentUser();
-    const res = await fetch(`/api/todos?user=${encodeURIComponent(user)}`);
+    const res = await apiFetch(`/api/todos?user=${encodeURIComponent(user)}`);
     const data = await res.json();
     setTodos(data.todos || []);
     setTodoLoading(false);
@@ -86,7 +87,7 @@ export default function Navbar() {
   async function fetchFollowUps() {
     setNotifLoading(true);
     try {
-      const res = await fetch("/api/follow-ups");
+      const res = await apiFetch("/api/follow-ups");
       const data = await res.json();
       setFollowUps(data.tasks || []);
     } catch {}
@@ -104,7 +105,7 @@ export default function Navbar() {
   }
 
   async function completeFollowUp(taskId) {
-    await fetch(`/api/follow-ups/${taskId}`, {
+    await apiFetch(`/api/follow-ups/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_completed: true }),

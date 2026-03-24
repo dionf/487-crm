@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { format, addDays } from "date-fns";
+import { apiFetch } from "@/lib/api";
 
 export default function QuoteForm({ open, onClose, leadId, onSaved }) {
   const [form, setForm] = useState({
@@ -27,7 +28,7 @@ export default function QuoteForm({ open, onClose, leadId, onSaved }) {
     setError("");
 
     try {
-      const res = await fetch("/api/quotes", {
+      const res = await apiFetch("/api/quotes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

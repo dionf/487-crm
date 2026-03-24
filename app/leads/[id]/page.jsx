@@ -35,6 +35,7 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function LeadDetailPage() {
   const params = useParams();
@@ -63,8 +64,8 @@ export default function LeadDetailPage() {
   const fetchData = useCallback(async () => {
     try {
       const [leadRes, attachRes] = await Promise.all([
-        fetch(`/api/leads/${params.id}`),
-        fetch(`/api/attachments?lead_id=${params.id}`),
+        apiFetch(`/api/leads/${params.id}`),
+        apiFetch(`/api/attachments?lead_id=${params.id}`),
       ]);
       if (!leadRes.ok) {
         router.push("/leads");
@@ -87,7 +88,7 @@ export default function LeadDetailPage() {
 
   async function updateStatus(newStatus) {
     setShowStatusMenu(false);
-    await fetch(`/api/leads/${params.id}`, {
+    await apiFetch(`/api/leads/${params.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
@@ -96,7 +97,7 @@ export default function LeadDetailPage() {
   }
 
   async function toggleTodo(noteId, isCompleted) {
-    await fetch(`/api/notes/${noteId}`, {
+    await apiFetch(`/api/notes/${noteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_completed: !isCompleted }),
@@ -105,12 +106,12 @@ export default function LeadDetailPage() {
   }
 
   async function deleteNote(noteId) {
-    await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+    await apiFetch(`/api/notes/${noteId}`, { method: "DELETE" });
     fetchData();
   }
 
   async function saveNoteEdit(noteId) {
-    await fetch(`/api/notes/${noteId}`, {
+    await apiFetch(`/api/notes/${noteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: editNoteContent }),
@@ -120,12 +121,12 @@ export default function LeadDetailPage() {
   }
 
   async function deleteQuote(quoteId) {
-    await fetch(`/api/quotes/${quoteId}`, { method: "DELETE" });
+    await apiFetch(`/api/quotes/${quoteId}`, { method: "DELETE" });
     fetchData();
   }
 
   async function saveQuoteEdit(quoteId) {
-    await fetch(`/api/quotes/${quoteId}`, {
+    await apiFetch(`/api/quotes/${quoteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description: editQuoteDesc }),
@@ -135,7 +136,7 @@ export default function LeadDetailPage() {
   }
 
   async function updateQuoteStatus(quoteId, newStatus) {
-    await fetch(`/api/quotes/${quoteId}`, {
+    await apiFetch(`/api/quotes/${quoteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
@@ -146,7 +147,7 @@ export default function LeadDetailPage() {
   async function generateAiSummary() {
     setAiLoading(true);
     try {
-      const res = await fetch(`/api/leads/${params.id}/summary`, { method: "POST" });
+      const res = await apiFetch(`/api/leads/${params.id}/summary`, { method: "POST" });
       const result = await res.json();
       if (result.summary) {
         fetchData();

@@ -7,6 +7,7 @@ import StatsPanel from "@/components/StatsPanel";
 import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
 import { Plus, RefreshCw, LayoutGrid, List } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState([]);
@@ -15,7 +16,7 @@ export default function DashboardPage() {
 
   const fetchLeads = useCallback(async () => {
     try {
-      const res = await fetch("/api/leads");
+      const res = await apiFetch("/api/leads");
       const data = await res.json();
       setLeads(data.leads || []);
     } catch {
@@ -36,7 +37,7 @@ export default function DashboardPage() {
     );
 
     try {
-      await fetch(`/api/leads/${leadId}`, {
+      await apiFetch(`/api/leads/${leadId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),

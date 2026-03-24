@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   Filter,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
@@ -33,7 +34,7 @@ export default function LeadsPage() {
     if (serviceFilter) params.set("service_type", serviceFilter);
 
     try {
-      const res = await fetch(`/api/leads?${params}`);
+      const res = await apiFetch(`/api/leads?${params}`);
       const data = await res.json();
       setLeads(data.leads || []);
     } catch {

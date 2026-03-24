@@ -141,7 +141,7 @@ export default function LeadsPage() {
   const nextLead = isHipHot ? getNextToBell() : null;
 
   // Wait for auth to determine tenant before rendering tenant-specific UI
-  if (authLoading || !tenant) {
+  if (authLoading) {
     return (
       <AppShell>
         <div className="flex items-center justify-center py-20">

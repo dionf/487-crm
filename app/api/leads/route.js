@@ -1,20 +1,28 @@
 import { supabase } from "@/lib/supabase";
 
+function getTenant(request) {
+  return request.headers.get("x-tenant") || "48-7";
+}
+
 export async function GET(request) {
+  const tenant = getTenant(request);
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const service_type = searchParams.get("service_type");
   const search = searchParams.get("search");
   const sort = searchParams.get("sort") || "created_at";
   const order = searchParams.get("order") || "desc";
+  const assigned_to = searchParams.get("assigned_to");
 
   let query = supabase
     .from("leads")
     .select("*, quotes(id), notes(id, is_completed, note_type)")
+    .eq("tenant", tenant)
     .order(sort, { ascending: order === "asc" });
 
   if (status) query = query.eq("status", status);
   if (service_type) query = query.eq("service_type", service_type);
+  if (assigned_to) query = query.eq("assigned_to", assigned_to);
   if (search) {
     query = query.or(
       `company_name.ilike.%${search}%,contact_person.ilike.%${search}%`
@@ -42,8 +50,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const tenant = getTenant(request);
   const body = await request.json();
-  const { company_name, contact_person, email, phone, service_type, estimated_value, source, website_url } = body;
+  const { company_name, contact_person, email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage } = body;
 
   if (!company_name || !contact_person || !email) {
     return Response.json(
@@ -63,6 +72,8 @@ export async function POST(request) {
       estimated_value: estimated_value || null,
       source: source || null,
       website_url: website_url || null,
+      commission_partner_percentage: commission_partner_percentage || null,
+      tenant,
     })
     .select()
     .single();
@@ -77,6 +88,7 @@ export async function POST(request) {
     activity_type: "lead_created",
     description: `Lead aangemaakt: ${company_name}`,
     created_by: body.created_by || null,
+    tenant,
   });
 
   return Response.json({ lead: data }, { status: 201 });

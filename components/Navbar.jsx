@@ -16,7 +16,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
-import UserSelector from "./UserSelector";
+import { useOrg } from "@/lib/org-context";
 import StatusBadge from "./StatusBadge";
 
 const navItems = [
@@ -27,6 +27,7 @@ const navItems = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, organization, logout } = useOrg();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -47,10 +48,7 @@ export default function Navbar() {
   const notifRef = useRef(null);
 
   function getCurrentUser() {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("crm-user") || "Dion";
-    }
-    return "Dion";
+    return user?.name || "Dion";
   }
 
   // Load todo count and follow-ups on mount
@@ -132,9 +130,10 @@ export default function Navbar() {
   }, []);
 
   function handleLogout() {
-    localStorage.removeItem("crm-auth");
-    window.location.reload();
+    logout();
   }
+
+  const accentColor = organization?.theme?.accent || "#F5A623";
 
   const hasOverdue = todos.some(
     (t) => t.due_date && new Date(t.due_date) < new Date()
@@ -146,10 +145,15 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-black rounded-lg flex items-center justify-center">
-              <span className="text-brand-amber font-bold text-sm">48</span>
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+              style={{ backgroundColor: accentColor }}
+            >
+              {organization?.theme?.logo_text || "CRM"}
             </div>
-            <span className="font-bold text-brand-black">-7 CRM</span>
+            <span className="font-bold text-brand-black">
+              {organization?.display_name || "CRM"}
+            </span>
           </Link>
 
           {/* Nav links */}
@@ -422,7 +426,17 @@ export default function Navbar() {
               )}
             </div>
 
-            <UserSelector />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-100">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                style={{ backgroundColor: accentColor }}
+              >
+                {user?.name?.charAt(0) || "?"}
+              </div>
+              <span className="text-sm font-medium text-brand-dark-gray">
+                {user?.name?.split(" ")[0] || "User"}
+              </span>
+            </div>
             <button
               onClick={handleLogout}
               className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"

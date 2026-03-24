@@ -30,3 +30,8 @@ Dit is NIET HubSpot. Als de gebruiker "CRM", "487crm", "48-7 crm", "leads" of "o
 - AI bedrijfsanalyse per lead
 - Zoekfunctie in header
 - Todo overzicht per gebruiker
+
+## Multi-Tenant Uitbreiding
+Zie PRD-multi-tenant.md voor de volledige specificatie.
+Tech stack: Next.js, Supabase (project: olzyffwotjtyvupomoiz), Vercel.
+Werk de fases sequentieel af. Begin met Fase 1 (database & auth).

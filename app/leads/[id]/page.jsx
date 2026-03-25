@@ -218,23 +218,44 @@ export default function LeadDetailPage() {
   }
   if (!lead.website_url) missingFields.push("Website");
 
-  // Convert markdown-style AI summary to HTML
+  // Convert markdown-style AI summary to clean HTML
   function formatAiSummary(text) {
-    return text
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/^/, '<p>')
-      .replace(/$/, '</p>')
-      .replace(/<p><h/g, '<h')
-      .replace(/<\/h([234])><\/p>/g, '</h$1>')
-      .replace(/<p><ul>/g, '<ul>')
-      .replace(/<\/ul><\/p>/g, '</ul>');
+    const lines = text.split('\n');
+    let html = '';
+    let inList = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (inList) { html += '</ul>'; inList = false; }
+        continue;
+      }
+
+      // Headers: ## Heading or **Heading:** or **Heading**
+      const h2Match = trimmed.match(/^#{1,3}\s+(.+)$/);
+      const boldHeaderMatch = trimmed.match(/^\*\*([^*]+?)(?::?\s*)\*\*\s*$/);
+      if (h2Match || boldHeaderMatch) {
+        if (inList) { html += '</ul>'; inList = false; }
+        const title = (h2Match ? h2Match[1] : boldHeaderMatch[1]).replace(/\*\*/g, '');
+        html += `<h3>${title}</h3>`;
+        continue;
+      }
+
+      // Bullet points: - item or • item
+      const bulletMatch = trimmed.match(/^[-•]\s+(.+)$/);
+      if (bulletMatch) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${bulletMatch[1].replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</li>`;
+        continue;
+      }
+
+      // Regular paragraph text
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<p>${trimmed.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p>`;
+    }
+
+    if (inList) html += '</ul>';
+    return html;
   }
 
   const filteredNotes =

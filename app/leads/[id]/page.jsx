@@ -755,7 +755,7 @@ export default function LeadDetailPage() {
             </div>
             {lead.ai_summary ? (
               <div
-                className="text-sm text-brand-dark-gray leading-relaxed prose prose-sm prose-headings:text-brand-black prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 max-w-none"
+                className="text-sm text-brand-dark-gray leading-relaxed max-w-none [&_h3]:text-xs [&_h3]:font-bold [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:text-gray-500 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3:first-child]:mt-0 [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:pl-4 [&_ul]:list-disc [&_li]:mb-1 [&_strong]:font-semibold [&_strong]:text-brand-black"
                 dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
               />
             ) : (

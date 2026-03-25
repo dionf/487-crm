@@ -401,21 +401,23 @@ server.tool(
     const ext = name.split(".").pop()?.toLowerCase() || "";
     const mimeTypes = {
       pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-      gif: "image/gif", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      gif: "image/gif", webp: "image/webp",
+      doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      json: "application/json", html: "text/html", txt: "text/plain", csv: "text/csv",
     };
     const mimeType = mimeTypes[ext] || "application/octet-stream";
-    const storagePath = `${id}/${Date.now()}_${name}`;
+    const storagePath = `leads/${id}/${Date.now()}_${name}`;
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage (bucket = "attachments")
     const { error: uploadError } = await supabase.storage
-      .from("crm-attachments")
+      .from("attachments")
       .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false });
 
     if (uploadError) return { content: [{ type: "text", text: `Upload mislukt: ${uploadError.message}` }] };
 
     // Get public URL
-    const { data: urlData } = supabase.storage.from("crm-attachments").getPublicUrl(storagePath);
+    const { data: urlData } = supabase.storage.from("attachments").getPublicUrl(storagePath);
     const fileUrl = urlData?.publicUrl || "";
 
     // Insert in attachments table

@@ -10,6 +10,7 @@ import NoteForm from "@/components/NoteForm";
 import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
+import ContactsPanel from "@/components/ContactsPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
@@ -80,9 +81,10 @@ export default function LeadDetailPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [leadRes, attachRes] = await Promise.all([
+      const [leadRes, attachRes, contactsRes] = await Promise.all([
         apiFetch(`/api/leads/${params.id}`),
         apiFetch(`/api/attachments?lead_id=${params.id}`),
+        apiFetch(`/api/contacts?lead_id=${params.id}`),
       ]);
       if (!leadRes.ok) {
         router.push("/leads");
@@ -90,7 +92,9 @@ export default function LeadDetailPage() {
       }
       const result = await leadRes.json();
       const attachData = await attachRes.json();
+      const contactsData = await contactsRes.json();
       result.attachments = attachData.attachments || [];
+      result.contacts = contactsData.contacts || [];
       setData(result);
     } catch {
       router.push("/leads");
@@ -202,7 +206,7 @@ export default function LeadDetailPage() {
     );
   }
 
-  const { lead, quotes, notes, activities, attachments } = data;
+  const { lead, quotes, notes, activities, attachments, contacts } = data;
   const isHipHot = lead.tenant === "hiphot";
   const serviceLabel = SERVICE_TYPES.find((s) => s.id === lead.service_type)?.label;
 
@@ -485,6 +489,18 @@ export default function LeadDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Contacts */}
+          <div className="bg-white border border-gray-100 rounded-card p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Contactpersonen ({contacts?.length || 0})
+            </h3>
+            <ContactsPanel
+              leadId={params.id}
+              contacts={contacts || []}
+              onUpdate={fetchData}
+            />
           </div>
 
           {/* Call Outcome Panel (HipHot only) */}

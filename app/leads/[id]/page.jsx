@@ -165,6 +165,15 @@ export default function LeadDetailPage() {
     fetchData();
   }
 
+  async function publishQuote(quoteId) {
+    await apiFetch(`/api/quotes/${quoteId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    fetchData();
+  }
+
   async function submitCallOutcome(outcomeId) {
     setCallingOutcome(outcomeId);
     try {
@@ -836,6 +845,43 @@ export default function LeadDetailPage() {
                             </div>
                           </div>
                           {q.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{q.description}</p>}
+                          {/* Publish / Link */}
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            {q.public_hash ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    const url = `${window.location.origin}/offerte/${q.public_hash}`;
+                                    navigator.clipboard.writeText(url);
+                                    alert("Link gekopieerd!");
+                                  }}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700 hover:bg-green-100"
+                                >
+                                  Link kopiëren
+                                </button>
+                                <a
+                                  href={`/offerte/${q.public_hash}`}
+                                  target="_blank"
+                                  rel="noopener"
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                >
+                                  Bekijken ↗
+                                </a>
+                                {q.accepted_at && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700">
+                                    ✓ Geaccepteerd
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => publishQuote(q.id)}
+                                className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-brand-amber/10 text-brand-orange hover:bg-brand-amber/20"
+                              >
+                                Publiceer offerte
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

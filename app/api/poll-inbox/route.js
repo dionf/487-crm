@@ -102,16 +102,64 @@ export async function GET(request) {
             }
           }
 
-          // Parse email content
+          // Parse email content — use HTML first (preserves full thread), fallback to text
           const parsed = await simpleParser(msg.source);
-          const emailBody =
-            parsed.text ||
-            stripHtml(parsed.html || "") ||
-            "(geen inhoud)";
           const fromEmail = parsed.from?.value?.[0]?.address || logEntry.email_from;
           const fromName = parsed.from?.value?.[0]?.name || "";
 
-          // Extract lead data with Claude
+          // Get full email body including quoted replies
+          // HTML typically contains the full thread, text sometimes strips it
+          const fullHtmlBody = parsed.html ? stripHtml(parsed.html) : null;
+          const textBody = parsed.text || "";
+          // Use whichever is longer (more complete thread)
+          const emailBody = (fullHtmlBody && fullHtmlBody.length > textBody.length)
+            ? fullHtmlBody
+            : textBody || "(geen inhoud)";
+
+          // Check if sender email matches an existing lead
+          const allEmails = extractAllEmails(emailBody, fromEmail, parsed.to?.value, parsed.cc?.value);
+          let existingLead = null;
+
+          for (const checkEmail of allEmails) {
+            const { data } = await supabase
+              .from("leads")
+              .select("id, company_name, contact_person, email")
+              .ilike("email", checkEmail)
+              .limit(1)
+              .maybeSingle();
+            if (data) {
+              existingLead = data;
+              break;
+            }
+          }
+
+          if (existingLead) {
+            // Existing lead found — add email as note, don't create new lead
+            await supabase.from("notes").insert({
+              lead_id: existingLead.id,
+              content: `Van: ${fromName} <${fromEmail}>\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,
+              note_type: "email",
+              created_by: "Inbox",
+            });
+
+            await supabase.from("activities").insert({
+              lead_id: existingLead.id,
+              activity_type: "email_received",
+              description: `Email ontvangen: ${logEntry.email_subject}`,
+              created_by: "Inbox",
+            });
+
+            // Mark as read
+            await client.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true });
+
+            logEntry.status = "matched_existing";
+            logEntry.lead_id = existingLead.id;
+            await insertLog(logEntry);
+            results.push({ ...logEntry, lead_id: existingLead.id, matched: existingLead.company_name });
+            continue;
+          }
+
+          // No existing lead — extract data with Claude and create new lead
           const leadData = await extractLeadWithClaude(
             emailBody,
             logEntry.email_subject,
@@ -139,7 +187,7 @@ export async function GET(request) {
 
           if (leadError) throw new Error(`Lead insert failed: ${leadError.message}`);
 
-          // Insert original email as note
+          // Insert original email as note (full thread)
           await supabase.from("notes").insert({
             lead_id: lead.id,
             content: `Van: ${fromName} <${fromEmail}>\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,
@@ -291,6 +339,34 @@ function stripHtml(html) {
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+// Extract all non-internal email addresses from the thread for lead matching
+function extractAllEmails(body, fromEmail, toAddresses, ccAddresses) {
+  const internalDomains = ["48-7.nl", "48-7.ai"];
+  const emails = new Set();
+
+  // Add from email
+  if (fromEmail) emails.add(fromEmail.toLowerCase());
+
+  // Add to/cc addresses
+  [toAddresses, ccAddresses].forEach(list => {
+    (list || []).forEach(addr => {
+      if (addr.address) emails.add(addr.address.toLowerCase());
+    });
+  });
+
+  // Extract emails from body (catches quoted thread participants)
+  const bodyEmails = body.match(/[\w.-]+@[\w.-]+\.\w+/g) || [];
+  bodyEmails.forEach(e => emails.add(e.toLowerCase()));
+
+  // Remove internal emails and free email domains
+  const filtered = [...emails].filter(e => {
+    const domain = e.split("@")[1];
+    return !internalDomains.includes(domain) && !FREE_EMAIL_DOMAINS.includes(domain);
+  });
+
+  return filtered;
 }
 
 const FREE_EMAIL_DOMAINS = [

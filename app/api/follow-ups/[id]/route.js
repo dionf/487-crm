@@ -1,7 +1,15 @@
 import { supabase } from "@/lib/supabase";
 
 export async function PATCH(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
+
+  // Verify task belongs to tenant
+  const { data: existing } = await supabase
+    .from("follow_up_tasks").select("tenant").eq("id", params.id).single();
+  if (!existing || existing.tenant !== tenant) {
+    return Response.json({ error: "Taak niet gevonden" }, { status: 404 });
+  }
 
   const updates = {};
   if (body.is_completed !== undefined) {

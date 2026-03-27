@@ -1,13 +1,15 @@
 import { supabase } from "@/lib/supabase";
 
 export async function GET(request) {
+  const tenant = request.headers.get("x-auth-tenant");
   const { searchParams } = new URL(request.url);
   const quote_id = searchParams.get("quote_id");
   const lead_id = searchParams.get("lead_id");
 
   let query = supabase
     .from("attachments")
-    .select("*")
+    .select("*, leads!inner(tenant)")
+    .eq("leads.tenant", tenant)
     .order("created_at", { ascending: false });
 
   if (quote_id) query = query.eq("quote_id", quote_id);
@@ -23,17 +25,26 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const tenant = request.headers.get("x-auth-tenant");
+  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
   const formData = await request.formData();
   const file = formData.get("file");
   const quote_id = formData.get("quote_id");
   const lead_id = formData.get("lead_id");
-  const uploaded_by = formData.get("uploaded_by") || "Dion";
+  const uploaded_by = formData.get("uploaded_by") || userName || "Onbekend";
 
   if (!file || !lead_id) {
     return Response.json(
       { error: "file en lead_id zijn verplicht" },
       { status: 400 }
     );
+  }
+
+  // Verify lead belongs to tenant
+  const { data: lead } = await supabase
+    .from("leads").select("tenant").eq("id", lead_id).single();
+  if (!lead || lead.tenant !== tenant) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
   }
 
   // Create unique storage path
@@ -80,6 +91,7 @@ export async function POST(request) {
     description: `Bijlage toegevoegd: ${file.name}${quote_id ? " (bij offerte)" : ""}`,
     metadata: { attachment_id: data.id, file_name: file.name, quote_id },
     created_by: uploaded_by,
+    tenant,
   });
 
   return Response.json({ attachment: data }, { status: 201 });

@@ -1,12 +1,8 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 // POST /api/leads/:id/call-outcome — register a call outcome
 export async function POST(request, { params }) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
   const { outcome, note, user_id, user_name } = body;
 
@@ -23,6 +19,14 @@ export async function POST(request, { params }) {
   }
 
   const leadId = params.id;
+
+  // Verify lead belongs to tenant
+  const { data: lead } = await supabase
+    .from("leads").select("tenant").eq("id", leadId).single();
+  if (!lead || lead.tenant !== tenant) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
+  }
+
   const now = new Date().toISOString();
 
   // Update lead

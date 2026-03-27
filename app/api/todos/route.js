@@ -1,11 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 export async function GET(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const { searchParams } = new URL(request.url);
   const user = searchParams.get("user");
 

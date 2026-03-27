@@ -1,11 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 export async function GET(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const service_type = searchParams.get("service_type");
@@ -50,7 +46,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
   const { company_name, contact_person, email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage } = body;
 

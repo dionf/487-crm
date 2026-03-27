@@ -1,10 +1,13 @@
 import { supabase } from "@/lib/supabase";
 
 export async function GET(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
+
   const { data, error } = await supabase
     .from("quote_templates")
     .select("*")
     .eq("id", params.id)
+    .eq("tenant", tenant)
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -12,6 +15,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
   const updates = {};
 
@@ -24,6 +28,7 @@ export async function PATCH(request, { params }) {
     .from("quote_templates")
     .update(updates)
     .eq("id", params.id)
+    .eq("tenant", tenant)
     .select()
     .single();
 
@@ -32,10 +37,13 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
+
   const { error } = await supabase
     .from("quote_templates")
     .update({ is_active: false })
-    .eq("id", params.id);
+    .eq("id", params.id)
+    .eq("tenant", tenant);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true });

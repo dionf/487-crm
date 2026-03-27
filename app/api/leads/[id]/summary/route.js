@@ -52,12 +52,14 @@ async function scrapeWebsite(url) {
 }
 
 export async function POST(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
   const { id } = params;
 
   const { data: lead, error } = await supabase
     .from("leads")
     .select("*")
     .eq("id", id)
+    .eq("tenant", tenant)
     .single();
 
   if (error || !lead) {

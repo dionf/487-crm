@@ -67,8 +67,6 @@ function parseCommand(command) {
   }
 
   // Quote creation patterns
-  // "maak offerte voor Enablemi van 5000 voor Cowork setup"
-  // "offerte Enablemi 5000 cowork setup"
   const quoteMatch1 = command.match(/(?:maak\s+)?offerte\s+(?:voor\s+)?(.+?)\s+(?:van\s+)?[€]?\s*(\d+[\d.,]*)\s*(?:voor\s+)?(.+)?/i);
   if (quoteMatch1) {
     const amount = parseFloat(quoteMatch1[2].replace(/\./g, "").replace(",", "."));
@@ -139,10 +137,11 @@ async function parseWithClaude(command) {
   return parseCommand(command);
 }
 
-async function findLeadByName(companyName) {
+async function findLeadByName(companyName, tenant) {
   const { data } = await supabase
     .from("leads")
     .select("*")
+    .eq("tenant", tenant)
     .ilike("company_name", `%${companyName}%`)
     .limit(1)
     .single();
@@ -150,6 +149,8 @@ async function findLeadByName(companyName) {
 }
 
 export async function POST(request) {
+  const tenant = request.headers.get("x-auth-tenant");
+  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "Cowork");
   const { command } = await request.json();
 
   if (!command) {
@@ -161,7 +162,7 @@ export async function POST(request) {
   try {
     switch (parsed.action) {
       case "list_leads": {
-        let query = supabase.from("leads").select("*").order("updated_at", { ascending: false });
+        let query = supabase.from("leads").select("*").eq("tenant", tenant).order("updated_at", { ascending: false });
         if (parsed.params.status) query = query.eq("status", parsed.params.status);
         if (parsed.params.service_type) query = query.eq("service_type", parsed.params.service_type);
         const { data: leads } = await query;
@@ -174,7 +175,7 @@ export async function POST(request) {
       }
 
       case "get_lead_detail": {
-        const lead = await findLeadByName(parsed.params.company_name);
+        const lead = await findLeadByName(parsed.params.company_name, tenant);
         if (!lead) {
           return Response.json({
             action: "get_lead_detail",
@@ -195,7 +196,7 @@ export async function POST(request) {
       }
 
       case "update_status": {
-        const lead = await findLeadByName(parsed.params.company_name);
+        const lead = await findLeadByName(parsed.params.company_name, tenant);
         if (!lead) {
           return Response.json({
             action: "update_status",
@@ -226,7 +227,7 @@ export async function POST(request) {
       }
 
       case "add_note": {
-        const lead = await findLeadByName(parsed.params.company_name);
+        const lead = await findLeadByName(parsed.params.company_name, tenant);
         if (!lead) {
           return Response.json({
             action: "add_note",
@@ -238,14 +239,16 @@ export async function POST(request) {
           lead_id: lead.id,
           content: parsed.params.content,
           note_type: parsed.params.note_type || "intern",
-          created_by: "Cowork",
+          created_by: userName,
+          tenant,
         });
 
         await supabase.from("activities").insert({
           lead_id: lead.id,
           activity_type: "note_added",
           description: `Notitie via Cowork: ${parsed.params.content.substring(0, 50)}...`,
-          created_by: "Cowork",
+          created_by: userName,
+          tenant,
         });
 
         return Response.json({
@@ -255,7 +258,7 @@ export async function POST(request) {
       }
 
       case "create_quote": {
-        const lead = await findLeadByName(parsed.params.company_name);
+        const lead = await findLeadByName(parsed.params.company_name, tenant);
         if (!lead) {
           return Response.json({
             action: "create_quote",
@@ -284,7 +287,8 @@ export async function POST(request) {
             vat_percentage: 21.0,
             description: parsed.params.description || null,
             valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            created_by: "Cowork",
+            created_by: userName,
+            tenant,
           })
           .select()
           .single();
@@ -302,7 +306,8 @@ export async function POST(request) {
           activity_type: "quote_created",
           description: `Offerte ${quoteNumber} aangemaakt via Cowork (€${amount.toLocaleString("nl-NL")} excl. BTW)`,
           metadata: { quote_id: quote.id, quote_number: quoteNumber, amount },
-          created_by: "Cowork",
+          created_by: userName,
+          tenant,
         });
 
         const vatAmount = amount * 0.21;
@@ -319,6 +324,7 @@ export async function POST(request) {
         const { data: todos } = await supabase
           .from("notes")
           .select("*, leads(company_name)")
+          .eq("tenant", tenant)
           .eq("note_type", "todo")
           .eq("is_completed", false)
           .order("due_date", { ascending: true, nullsLast: true });
@@ -383,7 +389,7 @@ export async function POST(request) {
       }
 
       case "get_stats": {
-        const { data: leads } = await supabase.from("leads").select("*");
+        const { data: leads } = await supabase.from("leads").select("*").eq("tenant", tenant);
         const active = leads?.filter((l) => !["gewonnen", "verloren"].includes(l.status)) || [];
         const won = leads?.filter((l) => l.status === "gewonnen") || [];
         const lost = leads?.filter((l) => l.status === "verloren") || [];

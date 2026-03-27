@@ -1,11 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 export async function GET(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
 
   const { data: leads, error } = await supabase
     .from("leads")
@@ -17,7 +13,6 @@ export async function GET(request) {
   }
 
   // Build metrics per service_type + status
-  const metrics = [];
   const grouped = {};
 
   for (const lead of leads || []) {

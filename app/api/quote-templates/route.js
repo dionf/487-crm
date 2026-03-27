@@ -1,11 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 export async function GET(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const { data, error } = await supabase
     .from("quote_templates")
     .select("*")
@@ -18,7 +14,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
 
   const { data, error } = await supabase

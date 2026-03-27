@@ -1,12 +1,15 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 // POST /api/admin/import — bulk import leads
 export async function POST(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
+  const role = request.headers.get("x-auth-role");
+
+  // Admin only
+  if (role !== "admin") {
+    return Response.json({ error: "Alleen admins kunnen importeren" }, { status: 403 });
+  }
+
   const body = await request.json();
   const { leads, default_status } = body;
 

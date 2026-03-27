@@ -1,7 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { createHash } from "crypto";
+import { signToken } from "@/lib/auth";
+import { NextResponse } from "next/server";
 
-// POST /api/auth/verify-pin — verify user pin
+const COOKIE_NAME = "crm-auth";
+
+// POST /api/auth/verify-pin — verify user pin and set auth cookie
 export async function POST(request) {
   const { user_id, pin } = await request.json();
 
@@ -28,19 +32,40 @@ export async function POST(request) {
     return Response.json({ error: "Onjuiste pincode" }, { status: 401 });
   }
 
-  // Return session data (no JWT needed for this simple auth)
-  return Response.json({
-    success: true,
-    session: {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-      organization: user.organizations,
-      tenant: user.organizations.slug,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h
+  // Create JWT payload
+  const tokenPayload = {
+    user_id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    tenant: user.organizations.slug,
+    org_id: user.organizations.id,
+  };
+
+  const token = await signToken(tokenPayload);
+
+  // Build session data for client (UI state)
+  const sessionData = {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
     },
+    organization: user.organizations,
+    tenant: user.organizations.slug,
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+
+  // Set httpOnly cookie with JWT and return session data for UI
+  const response = NextResponse.json({ success: true, session: sessionData });
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24, // 24h
   });
+
+  return response;
 }

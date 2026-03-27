@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request) {
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
   const { lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by } = body;
 
@@ -8,11 +9,12 @@ export async function POST(request) {
     return Response.json({ error: "lead_id en amount_excl_vat zijn verplicht" }, { status: 400 });
   }
 
-  // Get lead info
+  // Get lead info and verify tenant
   const { data: lead, error: leadError } = await supabase
     .from("leads")
     .select("*")
     .eq("id", lead_id)
+    .eq("tenant", tenant)
     .single();
 
   if (leadError || !lead) {
@@ -33,6 +35,7 @@ export async function POST(request) {
       description: description || null,
       valid_until: valid_until || null,
       created_by: created_by || null,
+      tenant,
     })
     .select()
     .single();
@@ -48,6 +51,7 @@ export async function POST(request) {
     description: `Offerte ${quoteNumber} aangemaakt`,
     metadata: { quote_id: quote.id, quote_number: quoteNumber, amount: amount_excl_vat },
     created_by: created_by || null,
+    tenant,
   });
 
   return Response.json({ quote }, { status: 201 });

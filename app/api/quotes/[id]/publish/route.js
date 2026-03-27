@@ -2,7 +2,15 @@ import { supabase } from "@/lib/supabase";
 import { randomBytes } from "crypto";
 
 export async function POST(request, { params }) {
+  const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json().catch(() => ({}));
+
+  // Verify quote belongs to tenant
+  const { data: existing } = await supabase
+    .from("quotes").select("lead_id, leads(tenant)").eq("id", params.id).single();
+  if (!existing || existing.leads?.tenant !== tenant) {
+    return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
+  }
 
   // Generate unique hash
   const hash = randomBytes(16).toString("hex");
@@ -37,6 +45,7 @@ export async function POST(request, { params }) {
       activity_type: "quote_published",
       description: `Offerte ${data.quote_number} gepubliceerd — geldig tot ${validUntil}`,
       created_by: body.created_by || "CRM",
+      tenant,
     });
   }
 

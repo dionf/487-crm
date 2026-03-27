@@ -1,11 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
-
 export async function GET(request) {
-  const tenant = getTenant(request);
+  const tenant = request.headers.get("x-auth-tenant");
   const { data: tasks, error } = await supabase
     .from("follow_up_tasks")
     .select("*, leads(company_name, contact_person, status)")

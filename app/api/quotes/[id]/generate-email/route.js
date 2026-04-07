@@ -1,9 +1,10 @@
 import { supabase } from "@/lib/supabase";
 import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const tenant = request.headers.get("x-auth-tenant");
   const { id } = await params;
 

@@ -1,9 +1,10 @@
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const tenant = request.headers.get("x-auth-tenant");
   const userName = decodeURIComponent(request.headers.get("x-auth-name") || "CRM");
   const { id } = await params;

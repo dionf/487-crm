@@ -1,4 +1,5 @@
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
+import { supabase } from "@/lib/supabase";
 
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
@@ -8,6 +9,17 @@ export async function POST(request) {
 
   const body = await request.json();
   const { lead, items, totals, branchText, language, remarksHtml, contactName, contactEmail, contactPhone } = body;
+
+  // Pull intro/terms from settings for preview
+  const { data: settings } = await supabase
+    .from("hiphot_settings")
+    .select("*")
+    .eq("tenant", "hiphot")
+    .single();
+
+  const lang = language || "nl";
+  const introHtml = settings?.intro_html?.[lang] || settings?.intro_html?.nl || "";
+  const termsHtml = settings?.terms_html?.[lang] || settings?.terms_html?.nl || "";
 
   const html = generateQuoteHtml({
     quote: {
@@ -23,7 +35,10 @@ export async function POST(request) {
     lineItems: items || [],
     totals: totals || {},
     branchText: branchText || null,
-    language: language || "nl",
+    language: lang,
+    settings: settings || {},
+    introHtml,
+    termsHtml,
   });
 
   return Response.json({ html });

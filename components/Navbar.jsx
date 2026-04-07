@@ -16,6 +16,7 @@ import {
   X,
   AlertCircle,
   CheckCircle,
+  FileText,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -161,7 +162,18 @@ export default function Navbar() {
 
           {/* Nav links */}
           <div className="flex items-center gap-1">
-            {[...baseNavItems, ...(isAdmin ? [{ href: "/admin/users", label: "Users", icon: Settings }, { href: "/admin/import", label: "Import", icon: Upload }] : [])].map((item) => {
+            {[
+              ...baseNavItems,
+              ...(isAdmin
+                ? [
+                    { href: "/admin/users", label: "Users", icon: Settings },
+                    { href: "/admin/import", label: "Import", icon: Upload },
+                    ...(organization?.tenant === "hiphot"
+                      ? [{ href: "/admin/hiphot-teksten", label: "Teksten", icon: FileText }]
+                      : []),
+                  ]
+                : []),
+            ].map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/" && pathname.startsWith(item.href));

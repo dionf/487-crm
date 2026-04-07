@@ -31,11 +31,15 @@ export async function PATCH(request) {
   }
 
   const body = await request.json();
-  const allowed = ["verzendkosten", "gratis_drempel", "pickpack_vast", "pickpack_per_artikel"];
+  const numericKeys = ["verzendkosten", "gratis_drempel", "pickpack_vast", "pickpack_per_artikel"];
+  const jsonKeys = ["intro_html", "terms_html"];
   const updates = { updated_at: new Date().toISOString() };
 
-  for (const key of allowed) {
+  for (const key of numericKeys) {
     if (body[key] !== undefined) updates[key] = Number(body[key]);
+  }
+  for (const key of jsonKeys) {
+    if (body[key] !== undefined) updates[key] = body[key];
   }
 
   const { data, error } = await supabase

@@ -9,11 +9,12 @@ import ProductSelector from "@/components/hiphot/ProductSelector";
 import LineItemsTable from "@/components/hiphot/LineItemsTable";
 import MarginPanel from "@/components/hiphot/MarginPanel";
 
-export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
+export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null }) {
   const [step, setStep] = useState("edit"); // edit | preview
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showProductSelector, setShowProductSelector] = useState(false);
+  const [addedFlash, setAddedFlash] = useState(0);
 
   // Quote data
   const [language, setLanguage] = useState(lead?.language || "nl");
@@ -23,6 +24,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
   const [remarksHtml, setRemarksHtml] = useState("");
   const [items, setItems] = useState([]);
   const [useFulfillment, setUseFulfillment] = useState(true);
+  const [editingId, setEditingId] = useState(null);
 
   // Settings & branch text
   const [settings, setSettings] = useState(null);
@@ -45,6 +47,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
     setStep("edit");
     setError("");
     setUseFulfillment(true);
+    setEditingId(editQuoteId || null);
 
     // Fetch settings
     apiFetch("/api/hiphot/settings")
@@ -66,7 +69,48 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
         }
       })
       .catch(() => {});
-  }, [open, lead]);
+
+    // Load existing quote when editing
+    if (editQuoteId) {
+      (async () => {
+        try {
+          const [qRes, iRes] = await Promise.all([
+            apiFetch(`/api/quotes/${editQuoteId}`),
+            apiFetch(`/api/hiphot/quote-items?quote_id=${editQuoteId}`),
+          ]);
+          const { quote } = await qRes.json();
+          const { items: existingItems } = await iRes.json();
+          if (quote) {
+            setLanguage(quote.language || "nl");
+            setContactName(quote.contact_name || lead?.contact_person || "");
+            setContactEmail(quote.contact_email || lead?.email || "");
+            setContactPhone(quote.contact_phone || lead?.phone || "");
+            setRemarksHtml(quote.remarks_html || "");
+            setUseFulfillment(quote.margin_data?.useFulfillment ?? true);
+          }
+          if (existingItems?.length) {
+            setItems(
+              existingItems.map((it) => ({
+                id: crypto.randomUUID(),
+                article_id: it.article_id,
+                wc_product_id: it.wc_product_id,
+                name: it.name,
+                sku: it.sku || "",
+                description: it.description || "",
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.unit_price) || 0,
+                discount_pct: Number(it.discount_pct) || 0,
+                inkoop_price: Number(it.inkoop_price) || 0,
+                sort_order: it.sort_order || 0,
+              }))
+            );
+          }
+        } catch (e) {
+          setError("Bestaande offerte kon niet worden geladen");
+        }
+      })();
+    }
+  }, [open, lead, editQuoteId]);
 
   // Update branch text when language changes
   useEffect(() => {
@@ -94,7 +138,8 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
         sort_order: prev.length,
       },
     ]);
-    setShowProductSelector(false);
+    // Houd het paneel open en geef korte feedback
+    setAddedFlash((c) => c + 1);
   }
 
   function handleRemoveItem(index) {
@@ -115,37 +160,53 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
     setError("");
 
     try {
-      // Create quote
-      const quoteRes = await apiFetch("/api/quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lead_id: lead.id,
-          amount_excl_vat: orderTotals.nettoVerkoop,
-          vat_percentage: 21,
-          description: items.map((i) => `${i.quantity}x ${i.name}`).join(", "),
-          quote_type: "hiphot",
-          remarks_html: remarksHtml || null,
-          shipping_cost: orderTotals.verzendkostenOntvangen,
-          contact_name: contactName,
-          contact_email: contactEmail,
-          contact_phone: contactPhone,
-          language,
-          margin_data: {
-            useFulfillment,
-            ...orderTotals,
-          },
-        }),
-      });
+      const payload = {
+        lead_id: lead.id,
+        amount_excl_vat: orderTotals.nettoVerkoop,
+        vat_percentage: 21,
+        description: items.map((i) => `${i.quantity}x ${i.name}`).join(", "),
+        quote_type: "hiphot",
+        remarks_html: remarksHtml || null,
+        shipping_cost: orderTotals.verzendkostenOntvangen,
+        contact_name: contactName,
+        contact_email: contactEmail,
+        contact_phone: contactPhone,
+        language,
+        margin_data: {
+          useFulfillment,
+          ...orderTotals,
+        },
+      };
 
-      if (!quoteRes.ok) {
-        const err = await quoteRes.json();
-        throw new Error(err.error || "Fout bij opslaan");
+      let quote;
+      if (editingId) {
+        // Update existing quote
+        const r = await apiFetch(`/api/quotes/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) {
+          const err = await r.json();
+          throw new Error(err.error || "Fout bij bijwerken");
+        }
+        const j = await r.json();
+        quote = j.quote;
+      } else {
+        const quoteRes = await apiFetch("/api/quotes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!quoteRes.ok) {
+          const err = await quoteRes.json();
+          throw new Error(err.error || "Fout bij opslaan");
+        }
+        const j = await quoteRes.json();
+        quote = j.quote;
       }
 
-      const { quote } = await quoteRes.json();
-
-      // Save line items
+      // Save line items — replace all on edit
       const lineItemsData = enrichedItems
         .filter((i) => i.quantity > 0)
         .map((item, idx) => ({
@@ -166,12 +227,11 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
       await apiFetch("/api/hiphot/quote-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: lineItemsData }),
+        body: JSON.stringify({ items: lineItemsData, replace_for_quote_id: quote.id }),
       });
 
-      // Publish if requested
-      if (publish) {
-        // Generate HTML server-side
+      // Publish if requested OR re-generate HTML if quote was already published
+      if (publish || quote.public_hash) {
         await apiFetch(`/api/quotes/${quote.id}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -179,6 +239,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
             generate_hiphot_html: true,
             language,
             branch_text_id: branchText?.id || null,
+            keep_hash: !!quote.public_hash,
           }),
         });
       }
@@ -230,7 +291,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
           <div className="flex items-center gap-3">
             <FileText className="w-5 h-5 text-brand-orange" />
             <div>
-              <h2 className="font-semibold text-lg">HipHot Offerte</h2>
+              <h2 className="font-semibold text-lg">{editingId ? "Offerte bewerken" : "HipHot Offerte"}</h2>
               <p className="text-xs text-gray-500">{lead?.company_name}</p>
             </div>
           </div>
@@ -290,9 +351,8 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
             />
           </div>
         ) : (
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: form + items */}
-            <div className="lg:col-span-2 space-y-6">
+          <div className="p-6 space-y-6">
+            <div className="space-y-6">
               {/* Client & Language */}
               <div className="bg-white border border-gray-100 rounded-card p-5">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -410,32 +470,37 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
               </div>
             </div>
 
-            {/* Right: margin panel */}
-            <div>
-              <MarginPanel
-                items={items}
-                settings={settings || {}}
-                useFulfillment={useFulfillment}
-                onToggleFulfillment={() => setUseFulfillment(!useFulfillment)}
-              />
-            </div>
+            {/* Margin panel onder de items */}
+            <MarginPanel
+              items={items}
+              settings={settings || {}}
+              useFulfillment={useFulfillment}
+              onToggleFulfillment={() => setUseFulfillment(!useFulfillment)}
+            />
           </div>
         )}
 
         {/* Product Selector Modal */}
         {showProductSelector && (
           <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl flex flex-col">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                <h2 className="font-semibold">Product selecteren</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="font-semibold">Producten toevoegen</h2>
+                  {addedFlash > 0 && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700">
+                      {addedFlash} toegevoegd
+                    </span>
+                  )}
+                </div>
                 <button
-                  onClick={() => setShowProductSelector(false)}
-                  className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400"
+                  onClick={() => { setShowProductSelector(false); setAddedFlash(0); }}
+                  className="px-3 py-1.5 text-sm font-semibold bg-brand-amber hover:bg-brand-amber-hover text-brand-black rounded-pill"
                 >
-                  <X className="w-4 h-4" />
+                  Klaar
                 </button>
               </div>
-              <div className="overflow-y-auto max-h-[calc(80vh-65px)]">
+              <div className="overflow-y-auto flex-1">
                 <ProductSelector onAddProduct={handleAddProduct} />
               </div>
             </div>

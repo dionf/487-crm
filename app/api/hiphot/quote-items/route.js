@@ -6,9 +6,23 @@ export async function POST(request) {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
 
-  const { items } = await request.json();
+  const { items, replace_for_quote_id } = await request.json();
   if (!items || items.length === 0) {
     return Response.json({ error: "Geen items opgegeven" }, { status: 400 });
+  }
+
+  // When editing a quote: delete existing line items first
+  if (replace_for_quote_id) {
+    // Verify quote belongs to tenant via lead
+    const { data: q } = await supabase
+      .from("quotes")
+      .select("id, leads(tenant)")
+      .eq("id", replace_for_quote_id)
+      .single();
+    if (!q || q.leads?.tenant !== "hiphot") {
+      return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
+    }
+    await supabase.from("quote_line_items").delete().eq("quote_id", replace_for_quote_id);
   }
 
   const { data, error } = await supabase

@@ -1,23 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
 import AcceptQuoteButton from "@/components/AcceptQuoteButton";
 import QuotePrintButtons from "@/components/QuotePrintButtons";
+import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
+import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+const BRAND = {
+  hiphot: { name: "HipHot", url: "https://hiphot.nl", email: "hallo@hiphot.nl" },
+  "48-7": { name: "48-7 AI Professionals", url: "https://48-7.nl", email: "dion@48-7.nl" },
+};
+
+function brandFor(tenant) {
+  return BRAND[tenant] || BRAND["48-7"];
+}
+
 export async function generateMetadata({ params }) {
   const { data: quote } = await supabase
     .from("quotes")
-    .select("quote_number, leads(company_name)")
+    .select("quote_number, leads(company_name, tenant)")
     .eq("public_hash", params.hash)
     .maybeSingle();
 
+  const brand = brandFor(quote?.leads?.tenant);
   return {
     title: quote
-      ? `Offerte ${quote.quote_number} | 48-7 AI Professionals`
-      : "Offerte | 48-7 AI Professionals",
+      ? `Offerte ${quote.quote_number} | ${brand.name}`
+      : `Offerte | ${brand.name}`,
     robots: "noindex, nofollow, noarchive, nosnippet",
   };
 }
@@ -40,12 +52,58 @@ function formatDate(dateStr) {
 export default async function PublicQuotePage({ params }) {
   const { data: quote } = await supabase
     .from("quotes")
-    .select("*, leads(company_name, contact_person, email)")
+    .select("*, leads(company_name, contact_person, email, phone, tenant, industry)")
     .eq("public_hash", params.hash)
     .maybeSingle();
 
   if (!quote) {
     return <QuoteNotFound />;
+  }
+
+  const tenant = quote.leads?.tenant || "48-7";
+  const brand = brandFor(tenant);
+  const isHipHot = tenant === "hiphot";
+
+  // Auto-generate HipHot HTML on-the-fly when missing (handles oude quotes)
+  if (isHipHot && !quote.html_content) {
+    try {
+      const { data: lineItems } = await supabase
+        .from("quote_line_items")
+        .select("*")
+        .eq("quote_id", quote.id)
+        .order("sort_order");
+
+      const enriched = calculateLineTotals(lineItems || []);
+
+      const { data: settings } = await supabase
+        .from("hiphot_settings")
+        .select("*")
+        .eq("tenant", "hiphot")
+        .single();
+
+      const useFulfillment = quote.margin_data?.useFulfillment ?? true;
+      const totals = calculateOrderTotals(enriched, settings || {}, useFulfillment);
+      const lang = quote.language || "nl";
+      const introHtml = settings?.intro_html?.[lang] || settings?.intro_html?.nl || "";
+      const termsHtml = settings?.terms_html?.[lang] || settings?.terms_html?.nl || "";
+
+      // If there are line items, generate full HipHot HTML; otherwise use minimal fallback
+      if ((lineItems || []).length > 0) {
+        quote.html_content = generateQuoteHtml({
+          quote,
+          lead: quote.leads || {},
+          lineItems: enriched,
+          totals,
+          branchText: null,
+          language: lang,
+          settings: settings || {},
+          introHtml,
+          termsHtml,
+        });
+      }
+    } catch {
+      // fall through to default template (HipHot styled below)
+    }
   }
 
   const isExpired =
@@ -82,24 +140,24 @@ export default async function PublicQuotePage({ params }) {
 
       {quote.html_content ? (
         /* Render custom HTML template */
-        <div>
-          {/* Print/Download bar */}
-          <QuotePrintButtons language={quote.language || "nl"} />
+        <div style={{ background: "#f5f5f5", minHeight: "100vh" }}>
+          {/* Top print bar voor non-HipHot tenants (HipHot heeft eigen knoppen in template) */}
+          {!isHipHot && <QuotePrintButtons language={quote.language || "nl"} />}
           <div dangerouslySetInnerHTML={{ __html: quote.html_content }} />
           {/* Acceptance section at bottom */}
           {!isAccepted && !isExpired && (
-            <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 32px", textAlign: "center" }}>
+            <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px", textAlign: "center", background: "#fff" }}>
               <AcceptQuoteButton hash={params.hash} />
             </div>
           )}
           {isAccepted && (
-            <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 32px", textAlign: "center" }}>
+            <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px", textAlign: "center", background: "#fff" }}>
               <AcceptedBanner acceptedAt={quote.accepted_at} />
             </div>
           )}
         </div>
       ) : (
-        /* Default template */
+        /* Default template — tenant-aware */
         <DefaultQuoteTemplate
           quote={quote}
           vatAmount={vatAmount}
@@ -107,20 +165,26 @@ export default async function PublicQuotePage({ params }) {
           isAccepted={isAccepted}
           isExpired={isExpired}
           hash={params.hash}
+          brand={brand}
+          isHipHot={isHipHot}
         />
       )}
     </>
   );
 }
 
-function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpired, hash }) {
+function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpired, hash, brand, isHipHot }) {
+  const accent = isHipHot ? "#FFD500" : "#FAB868";
+  const accentDark = isHipHot ? "#D4B100" : "#D4731C";
+  const label = isHipHot ? "HIPHOT" : "FULL SERVICE AI";
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#fff", color: "#0D0D0F", lineHeight: 1.6, WebkitFontSmoothing: "antialiased" }}>
+      <QuotePrintButtons language={quote.language || "nl"} />
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 32px" }}>
         {/* Header */}
         <header style={{ padding: "40px 0 32px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "#6B7280", marginBottom: 24, paddingBottom: 16, borderBottom: "3px solid #FAB868" }}>
-            FULL SERVICE AI
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "#6B7280", marginBottom: 24, paddingBottom: 16, borderBottom: `3px solid ${accent}` }}>
+            {label}
           </div>
           <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 6, lineHeight: 1.2 }}>
             Offerte {quote.quote_number}
@@ -163,7 +227,7 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
         {/* Pricing */}
         <section style={{ padding: "40px 0", borderTop: "1px solid #e5e7eb" }}>
           <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Investering</h2>
-          <div style={{ border: "2px solid #FAB868", borderRadius: 16, padding: "28px 32px", background: "linear-gradient(180deg, #fffdf7, #fff)" }}>
+          <div style={{ border: `2px solid ${accent}`, borderRadius: 16, padding: "28px 32px", background: "linear-gradient(180deg, #fffdf7, #fff)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #e5e7eb" }}>
               <span style={{ fontSize: 15, color: "#292828" }}>Bedrag excl. BTW</span>
               <span style={{ fontSize: 18, fontWeight: 700, color: "#0D0D0F" }}>{formatCurrency(quote.amount_excl_vat)}</span>
@@ -174,7 +238,7 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 17, fontWeight: 700, color: "#0D0D0F" }}>Totaal incl. BTW</span>
-              <span style={{ fontSize: 28, fontWeight: 700, color: "#D4731C" }}>{formatCurrency(totalIncl)}</span>
+              <span style={{ fontSize: 28, fontWeight: 700, color: accentDark }}>{formatCurrency(totalIncl)}</span>
             </div>
           </div>
         </section>
@@ -184,9 +248,7 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
           <div style={{ background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 12, padding: "20px 24px", marginTop: 24, fontSize: 14, color: "#6B7280" }}>
             Deze offerte is geldig tot <strong style={{ color: "#0D0D0F" }}>{formatDate(quote.valid_until)}</strong>.
             {" "}Neem contact op via{" "}
-            <a href="mailto:dion@48-7.nl" style={{ color: "#D4731C", textDecoration: "none" }}>dion@48-7.nl</a>
-            {" "}of{" "}
-            <a href="tel:+31850601487" style={{ color: "#D4731C", textDecoration: "none" }}>085-06 01 487</a>.
+            <a href={`mailto:${brand.email}`} style={{ color: accentDark, textDecoration: "none" }}>{brand.email}</a>.
           </div>
         )}
 
@@ -203,12 +265,16 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
         <footer style={{ background: "#0D0D0F", color: "#9ca3af", padding: "32px 0", fontSize: 13, borderRadius: "12px 12px 0 0", marginTop: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 32px" }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>
-              <span style={{ color: "#FAB868" }}>48</span>-7 AI Professionals
+              {isHipHot ? (
+                <>HIPH<span style={{ color: accent }}>O</span>T</>
+              ) : (
+                <><span style={{ color: accent }}>48</span>-7 AI Professionals</>
+              )}
             </span>
             <span>
-              <a href="https://48-7.nl" style={{ color: "#FAB868", textDecoration: "none" }}>48-7.nl</a>
+              <a href={brand.url} style={{ color: accent, textDecoration: "none" }}>{brand.url.replace(/^https?:\/\//, "")}</a>
               {" | "}
-              <a href="mailto:dion@48-7.nl" style={{ color: "#FAB868", textDecoration: "none" }}>dion@48-7.nl</a>
+              <a href={`mailto:${brand.email}`} style={{ color: accent, textDecoration: "none" }}>{brand.email}</a>
             </span>
           </div>
         </footer>

@@ -15,12 +15,16 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
   }
 
-  // Generate unique hash
-  const hash = randomBytes(16).toString("hex");
+  // Keep existing hash on republish, otherwise generate new
+  const hash = body.keep_hash && existing.public_hash
+    ? existing.public_hash
+    : randomBytes(16).toString("hex");
   const validDays = body.valid_days || 30;
-  const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
+  const validUntil = body.keep_hash && existing.valid_until
+    ? existing.valid_until
+    : new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
 
   const updates = {
     public_hash: hash,
@@ -48,6 +52,7 @@ export async function POST(request, { params }) {
     const totals = calculateOrderTotals(enriched, settingsData || {}, useFulfillment);
 
     // Get branch text if specified
+    const lang = body.language || existing.language || "nl";
     let branchText = null;
     if (body.branch_text_id) {
       const { data: bt } = await supabase
@@ -58,13 +63,19 @@ export async function POST(request, { params }) {
       branchText = bt;
     }
 
+    const introHtml = settingsData?.intro_html?.[lang] || settingsData?.intro_html?.nl || "";
+    const termsHtml = settingsData?.terms_html?.[lang] || settingsData?.terms_html?.nl || "";
+
     updates.html_content = generateQuoteHtml({
-      quote: existing,
+      quote: { ...existing, valid_until: validUntil },
       lead: existing.leads || {},
       lineItems: enriched,
       totals,
       branchText,
-      language: body.language || existing.language || "nl",
+      language: lang,
+      settings: settingsData || {},
+      introHtml,
+      termsHtml,
     });
   }
 

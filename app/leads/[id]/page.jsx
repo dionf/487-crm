@@ -63,6 +63,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showHipHotBuilder, setShowHipHotBuilder] = useState(false);
+  const [editHipHotQuoteId, setEditHipHotQuoteId] = useState(null);
   const [showEmailCompose, setShowEmailCompose] = useState(null); // quote ID
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -844,6 +845,15 @@ export default function LeadDetailPage() {
                                   <option key={s.id} value={s.id}>{s.label}</option>
                                 ))}
                               </select>
+                              {isHipHot && (
+                                <button
+                                  onClick={() => { setEditHipHotQuoteId(q.id); setShowHipHotBuilder(true); }}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                  title="Offerte bewerken"
+                                >
+                                  Bewerken
+                                </button>
+                              )}
                               <button onClick={() => deleteQuote(q.id)} className="p-0.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100">
                                 <Trash2 className="w-3 h-3" />
                               </button>
@@ -941,8 +951,9 @@ export default function LeadDetailPage() {
       {isHipHot && (
         <HipHotQuoteBuilder
           open={showHipHotBuilder}
-          onClose={() => setShowHipHotBuilder(false)}
+          onClose={() => { setShowHipHotBuilder(false); setEditHipHotQuoteId(null); }}
           lead={lead}
+          editQuoteId={editHipHotQuoteId}
           onSaved={fetchData}
         />
       )}

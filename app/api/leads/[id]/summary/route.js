@@ -91,7 +91,21 @@ export async function POST(request, { params }) {
     ? notes.map((n) => `[${n.note_type}] ${n.content}`).join("\n")
     : "";
 
-  const prompt = `Je bent een sales intelligence assistent voor 48-7 AI Professionals, een bedrijf dat AI-oplossingen, Cowork (AI werkplekken), trainingen en maatwerk software levert aan bedrijven.
+  const isHipHot = tenant === "hiphot";
+  const companyDescription = isHipHot
+    ? "HipHot, een Nederlands B2B bedrijf dat zonnebrandcrème dispensers, navullingen (Factor 30 / Factor 50) en bijbehorende accessoires levert aan bedrijven, gemeenten, evenementen, scholen, kinderopvang, bouwbedrijven en buitenwerkers — om medewerkers en bezoekers te beschermen tegen UV-straling"
+    : "48-7 AI Professionals, een bedrijf dat AI-oplossingen, Cowork (AI werkplekken), trainingen en maatwerk software levert aan bedrijven";
+
+  const kansenLabel = isHipHot ? "Kansen voor HipHot" : "Kansen voor 48-7";
+  const kansenVoorbeeld = isHipHot
+    ? `- [kans 1: bv. UV-bescherming voor buitenwerkers, evenementen, gasten, kinderen]
+- [kans 2: bv. CSR/duurzaamheid, Arbo, employer branding via gezondheid]
+- [kans 3: bv. dispenser locaties, jaarcontract navullingen, branding mogelijkheden]`
+    : `- [kans 1: concrete kans voor AI automatisering, efficiëntie, data-analyse etc.]
+- [kans 2]
+- [kans 3]`;
+
+  const prompt = `Je bent een sales intelligence assistent voor ${companyDescription}.
 
 Analyseer het volgende bedrijf en geef een korte samenvatting (max 200 woorden) in het Nederlands. Gebruik deze EXACTE structuur met HTML-achtige koppen:
 
@@ -104,10 +118,8 @@ Analyseer het volgende bedrijf en geef een korte samenvatting (max 200 woorden) 
 ## Omvang
 [inschatting indien mogelijk, anders weglaten]
 
-## Kansen voor 48-7
-- [kans 1: concrete kans voor AI automatisering, efficiëntie, data-analyse etc.]
-- [kans 2]
-- [kans 3]
+## ${kansenLabel}
+${kansenVoorbeeld}
 
 ## Gesprekstip
 [concrete suggestie voor eerste contact]

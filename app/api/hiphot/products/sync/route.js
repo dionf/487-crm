@@ -34,12 +34,25 @@ async function fetchAllWcProducts() {
 function mapCategory(wcProduct) {
   const cats = (wcProduct.categories || []).map((c) => c.name.toLowerCase());
   const joined = cats.join(" ");
-  if (joined.includes("spf 30") || joined.includes("spf30")) {
-    if (joined.includes("spf 50") || joined.includes("spf50")) return "beide";
-    return "spf30";
+  const name = (wcProduct.name || "").toLowerCase();
+  const all = `${joined} ${name}`;
+
+  const has30 = /factor\s*30|spf\s*30/.test(all);
+  const has50 = /factor\s*50|spf\s*50/.test(all);
+
+  if (has30 && has50) return "beide";
+  if (has30) return "spf30";
+  if (has50) return "spf50";
+
+  if (
+    joined.includes("toebehoren") ||
+    joined.includes("accessoire") ||
+    joined.includes("geen categorie") ||
+    /dispenser|sticker|rakel|achterplaat|navul/.test(name)
+  ) {
+    return "accessoire";
   }
-  if (joined.includes("spf 50") || joined.includes("spf50")) return "spf50";
-  if (joined.includes("accessoire")) return "accessoire";
+
   return "beide";
 }
 

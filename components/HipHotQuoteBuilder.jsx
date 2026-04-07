@@ -1,0 +1,447 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { X, Save, Send, Eye, Globe, ChevronDown, Plus, FileText } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { LANGUAGES } from "@/lib/translations/quote";
+import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
+import ProductSelector from "@/components/hiphot/ProductSelector";
+import LineItemsTable from "@/components/hiphot/LineItemsTable";
+import MarginPanel from "@/components/hiphot/MarginPanel";
+
+export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved }) {
+  const [step, setStep] = useState("edit"); // edit | preview
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showProductSelector, setShowProductSelector] = useState(false);
+
+  // Quote data
+  const [language, setLanguage] = useState(lead?.language || "nl");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [remarksHtml, setRemarksHtml] = useState("");
+  const [items, setItems] = useState([]);
+  const [useFulfillment, setUseFulfillment] = useState(true);
+
+  // Settings & branch text
+  const [settings, setSettings] = useState(null);
+  const [branchText, setBranchText] = useState(null);
+  const [branchTexts, setBranchTexts] = useState([]);
+
+  // Preview HTML
+  const [previewHtml, setPreviewHtml] = useState("");
+
+  // Load settings + branch texts on open
+  useEffect(() => {
+    if (!open) return;
+    // Reset form with lead data
+    setContactName(lead?.contact_person || "");
+    setContactEmail(lead?.email || "");
+    setContactPhone(lead?.phone || "");
+    setLanguage(lead?.language || "nl");
+    setItems([]);
+    setRemarksHtml("");
+    setStep("edit");
+    setError("");
+    setUseFulfillment(true);
+
+    // Fetch settings
+    apiFetch("/api/hiphot/settings")
+      .then((r) => r.json())
+      .then((d) => setSettings(d.settings))
+      .catch(() => {});
+
+    // Fetch branch texts
+    apiFetch("/api/hiphot/branch-texts")
+      .then((r) => r.json())
+      .then((d) => {
+        setBranchTexts(d.texts || []);
+        // Auto-select based on lead industry + language
+        if (lead?.industry) {
+          const match =
+            d.texts?.find((t) => t.branch_key === lead.industry && t.language === (lead?.language || "nl")) ||
+            d.texts?.find((t) => t.branch_key === lead.industry && t.language === "nl");
+          if (match) setBranchText(match);
+        }
+      })
+      .catch(() => {});
+  }, [open, lead]);
+
+  // Update branch text when language changes
+  useEffect(() => {
+    if (!lead?.industry || branchTexts.length === 0) return;
+    const match =
+      branchTexts.find((t) => t.branch_key === lead.industry && t.language === language) ||
+      branchTexts.find((t) => t.branch_key === lead.industry && t.language === "nl");
+    setBranchText(match || null);
+  }, [language, lead?.industry, branchTexts]);
+
+  function handleAddProduct(product) {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        article_id: product.id,
+        wc_product_id: product.wc_product_id,
+        name: product.name,
+        sku: product.sku || "",
+        description: "",
+        quantity: 1,
+        unit_price: Number(product.verkoop_price) || 0,
+        discount_pct: 0,
+        inkoop_price: Number(product.inkoop_price) || 0,
+        sort_order: prev.length,
+      },
+    ]);
+    setShowProductSelector(false);
+  }
+
+  function handleRemoveItem(index) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Computed totals
+  const enrichedItems = calculateLineTotals(items);
+  const orderTotals = calculateOrderTotals(items, settings || {}, useFulfillment);
+
+  async function handleSave(publish = false) {
+    if (items.length === 0) {
+      setError("Voeg minimaal één product toe");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Create quote
+      const quoteRes = await apiFetch("/api/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          amount_excl_vat: orderTotals.nettoVerkoop,
+          vat_percentage: 21,
+          description: items.map((i) => `${i.quantity}x ${i.name}`).join(", "),
+          quote_type: "hiphot",
+          remarks_html: remarksHtml || null,
+          shipping_cost: orderTotals.verzendkostenOntvangen,
+          contact_name: contactName,
+          contact_email: contactEmail,
+          contact_phone: contactPhone,
+          language,
+          margin_data: {
+            useFulfillment,
+            ...orderTotals,
+          },
+        }),
+      });
+
+      if (!quoteRes.ok) {
+        const err = await quoteRes.json();
+        throw new Error(err.error || "Fout bij opslaan");
+      }
+
+      const { quote } = await quoteRes.json();
+
+      // Save line items
+      const lineItemsData = enrichedItems
+        .filter((i) => i.quantity > 0)
+        .map((item, idx) => ({
+          quote_id: quote.id,
+          article_id: item.article_id || null,
+          wc_product_id: item.wc_product_id || null,
+          name: item.name,
+          sku: item.sku || null,
+          description: item.description || null,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          discount_pct: item.discount_pct || 0,
+          line_total: item.line_total,
+          inkoop_price: item.inkoop_price || null,
+          sort_order: idx,
+        }));
+
+      await apiFetch("/api/hiphot/quote-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: lineItemsData }),
+      });
+
+      // Publish if requested
+      if (publish) {
+        // Generate HTML server-side
+        await apiFetch(`/api/quotes/${quote.id}/publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            generate_hiphot_html: true,
+            language,
+            branch_text_id: branchText?.id || null,
+          }),
+        });
+      }
+
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePreview() {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/api/hiphot/quote-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead,
+          items: enrichedItems.filter((i) => i.quantity > 0),
+          totals: orderTotals,
+          branchText,
+          language,
+          remarksHtml,
+          contactName,
+          contactEmail,
+          contactPhone,
+        }),
+      });
+      const { html } = await res.json();
+      setPreviewHtml(html);
+      setStep("preview");
+    } catch {
+      setError("Preview kon niet worden gegenereerd");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
+      <div className="w-full max-w-5xl bg-white h-full overflow-y-auto shadow-2xl animate-slide-in-right">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-brand-orange" />
+            <div>
+              <h2 className="font-semibold text-lg">HipHot Offerte</h2>
+              <p className="text-xs text-gray-500">{lead?.company_name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {step === "preview" && (
+              <button
+                onClick={() => setStep("edit")}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50"
+              >
+                Terug naar bewerken
+              </button>
+            )}
+            {step === "edit" && (
+              <>
+                <button
+                  onClick={handlePreview}
+                  disabled={loading || items.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40"
+                >
+                  <Eye className="w-4 h-4" />
+                  Preview
+                </button>
+                <button
+                  onClick={() => handleSave(false)}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-40"
+                >
+                  <Save className="w-4 h-4" />
+                  Opslaan
+                </button>
+                <button
+                  onClick={() => handleSave(true)}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-amber hover:bg-brand-amber-hover rounded-pill font-semibold text-brand-black disabled:opacity-40"
+                >
+                  <Send className="w-4 h-4" />
+                  Publiceren
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 ml-2">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mx-6 mt-4 text-sm text-red-600 bg-red-50 px-4 py-2 rounded-xl">{error}</div>
+        )}
+
+        {step === "preview" ? (
+          <div className="p-6">
+            <iframe
+              srcDoc={previewHtml}
+              className="w-full h-[80vh] border border-gray-200 rounded-xl"
+              title="Quote Preview"
+            />
+          </div>
+        ) : (
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left: form + items */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Client & Language */}
+              <div className="bg-white border border-gray-100 rounded-card p-5">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Klantgegevens
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-500">Bedrijf</label>
+                    <p className="text-sm font-medium">{lead?.company_name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Taal</label>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    >
+                      {LANGUAGES.map((l) => (
+                        <option key={l.code} value={l.code}>{l.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Contactpersoon</label>
+                    <input
+                      value={contactName}
+                      onChange={(e) => setContactName(e.target.value)}
+                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Email</label>
+                    <input
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Telefoon</label>
+                    <input
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
+                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Line Items */}
+              <div className="bg-white border border-gray-100 rounded-card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Producten
+                  </h3>
+                  <button
+                    onClick={() => setShowProductSelector(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand-amber/10 text-brand-orange rounded-pill hover:bg-brand-amber/20"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Product toevoegen
+                  </button>
+                </div>
+
+                {items.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    <p>Nog geen producten toegevoegd</p>
+                    <button
+                      onClick={() => setShowProductSelector(true)}
+                      className="mt-2 text-brand-orange hover:underline text-sm"
+                    >
+                      Voeg je eerste product toe
+                    </button>
+                  </div>
+                ) : (
+                  <LineItemsTable
+                    items={enrichedItems}
+                    onChange={setItems}
+                    onRemove={handleRemoveItem}
+                  />
+                )}
+              </div>
+
+              {/* Branch text */}
+              {branchText && (
+                <div className="bg-amber-50 border border-amber-100 rounded-card p-5">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Branchetekst — {branchText.branch_key}
+                    {branchText.language !== language && (
+                      <span className="ml-2 text-amber-600 normal-case">(Fallback: {branchText.language})</span>
+                    )}
+                  </h3>
+                  {branchText.title && (
+                    <p className="font-semibold text-sm mb-1">{branchText.title}</p>
+                  )}
+                  <div
+                    className="text-sm text-gray-600 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: branchText.body || "" }}
+                  />
+                </div>
+              )}
+
+              {/* Remarks */}
+              <div className="bg-white border border-gray-100 rounded-card p-5">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Opmerkingen (optioneel)
+                </h3>
+                <textarea
+                  value={remarksHtml}
+                  onChange={(e) => setRemarksHtml(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber resize-none"
+                  placeholder="Eventuele opmerkingen op de offerte..."
+                />
+              </div>
+            </div>
+
+            {/* Right: margin panel */}
+            <div>
+              <MarginPanel
+                items={items}
+                settings={settings || {}}
+                useFulfillment={useFulfillment}
+                onToggleFulfillment={() => setUseFulfillment(!useFulfillment)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Product Selector Modal */}
+        {showProductSelector && (
+          <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <h2 className="font-semibold">Product selecteren</h2>
+                <button
+                  onClick={() => setShowProductSelector(false)}
+                  className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(80vh-65px)]">
+                <ProductSelector onAddProduct={handleAddProduct} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, FileText, MessageSquare, CircleDot, AlertCircle } from "lucide-react";
+import { GripVertical, FileText, MessageSquare, CircleDot, AlertCircle, PhoneForwarded, PhoneOff } from "lucide-react";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES } from "@/lib/constants";
 
@@ -55,10 +55,22 @@ export default function LeadCard({ lead, isDragging }) {
           </p>
           <p className="text-xs text-gray-500 truncate">{lead.contact_person}</p>
 
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             {serviceLabel && (
               <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-pill bg-brand-light-beige text-brand-orange">
                 {serviceLabel}
+              </span>
+            )}
+            {lead.call_outcome === "terugbellen_5_dagen" && (
+              <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-amber-50 text-amber-700 border border-amber-200">
+                <PhoneForwarded className="w-2.5 h-2.5" />
+                Terugbellen
+              </span>
+            )}
+            {lead.call_outcome === "geen_gehoor_terugbellen" && (
+              <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-orange-50 text-orange-700 border border-orange-200">
+                <PhoneOff className="w-2.5 h-2.5" />
+                Geen gehoor
               </span>
             )}
             {lead.estimated_value && (

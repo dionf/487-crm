@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import AcceptQuoteButton from "@/components/AcceptQuoteButton";
+import QuotePrintButtons from "@/components/QuotePrintButtons";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -82,6 +83,8 @@ export default async function PublicQuotePage({ params }) {
       {quote.html_content ? (
         /* Render custom HTML template */
         <div>
+          {/* Print/Download bar */}
+          <QuotePrintButtons language={quote.language || "nl"} />
           <div dangerouslySetInnerHTML={{ __html: quote.html_content }} />
           {/* Acceptance section at bottom */}
           {!isAccepted && !isExpired && (

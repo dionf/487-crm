@@ -36,11 +36,13 @@ export async function POST(request, { params }) {
     last_called_by: user_id || null,
   };
 
-  // Status changes based on outcome
+  // Status changes based on outcome (HipHot only — 48-7 keeps own pipeline)
   if (outcome === "niet_geinteresseerd") {
-    leadUpdate.status = "offerte_verloren";
+    leadUpdate.status = tenant === "hiphot" ? "offerte_verloren" : "verloren";
   } else if (outcome === "voorstel_mailen") {
-    leadUpdate.status = "offerte_gestuurd";
+    leadUpdate.status = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
+  } else if (outcome === "terugbellen_5_dagen" || outcome === "geen_gehoor_terugbellen") {
+    if (tenant === "hiphot") leadUpdate.status = "terugbellen";
   } else if (outcome === "vraag_opvolgen_collega") {
     leadUpdate.assigned_to = null; // Unassign
   }

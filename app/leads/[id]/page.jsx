@@ -6,6 +6,9 @@ import AppShell from "@/components/AppShell";
 import StatusBadge from "@/components/StatusBadge";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import QuoteForm from "@/components/QuoteForm";
+import HipHotQuoteBuilder from "@/components/HipHotQuoteBuilder";
+import QuoteEmailLog from "@/components/hiphot/QuoteEmailLog";
+import EmailCompose from "@/components/hiphot/EmailCompose";
 import NoteForm from "@/components/NoteForm";
 import LeadForm from "@/components/LeadForm";
 import CoworkBar from "@/components/CoworkBar";
@@ -59,6 +62,8 @@ export default function LeadDetailPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [showHipHotBuilder, setShowHipHotBuilder] = useState(false);
+  const [showEmailCompose, setShowEmailCompose] = useState(null); // quote ID
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -351,7 +356,7 @@ export default function LeadDetailPage() {
           </button>
 
           <button
-            onClick={() => setShowQuoteForm(true)}
+            onClick={() => isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black transition-colors"
           >
             <FileText className="w-4 h-4" />
@@ -803,7 +808,7 @@ export default function LeadDetailPage() {
                 </h3>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); setShowQuoteForm(true); }}
+                onClick={(e) => { e.stopPropagation(); isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true); }}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
               >
                 <Plus className="w-3 h-3" />
@@ -867,6 +872,14 @@ export default function LeadDetailPage() {
                                 >
                                   Bekijken ↗
                                 </a>
+                                {isHipHot && (
+                                  <button
+                                    onClick={() => setShowEmailCompose(q.id)}
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                  >
+                                    Mailen
+                                  </button>
+                                )}
                                 {q.accepted_at && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700">
                                     ✓ Geaccepteerd
@@ -911,6 +924,9 @@ export default function LeadDetailPage() {
             )}
           </div>
 
+          {/* Email log (HipHot) */}
+          {isHipHot && <QuoteEmailLog leadId={params.id} />}
+
           {/* Activity Timeline */}
           <div className="bg-white border border-gray-100 rounded-card p-5">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
@@ -922,6 +938,14 @@ export default function LeadDetailPage() {
       </div>
 
       {/* Modals */}
+      {isHipHot && (
+        <HipHotQuoteBuilder
+          open={showHipHotBuilder}
+          onClose={() => setShowHipHotBuilder(false)}
+          lead={lead}
+          onSaved={fetchData}
+        />
+      )}
       <QuoteForm
         open={showQuoteForm}
         onClose={() => setShowQuoteForm(false)}
@@ -940,6 +964,17 @@ export default function LeadDetailPage() {
         onSaved={fetchData}
         lead={lead}
       />
+      {/* Email Compose Modal */}
+      {showEmailCompose && (
+        <EmailCompose
+          open={!!showEmailCompose}
+          onClose={() => setShowEmailCompose(null)}
+          quoteId={showEmailCompose}
+          defaultTo={lead.email}
+          onSent={fetchData}
+        />
+      )}
+
       <CoworkBar onResult={() => fetchData()} />
     </AppShell>
   );

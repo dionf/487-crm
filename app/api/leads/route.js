@@ -9,6 +9,7 @@ export async function GET(request) {
   const sort = searchParams.get("sort") || "created_at";
   const order = searchParams.get("order") || "desc";
   const assigned_to = searchParams.get("assigned_to");
+  const call_filter = searchParams.get("call_filter");
 
   let query = supabase
     .from("leads")
@@ -19,6 +20,15 @@ export async function GET(request) {
   if (status) query = query.eq("status", status);
   if (service_type) query = query.eq("service_type", service_type);
   if (assigned_to) query = query.eq("assigned_to", assigned_to);
+
+  // HipHot bellijst filters
+  if (call_filter === "nieuw") {
+    query = query.is("call_outcome", null).is("last_called_at", null);
+  } else if (call_filter === "terugbellen") {
+    query = query.eq("call_outcome", "terugbellen_5_dagen");
+  } else if (call_filter === "geen_gehoor") {
+    query = query.eq("call_outcome", "geen_gehoor_terugbellen");
+  }
   if (search) {
     query = query.or(
       `company_name.ilike.%${search}%,contact_person.ilike.%${search}%`

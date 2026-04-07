@@ -23,8 +23,15 @@ export default function ProductSelector({ onAddProduct }) {
       const res = await apiFetch("/api/hiphot/products");
       if (!res.ok) throw new Error("Producten ophalen mislukt");
       const data = await res.json();
-      setProducts(data.products || []);
-      if (data.synced_at) setSyncedAt(data.synced_at);
+      setProducts(data.articles || data.products || []);
+      if (data.articles && data.articles.length > 0) {
+        const latest = data.articles
+          .map((a) => a.synced_at)
+          .filter(Boolean)
+          .sort()
+          .pop();
+        if (latest) setSyncedAt(latest);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -41,8 +48,8 @@ export default function ProductSelector({ onAddProduct }) {
     setError("");
     try {
       const res = await apiFetch("/api/hiphot/products/sync", { method: "POST" });
-      if (!res.ok) throw new Error("Sync mislukt");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sync mislukt");
       if (data.synced_at) setSyncedAt(data.synced_at);
       await fetchProducts();
     } catch (err) {

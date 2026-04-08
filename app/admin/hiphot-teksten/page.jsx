@@ -21,7 +21,7 @@ const BRANCH_KEYS = [
 ];
 
 export default function HipHotTekstenPage() {
-  const { isAdmin, tenant } = useOrg();
+  const { isAdmin, tenant, loading: orgLoading } = useOrg();
   const router = useRouter();
 
   const [tab, setTab] = useState("intro"); // intro | voorwaarden | branche
@@ -146,6 +146,16 @@ export default function HipHotTekstenPage() {
     if (!confirm("Branchetekst verwijderen?")) return;
     await apiFetch(`/api/hiphot/branch-texts/${id}`, { method: "DELETE" });
     fetchAll();
+  }
+
+  if (orgLoading) {
+    return (
+      <AppShell>
+        <div className="flex justify-center py-12">
+          <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppShell>
+    );
   }
 
   if (!isAdmin) {

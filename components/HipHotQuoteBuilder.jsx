@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Save, Send, Eye, Globe, ChevronDown, Plus, FileText } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useOrg } from "@/lib/org-context";
 import { LANGUAGES } from "@/lib/translations/quote";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
 import ProductSelector from "@/components/hiphot/ProductSelector";
@@ -10,6 +11,7 @@ import LineItemsTable from "@/components/hiphot/LineItemsTable";
 import MarginPanel from "@/components/hiphot/MarginPanel";
 
 export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null }) {
+  const { user } = useOrg();
   const [step, setStep] = useState("edit"); // edit | preview
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -37,10 +39,10 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
   // Load settings + branch texts on open
   useEffect(() => {
     if (!open) return;
-    // Reset form with lead data
-    setContactName(lead?.contact_person || "");
-    setContactEmail(lead?.email || "");
-    setContactPhone(lead?.phone || "");
+    // Reset form — sender info from logged-in user (klantinfo komt rechtstreeks van lead)
+    setContactName(user?.name || "");
+    setContactEmail(user?.email || "");
+    setContactPhone("");
     setLanguage(lead?.language || "nl");
     setItems([]);
     setRemarksHtml("");
@@ -82,9 +84,9 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
           const { items: existingItems } = await iRes.json();
           if (quote) {
             setLanguage(quote.language || "nl");
-            setContactName(quote.contact_name || lead?.contact_person || "");
-            setContactEmail(quote.contact_email || lead?.email || "");
-            setContactPhone(quote.contact_phone || lead?.phone || "");
+            setContactName(quote.contact_name || user?.name || "");
+            setContactEmail(quote.contact_email || user?.email || "");
+            setContactPhone(quote.contact_phone || "");
             setRemarksHtml(quote.remarks_html || "");
             setUseFulfillment(quote.margin_data?.useFulfillment ?? true);
           }
@@ -353,7 +355,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
         ) : (
           <div className="p-6 space-y-6">
             <div className="space-y-6">
-              {/* Client & Language */}
+              {/* Client */}
               <div className="bg-white border border-gray-100 rounded-card p-5">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                   Klantgegevens
@@ -361,7 +363,19 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-500">Bedrijf</label>
-                    <p className="text-sm font-medium">{lead?.company_name}</p>
+                    <p className="text-sm font-medium">{lead?.company_name || "-"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Contactpersoon</label>
+                    <p className="text-sm font-medium">{lead?.contact_person || "-"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Email</label>
+                    <p className="text-sm">{lead?.email || "-"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Telefoon</label>
+                    <p className="text-sm">{lead?.phone || "-"}</p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">Taal</label>
@@ -375,8 +389,20 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
                       ))}
                     </select>
                   </div>
+                </div>
+              </div>
+
+              {/* Sender / Afzender */}
+              <div className="bg-white border border-gray-100 rounded-card p-5">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Afzender
+                </h3>
+                <p className="text-xs text-gray-400 mb-3">
+                  Wordt getoond als &quot;Prijsopgave aangemaakt door&quot; en in het contactblok.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500">Contactpersoon</label>
+                    <label className="text-xs text-gray-500">Naam</label>
                     <input
                       value={contactName}
                       onChange={(e) => setContactName(e.target.value)}

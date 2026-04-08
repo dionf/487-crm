@@ -29,6 +29,7 @@ export default function MarginPanel({ items, settings, useFulfillment, onToggleF
 
   const gratisVerzending = totals.verzendkostenOntvangen === 0 && totals.brutoVerkoop > 0;
   const margeColor = totals.marge >= 0 ? "text-green-600" : "text-red-600";
+  const margeOnderDoel = totals.brutoVerkoop > 0 && totals.margePercentageVerkoop < 40;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm divide-y divide-gray-100">
@@ -94,8 +95,18 @@ export default function MarginPanel({ items, settings, useFulfillment, onToggleF
           Marge
         </h3>
         <Row label="Marge" value={fmt(totals.marge)} className={`font-semibold ${margeColor}`} />
-        <Row label="Marge % op verkoop" value={fmtPct(totals.margePercentageVerkoop)} className={margeColor} />
+        <Row
+          label="Marge % op verkoop"
+          value={fmtPct(totals.margePercentageVerkoop)}
+          className={margeOnderDoel ? "text-amber-600 font-semibold" : margeColor}
+        />
         <Row label="Marge % op inkoop" value={fmtPct(totals.margePercentageInkoop)} className={margeColor} />
+        {margeOnderDoel && (
+          <div className="mt-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium flex items-start gap-2">
+            <span aria-hidden="true">⚠️</span>
+            <span>Let op, je komt onder de gewenste marge (40%)</span>
+          </div>
+        )}
       </div>
 
       {/* Klant totaal */}

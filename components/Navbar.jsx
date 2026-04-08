@@ -31,7 +31,7 @@ const baseNavItems = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, organization, isAdmin, logout } = useOrg();
+  const { user, organization, tenant, isAdmin, logout } = useOrg();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -168,7 +168,7 @@ export default function Navbar() {
                 ? [
                     { href: "/admin/users", label: "Users", icon: Settings },
                     { href: "/admin/import", label: "Import", icon: Upload },
-                    ...(organization?.tenant === "hiphot"
+                    ...(tenant === "hiphot"
                       ? [{ href: "/admin/hiphot-teksten", label: "Teksten", icon: FileText }]
                       : []),
                   ]

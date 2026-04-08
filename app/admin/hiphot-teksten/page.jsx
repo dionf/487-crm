@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
-import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Plus, Trash2, FileText } from "lucide-react";
@@ -21,7 +20,6 @@ const BRANCH_KEYS = [
 ];
 
 export default function HipHotTekstenPage() {
-  const { isAdmin, tenant, loading: orgLoading } = useOrg();
   const router = useRouter();
 
   const [tab, setTab] = useState("intro"); // intro | voorwaarden | branche
@@ -37,12 +35,6 @@ export default function HipHotTekstenPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (tenant && tenant !== "hiphot") {
-      router.push("/");
-    }
-  }, [tenant, router]);
 
   useEffect(() => {
     fetchAll();
@@ -146,24 +138,6 @@ export default function HipHotTekstenPage() {
     if (!confirm("Branchetekst verwijderen?")) return;
     await apiFetch(`/api/hiphot/branch-texts/${id}`, { method: "DELETE" });
     fetchAll();
-  }
-
-  if (orgLoading) {
-    return (
-      <AppShell>
-        <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppShell>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <AppShell>
-        <p className="text-sm text-gray-500">Geen toegang.</p>
-      </AppShell>
-    );
   }
 
   return (

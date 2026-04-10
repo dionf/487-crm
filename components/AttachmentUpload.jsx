@@ -82,14 +82,25 @@ export default function AttachmentUpload({
     handleUpload(Array.from(e.dataTransfer.files));
   }
 
+  const [downloadError, setDownloadError] = useState(null);
+
   async function handleDownload(attachmentId, fileName) {
+    setDownloadError(null);
     try {
       const res = await apiFetch(`/api/attachments/${attachmentId}`);
       const data = await res.json();
+      if (!res.ok || data.error) {
+        setDownloadError(data.error || "Download mislukt");
+        setTimeout(() => setDownloadError(null), 4000);
+        return;
+      }
       if (data.download_url) {
         window.open(data.download_url, "_blank");
       }
-    } catch {}
+    } catch {
+      setDownloadError("Download mislukt — bestand niet beschikbaar");
+      setTimeout(() => setDownloadError(null), 4000);
+    }
   }
 
   async function handleDelete(attachmentId) {
@@ -145,6 +156,13 @@ export default function AttachmentUpload({
           </div>
         )}
       </div>
+
+      {/* Download error */}
+      {downloadError && (
+        <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">
+          {downloadError}
+        </div>
+      )}
 
       {/* Attachment list */}
       {relevantAttachments.length > 0 && (

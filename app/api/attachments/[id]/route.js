@@ -15,6 +15,20 @@ export async function GET(request, { params }) {
     return Response.json({ error: "Bijlage niet gevonden" }, { status: 404 });
   }
 
+  // Verify file exists in storage
+  const { data: fileData, error: fileError } = await supabase.storage
+    .from("attachments")
+    .list(attachment.storage_path.split("/").slice(0, -1).join("/"), {
+      search: attachment.storage_path.split("/").pop(),
+    });
+
+  if (fileError || !fileData?.length) {
+    return Response.json(
+      { error: "Bestand niet gevonden in storage — mogelijk verwijderd of niet correct geüpload" },
+      { status: 404 }
+    );
+  }
+
   // Generate signed URL (valid for 1 hour)
   const { data: signedData, error: signError } = await supabase.storage
     .from("attachments")

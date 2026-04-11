@@ -47,6 +47,9 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
+  // Update lead estimated_value with total of all non-rejected quotes
+  await updateLeadValue(quote.lead_id);
+
   return Response.json({ quote: data });
 }
 
@@ -67,5 +70,19 @@ export async function DELETE(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
+  // Update lead estimated_value after deletion
+  await updateLeadValue(quote.lead_id);
+
   return Response.json({ success: true });
+}
+
+async function updateLeadValue(leadId) {
+  const { data: allQuotes } = await supabase
+    .from("quotes")
+    .select("amount_excl_vat")
+    .eq("lead_id", leadId)
+    .not("status", "eq", "afgewezen");
+
+  const totalValue = (allQuotes || []).reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);
+  await supabase.from("leads").update({ estimated_value: totalValue }).eq("id", leadId);
 }

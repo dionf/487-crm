@@ -76,6 +76,18 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
+  // Update lead estimated_value with total of all quotes
+  const { data: allQuotes } = await supabase
+    .from("quotes")
+    .select("amount_excl_vat")
+    .eq("lead_id", lead_id)
+    .not("status", "eq", "afgewezen");
+
+  if (allQuotes?.length) {
+    const totalValue = allQuotes.reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);
+    await supabase.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id);
+  }
+
   // Log activity
   await supabase.from("activities").insert({
     lead_id,

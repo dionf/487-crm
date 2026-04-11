@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { SERVICE_TYPES, SOURCES } from "@/lib/constants";
+import { SERVICE_TYPES, SOURCES, INDUSTRIES } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
 
@@ -17,6 +17,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     email: "",
     phone: "",
     service_type: "",
+    industry: "",
     estimated_value: "",
     source: "",
     website_url: "",
@@ -35,6 +36,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         email: lead.email || "",
         phone: lead.phone || "",
         service_type: lead.service_type || "",
+        industry: lead.industry || "",
         estimated_value: lead.estimated_value || "",
         source: lead.source || "",
         website_url: lead.website_url || suggestedUrl || "",
@@ -47,6 +49,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         email: "",
         phone: "",
         service_type: "",
+        industry: "",
         estimated_value: "",
         source: "",
         website_url: "",
@@ -245,42 +248,60 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Branche
+              </label>
+              <select
+                value={form.industry}
+                onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+              >
+                <option value="">Selecteer...</option>
+                {INDUSTRIES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Bron
+              </label>
+              <select
+                value={form.source}
+                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+              >
+                <option value="">Selecteer...</option>
+                {SOURCES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {!isHipHot && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Service type
-                </label>
-                <select
-                  value={form.service_type}
-                  onChange={(e) => setForm({ ...form, service_type: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
-                >
-                  <option value="">Selecteer...</option>
-                  {SERVICE_TYPES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Bron
-                </label>
-                <select
-                  value={form.source}
-                  onChange={(e) => setForm({ ...form, source: e.target.value })}
-                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
-                >
-                  <option value="">Selecteer...</option>
-                  {SOURCES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Service type
+              </label>
+              <select
+                value={form.service_type}
+                onChange={(e) => setForm({ ...form, service_type: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+              >
+                <option value="">Selecteer...</option>
+                {SERVICE_TYPES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

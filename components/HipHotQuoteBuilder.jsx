@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Save, Send, Eye, Globe, ChevronDown, Plus, FileText } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
@@ -36,9 +36,22 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
   // Preview HTML
   const [previewHtml, setPreviewHtml] = useState("");
 
+  // Track whether modal was already open (prevent re-reset on lead changes)
+  const prevOpenRef = useRef(false);
+
   // Load settings + branch texts on open
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prevOpenRef.current = false;
+      return;
+    }
+
+    const freshOpen = !prevOpenRef.current;
+    prevOpenRef.current = true;
+
+    // Only reset form when modal freshly opens, not on subsequent re-renders
+    if (!freshOpen) return;
+
     // Reset form — sender info from logged-in user (klantinfo komt rechtstreeks van lead)
     setContactName(user?.name || "");
     setContactEmail(user?.email || "");
@@ -112,7 +125,8 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
         }
       })();
     }
-  }, [open, lead, editQuoteId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editQuoteId]);
 
   // Update branch text when language changes
   useEffect(() => {

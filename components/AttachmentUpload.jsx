@@ -16,6 +16,7 @@ import { apiFetch } from "@/lib/api";
 
 const FILE_ICONS = {
   "application/pdf": FileText,
+  "text/html": FileText,
   "image/png": Image,
   "image/jpeg": Image,
   "image/webp": Image,
@@ -137,7 +138,7 @@ export default function AttachmentUpload({
           multiple
           onChange={handleFileSelect}
           className="hidden"
-          accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.xls,.txt,.csv"
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.xls,.txt,.csv,.html,.htm"
         />
         {uploading ? (
           <div className="flex items-center justify-center gap-2 py-2">
@@ -151,7 +152,7 @@ export default function AttachmentUpload({
               Sleep bestanden hierheen of klik om te uploaden
             </span>
             <span className="text-[10px] text-gray-400">
-              PDF, afbeeldingen, Word, Excel (max 50MB)
+              PDF, HTML, afbeeldingen, Word, Excel (max 50MB)
             </span>
           </div>
         )}

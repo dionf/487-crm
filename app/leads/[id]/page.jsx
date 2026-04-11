@@ -75,6 +75,8 @@ export default function LeadDetailPage() {
   // Collapsible sections
   const [quotesOpen, setQuotesOpen] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [aiSummaryOpen, setAiSummaryOpen] = useState(false);
+  const [callOutcomeOpen, setCallOutcomeOpen] = useState(false);
 
   // Inline editing
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -518,13 +520,21 @@ export default function LeadDetailPage() {
             />
           </div>
 
-          {/* Call Outcome Panel (HipHot only) */}
+          {/* Call Outcome Panel (HipHot only) - Collapsible */}
           {isHipHot && (
-            <div className="bg-white border border-gray-100 rounded-card p-5">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <PhoneCall className="w-3.5 h-3.5 text-green-600" />
-                Bel-uitkomst registreren
-              </h3>
+            <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
+              <button
+                onClick={() => setCallOutcomeOpen(!callOutcomeOpen)}
+                className="w-full flex items-center gap-2 px-5 py-3 hover:bg-gray-50/50 transition-colors"
+              >
+                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${callOutcomeOpen ? "rotate-90" : ""}`} />
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <PhoneCall className="w-3.5 h-3.5 text-green-600" />
+                  Bel-uitkomst registreren
+                </h3>
+              </button>
+              {callOutcomeOpen && (
+              <div className="px-5 pb-4">
 
               {lead.call_outcome && (
                 <div className="mb-3 px-3 py-2 bg-gray-50 rounded-xl">
@@ -588,6 +598,8 @@ export default function LeadDetailPage() {
                   <PhoneCall className="w-4 h-4" />
                   Volgende bellen
                 </button>
+              )}
+              </div>
               )}
             </div>
           )}
@@ -759,15 +771,21 @@ export default function LeadDetailPage() {
 
         {/* Right column */}
         <div className="space-y-4">
-          {/* AI Summary */}
-          <div className="bg-white border border-gray-100 rounded-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
-                AI Bedrijfsanalyse
-              </h3>
+          {/* AI Summary - Collapsible */}
+          <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
+            <button
+              onClick={() => setAiSummaryOpen(!aiSummaryOpen)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${aiSummaryOpen ? "rotate-90" : ""}`} />
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                  AI Bedrijfsanalyse
+                </h3>
+              </div>
               <button
-                onClick={generateAiSummary}
+                onClick={(e) => { e.stopPropagation(); generateAiSummary(); }}
                 disabled={aiLoading}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors disabled:opacity-50"
               >
@@ -783,16 +801,20 @@ export default function LeadDetailPage() {
                   </>
                 )}
               </button>
-            </div>
-            {lead.ai_summary ? (
-              <div
-                className="text-sm text-brand-dark-gray leading-relaxed max-w-none [&_h3]:text-xs [&_h3]:font-bold [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:text-gray-500 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3:first-child]:mt-0 [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:pl-4 [&_ul]:list-disc [&_li]:mb-1 [&_strong]:font-semibold [&_strong]:text-brand-black"
-                dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
-              />
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-3">
-                Klik &quot;Analyseer&quot; voor AI-samenvatting
-              </p>
+            </button>
+            {aiSummaryOpen && (
+              <div className="px-5 pb-4">
+                {lead.ai_summary ? (
+                  <div
+                    className="text-sm text-brand-dark-gray leading-relaxed max-w-none [&_h3]:text-xs [&_h3]:font-bold [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:text-gray-500 [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3:first-child]:mt-0 [&_p]:mb-2 [&_ul]:mb-2 [&_ul]:pl-4 [&_ul]:list-disc [&_li]:mb-1 [&_strong]:font-semibold [&_strong]:text-brand-black"
+                    dangerouslySetInnerHTML={{ __html: formatAiSummary(lead.ai_summary) }}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-3">
+                    Klik &quot;Analyseer&quot; voor AI-samenvatting
+                  </p>
+                )}
+              </div>
             )}
           </div>
 

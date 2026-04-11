@@ -466,7 +466,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
               {branchText && (
                 <div className="bg-amber-50 border border-amber-100 rounded-card p-5">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Branchetekst — {branchText.branch_key}
+                    Branchetekst — {branchText.branch_key} (deze tekst komt in de offerte)
                     {branchText.language !== language && (
                       <span className="ml-2 text-amber-600 normal-case">(Fallback: {branchText.language})</span>
                     )}

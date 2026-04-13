@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
+import { wrapEmailHtml } from "@/lib/email-template";
 
 export async function POST(request, { params }) {
   const hash = params.hash;
@@ -118,46 +119,46 @@ async function sendAcceptanceNotification(quote, tenant) {
     const amount = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(quote.amount_excl_vat || 0);
     const crmUrl = `https://crm.48-7.nl/leads/${quote.lead_id}`;
 
+    const notificationBody = `
+      <div style="background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px; color: #166534; font-size: 18px;">Offerte geaccepteerd!</h2>
+        <p style="margin: 0; color: #15803d; font-size: 14px;">
+          ${contactPerson ? `${contactPerson} van ` : ""}${companyName} heeft offerte <strong>${quote.quote_number}</strong> zojuist geaccepteerd.
+        </p>
+      </div>
+      <table style="width: 100%; font-size: 14px; color: #374151;">
+        <tr>
+          <td style="padding: 6px 0; color: #6b7280;">Bedrijf</td>
+          <td style="padding: 6px 0; font-weight: 600;">${companyName}</td>
+        </tr>
+        ${contactPerson ? `<tr>
+          <td style="padding: 6px 0; color: #6b7280;">Contact</td>
+          <td style="padding: 6px 0;">${contactPerson}</td>
+        </tr>` : ""}
+        <tr>
+          <td style="padding: 6px 0; color: #6b7280;">Offerte</td>
+          <td style="padding: 6px 0;">${quote.quote_number}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; color: #6b7280;">Bedrag</td>
+          <td style="padding: 6px 0; font-weight: 600;">${amount} excl. BTW</td>
+        </tr>
+      </table>
+      <div style="margin-top: 20px;">
+        <a href="${crmUrl}" style="display: inline-block; background: ${tenant === "hiphot" ? "#FFD500" : "#FAB868"}; color: #0D0D0F; font-weight: 600; padding: 10px 24px; border-radius: 999px; text-decoration: none; font-size: 14px;">
+          Bekijk in CRM
+        </a>
+      </div>
+      <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">
+        De lead is automatisch naar "Gewonnen" verplaatst.
+      </p>
+    `;
+
     await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: [notifyEmail],
-      subject: `🎉 Offerte ${quote.quote_number} geaccepteerd — ${companyName}`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto;">
-          <div style="background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
-            <h2 style="margin: 0 0 8px; color: #166534; font-size: 18px;">Offerte geaccepteerd!</h2>
-            <p style="margin: 0; color: #15803d; font-size: 14px;">
-              ${contactPerson ? `${contactPerson} van ` : ""}${companyName} heeft offerte <strong>${quote.quote_number}</strong> zojuist geaccepteerd.
-            </p>
-          </div>
-          <table style="width: 100%; font-size: 14px; color: #374151;">
-            <tr>
-              <td style="padding: 6px 0; color: #6b7280;">Bedrijf</td>
-              <td style="padding: 6px 0; font-weight: 600;">${companyName}</td>
-            </tr>
-            ${contactPerson ? `<tr>
-              <td style="padding: 6px 0; color: #6b7280;">Contact</td>
-              <td style="padding: 6px 0;">${contactPerson}</td>
-            </tr>` : ""}
-            <tr>
-              <td style="padding: 6px 0; color: #6b7280;">Offerte</td>
-              <td style="padding: 6px 0;">${quote.quote_number}</td>
-            </tr>
-            <tr>
-              <td style="padding: 6px 0; color: #6b7280;">Bedrag</td>
-              <td style="padding: 6px 0; font-weight: 600;">${amount} excl. BTW</td>
-            </tr>
-          </table>
-          <div style="margin-top: 20px;">
-            <a href="${crmUrl}" style="display: inline-block; background: #FAB868; color: #0D0D0F; font-weight: 600; padding: 10px 24px; border-radius: 999px; text-decoration: none; font-size: 14px;">
-              Bekijk in CRM →
-            </a>
-          </div>
-          <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">
-            De lead is automatisch naar "Gewonnen" verplaatst.
-          </p>
-        </div>
-      `,
+      subject: `Offerte ${quote.quote_number} geaccepteerd — ${companyName}`,
+      html: wrapEmailHtml(notificationBody, { tenant }),
     });
   } catch (err) {
     // Don't fail the acceptance if notification fails

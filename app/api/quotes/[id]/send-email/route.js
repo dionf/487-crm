@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Resend } from "resend";
+import { wrapEmailHtml } from "@/lib/email-template";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export async function POST(request, { params }) {
       from: `${fromName} <${fromEmail}>`,
       to: [to],
       subject,
-      html: body_html,
+      html: wrapEmailHtml(body_html, { tenant }),
     };
     if (cc) emailData.cc = [cc];
     if (attachments.length) emailData.attachments = attachments;

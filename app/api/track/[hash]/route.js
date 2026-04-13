@@ -7,7 +7,7 @@ const PIXEL = Buffer.from(
 );
 
 export async function GET(request, { params }) {
-  const hash = params.hash;
+  const hash = (await params).hash;
 
   // Look up quote
   const { data: quote } = await supabase

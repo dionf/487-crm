@@ -3,7 +3,7 @@ import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
 export async function POST(request, { params }) {
-  const hash = params.hash;
+  const hash = (await params).hash;
 
   // Find quote by hash (include lead + tenant info)
   const { data: quote, error: findError } = await supabase

@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function PATCH(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
-  const { id } = params;
+  const { id } = await params;
   const body = await request.json();
 
   // Verify note belongs to tenant
@@ -28,7 +28,7 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
-  const { id } = params;
+  const { id } = await params;
 
   // Verify note belongs to tenant
   const { data: existing } = await supabase

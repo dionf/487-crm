@@ -18,7 +18,7 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Ongeldige uitkomst" }, { status: 400 });
   }
 
-  const leadId = params.id;
+  const leadId = (await params).id;
 
   // Verify lead belongs to tenant
   const { data: lead } = await supabase

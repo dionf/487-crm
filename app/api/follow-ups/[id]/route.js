@@ -6,7 +6,7 @@ export async function PATCH(request, { params }) {
 
   // Verify task belongs to tenant
   const { data: existing } = await supabase
-    .from("follow_up_tasks").select("tenant").eq("id", params.id).single();
+    .from("follow_up_tasks").select("tenant").eq("id", (await params).id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Taak niet gevonden" }, { status: 404 });
   }
@@ -22,7 +22,7 @@ export async function PATCH(request, { params }) {
   const { data, error } = await supabase
     .from("follow_up_tasks")
     .update(updates)
-    .eq("id", params.id)
+    .eq("id", (await params).id)
     .select()
     .single();
 

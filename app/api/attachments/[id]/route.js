@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function GET(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
-  const { id } = params;
+  const { id } = await params;
 
   // Get attachment record and verify tenant via lead
   const { data: attachment, error } = await supabase
@@ -46,7 +46,7 @@ export async function GET(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
-  const { id } = params;
+  const { id } = await params;
 
   // Get attachment and verify tenant via lead
   const { data: attachment } = await supabase

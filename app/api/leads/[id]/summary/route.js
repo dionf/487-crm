@@ -53,7 +53,7 @@ async function scrapeWebsite(url) {
 
 export async function POST(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
-  const { id } = params;
+  const { id } = await params;
 
   const { data: lead, error } = await supabase
     .from("leads")

@@ -15,7 +15,7 @@ export async function PATCH(request, { params }) {
   const { data, error } = await supabase
     .from("users")
     .update(updates)
-    .eq("id", params.id)
+    .eq("id", (await params).id)
     .select("id, name, email, phone, role, is_active")
     .single();
 
@@ -26,11 +26,11 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   // Unassign all leads from this user before deleting
-  await supabase.from("leads").update({ assigned_to: null }).eq("assigned_to", params.id);
-  await supabase.from("leads").update({ last_called_by: null }).eq("last_called_by", params.id);
-  await supabase.from("follow_up_tasks").update({ assigned_to: null }).eq("assigned_to", params.id);
+  await supabase.from("leads").update({ assigned_to: null }).eq("assigned_to", (await params).id);
+  await supabase.from("leads").update({ last_called_by: null }).eq("last_called_by", (await params).id);
+  await supabase.from("follow_up_tasks").update({ assigned_to: null }).eq("assigned_to", (await params).id);
 
-  const { error } = await supabase.from("users").delete().eq("id", params.id);
+  const { error } = await supabase.from("users").delete().eq("id", (await params).id);
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true });
 }

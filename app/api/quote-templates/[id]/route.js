@@ -6,7 +6,7 @@ export async function GET(request, { params }) {
   const { data, error } = await supabase
     .from("quote_templates")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", (await params).id)
     .eq("tenant", tenant)
     .single();
 
@@ -27,7 +27,7 @@ export async function PATCH(request, { params }) {
   const { data, error } = await supabase
     .from("quote_templates")
     .update(updates)
-    .eq("id", params.id)
+    .eq("id", (await params).id)
     .eq("tenant", tenant)
     .select()
     .single();
@@ -42,7 +42,7 @@ export async function DELETE(request, { params }) {
   const { error } = await supabase
     .from("quote_templates")
     .update({ is_active: false })
-    .eq("id", params.id)
+    .eq("id", (await params).id)
     .eq("tenant", tenant);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

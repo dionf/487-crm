@@ -115,6 +115,23 @@ export async function POST(request, { params }) {
       );
     }
 
+    // Auto-update lead status to "offerte gestuurd/verstuurd"
+    const quoteStatusId = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
+    const { data: currentLead } = await supabase
+      .from("leads")
+      .select("status")
+      .eq("id", quote.lead_id)
+      .single();
+
+    // Only upgrade status if lead is still in an early stage
+    const earlyStatuses = ["nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
+    if (currentLead && earlyStatuses.includes(currentLead.status)) {
+      await supabase
+        .from("leads")
+        .update({ status: quoteStatusId })
+        .eq("id", quote.lead_id);
+    }
+
     // Log activity
     const attSuffix = attachmentRecords.length ? ` (${attachmentRecords.length} bijlage${attachmentRecords.length > 1 ? "n" : ""})` : "";
     await supabase.from("activities").insert({

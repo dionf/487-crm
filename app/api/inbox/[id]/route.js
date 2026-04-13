@@ -25,7 +25,20 @@ export async function PATCH(request, { params }) {
   const { id } = await params;
   const body = await request.json();
 
-  // Only allow updating status
+  // Prevent status downgrade: gelezen can't overwrite beantwoord/gearchiveerd
+  if (body.status === "gelezen") {
+    const { data: current } = await supabase
+      .from("form_submissions")
+      .select("status")
+      .eq("id", id)
+      .eq("tenant", tenant)
+      .single();
+
+    if (current && ["beantwoord", "gearchiveerd"].includes(current.status)) {
+      return Response.json({ submission: current });
+    }
+  }
+
   const updates = {};
   if (body.status) updates.status = body.status;
   if (body.lead_id) updates.lead_id = body.lead_id;

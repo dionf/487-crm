@@ -100,17 +100,19 @@ function InboxPage() {
     setReplySent(false);
     setReplyError("");
 
-    // Mark as read if new
+    // Mark as read only if status is "nieuw" (don't downgrade beantwoord/gearchiveerd)
     if (sub.status === "nieuw") {
       await apiFetch(`/api/inbox/${sub.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "gelezen" }),
       });
+      const updatedSub = { ...sub, status: "gelezen" };
       setSubmissions((prev) =>
-        prev.map((s) => (s.id === sub.id ? { ...s, status: "gelezen" } : s))
+        prev.map((s) => (s.id === sub.id ? updatedSub : s))
       );
-      setSelected((prev) => (prev ? { ...prev, status: "gelezen" } : prev));
+      setSelected(updatedSub);
+      window.dispatchEvent(new Event("inbox-updated"));
     }
   }
 
@@ -122,6 +124,7 @@ function InboxPage() {
     });
     setSubmissions((prev) => prev.filter((s) => s.id !== id));
     if (selected?.id === id) setSelected(null);
+    window.dispatchEvent(new Event("inbox-updated"));
   }
 
   function openReply() {
@@ -153,6 +156,7 @@ function InboxPage() {
       setSubmissions((prev) =>
         prev.map((s) => (s.id === selected.id ? { ...s, status: "beantwoord" } : s))
       );
+      window.dispatchEvent(new Event("inbox-updated"));
     } catch (err) {
       setReplyError(err.message);
     } finally {

@@ -79,6 +79,19 @@ export default function Navbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Refresh inbox count on navigation and custom events
+  useEffect(() => {
+    fetchInboxCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    const handler = () => fetchInboxCount();
+    window.addEventListener("inbox-updated", handler);
+    return () => window.removeEventListener("inbox-updated", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Search debounce
   useEffect(() => {
     if (searchQuery.length < 2) {

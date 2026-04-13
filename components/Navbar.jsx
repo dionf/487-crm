@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  Inbox,
   Settings,
   Upload,
   LogOut,
@@ -27,6 +28,7 @@ import StatusBadge from "./StatusBadge";
 const baseNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
 ];
 
 export default function Navbar() {
@@ -46,6 +48,9 @@ export default function Navbar() {
   const [todoLoading, setTodoLoading] = useState(false);
   const todoRef = useRef(null);
 
+  // Inbox unread count
+  const [inboxCount, setInboxCount] = useState(0);
+
   // Follow-up tasks (notifications)
   const [notifOpen, setNotifOpen] = useState(false);
   const [followUps, setFollowUps] = useState([]);
@@ -56,10 +61,20 @@ export default function Navbar() {
     return user?.name || "Dion";
   }
 
-  // Load todo count and follow-ups on mount
+  // Fetch inbox unread count
+  async function fetchInboxCount() {
+    try {
+      const res = await apiFetch("/api/inbox/count");
+      const data = await res.json();
+      setInboxCount(data.count || 0);
+    } catch {}
+  }
+
+  // Load todo count, follow-ups, and inbox count on mount
   useEffect(() => {
     fetchTodos();
     fetchFollowUps();
+    fetchInboxCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -184,7 +199,7 @@ export default function Navbar() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors",
+                    "relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors",
                     isActive
                       ? "bg-brand-amber/10 text-brand-orange"
                       : "text-brand-dark-gray hover:bg-gray-100"
@@ -192,6 +207,11 @@ export default function Navbar() {
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
+                  {item.href === "/inbox" && inboxCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] rounded-full text-[9px] font-bold flex items-center justify-center text-white bg-blue-500">
+                      {inboxCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}

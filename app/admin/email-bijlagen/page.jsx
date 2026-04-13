@@ -193,7 +193,7 @@ export default function EmailBijlagenPage() {
                       {att.name}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {att.file_name} &middot; {formatFileSize(att.file_size)}
+                      {att.file_name} · {formatFileSize(att.file_size)}
                     </p>
                   </div>
                   <button

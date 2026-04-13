@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Mail, ChevronDown, ChevronRight, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, ChevronDown, ChevronRight, Clock, CheckCircle, AlertCircle, Paperclip } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -16,12 +16,30 @@ export default function QuoteEmailLog({ leadId }) {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [attachments, setAttachments] = useState({}); // { email_id: [...] }
 
   useEffect(() => {
     if (!leadId) return;
     apiFetch(`/api/hiphot/emails?lead_id=${leadId}`)
       .then((r) => r.json())
-      .then((d) => setEmails(d.emails || []))
+      .then((d) => {
+        const list = d.emails || [];
+        setEmails(list);
+        // Fetch attachments for all emails
+        if (list.length) {
+          apiFetch(`/api/hiphot/email-attachments?email_ids=${list.map((e) => e.id).join(",")}`)
+            .then((r) => r.json())
+            .then((a) => {
+              const byEmail = {};
+              for (const att of a.attachments || []) {
+                if (!byEmail[att.email_id]) byEmail[att.email_id] = [];
+                byEmail[att.email_id].push(att);
+              }
+              setAttachments(byEmail);
+            })
+            .catch(() => {});
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [leadId]);
@@ -67,6 +85,19 @@ export default function QuoteEmailLog({ leadId }) {
                     className="mt-2 p-3 bg-gray-50 rounded-lg text-sm prose prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ __html: email.body_html }}
                   />
+                  {attachments[email.id]?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {attachments[email.id].map((att) => (
+                        <span
+                          key={att.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-lg text-xs text-gray-600"
+                        >
+                          <Paperclip className="w-3 h-3" />
+                          {att.attachment_name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -904,14 +904,12 @@ export default function LeadDetailPage() {
                                 >
                                   Bekijken ↗
                                 </a>
-                                {isHipHot && (
-                                  <button
-                                    onClick={() => setShowEmailCompose(q.id)}
-                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-purple-50 text-purple-600 hover:bg-purple-100"
-                                  >
-                                    Mailen
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => setShowEmailCompose(q.id)}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                >
+                                  Mailen
+                                </button>
                                 {q.accepted_at && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700">
                                     ✓ Geaccepteerd
@@ -956,8 +954,8 @@ export default function LeadDetailPage() {
             )}
           </div>
 
-          {/* Email log (HipHot) */}
-          {isHipHot && <QuoteEmailLog leadId={params.id} />}
+          {/* Email log */}
+          <QuoteEmailLog leadId={params.id} />
 
           {/* Activity Timeline */}
           <div className="bg-white border border-gray-100 rounded-card p-5">
@@ -1005,6 +1003,8 @@ export default function LeadDetailPage() {
           quoteId={showEmailCompose}
           defaultTo={lead.email}
           onSent={fetchData}
+          lead={lead}
+          quoteData={quotes.find((q) => q.id === showEmailCompose)}
         />
       )}
 

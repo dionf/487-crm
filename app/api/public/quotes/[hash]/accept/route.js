@@ -91,11 +91,22 @@ export async function POST(request, { params }) {
   });
 }
 
+function getResendKey(tenant) {
+  if (tenant === "hiphot" && process.env.RESEND_API_KEY_HIPHOT) {
+    return process.env.RESEND_API_KEY_HIPHOT;
+  }
+  if (tenant === "48-7" && process.env.RESEND_API_KEY_487) {
+    return process.env.RESEND_API_KEY_487;
+  }
+  return process.env.RESEND_API_KEY;
+}
+
 async function sendAcceptanceNotification(quote, tenant) {
   try {
-    if (!process.env.RESEND_API_KEY) return;
+    const apiKey = getResendKey(tenant);
+    if (!apiKey) return;
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(apiKey);
 
     // Determine notification recipient based on tenant
     const notifyEmail = tenant === "hiphot" ? "hallo@hiphot.nl" : "dion@48-7.nl";

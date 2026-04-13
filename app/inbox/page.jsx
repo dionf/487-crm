@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { apiFetch } from "@/lib/api";
@@ -41,7 +41,15 @@ const STATUS_LABELS = {
   gearchiveerd: { label: "Gearchiveerd", color: "bg-gray-100 text-gray-400" },
 };
 
-export default function InboxPage() {
+export default function InboxPageWrapper() {
+  return (
+    <Suspense fallback={<AppShell><div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" /></div></AppShell>}>
+      <InboxPage />
+    </Suspense>
+  );
+}
+
+function InboxPage() {
   const { tenant } = useOrg();
   const router = useRouter();
   const searchParams = useSearchParams();

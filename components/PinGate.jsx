@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { useOrg } from "@/lib/org-context";
 import { ArrowLeft } from "lucide-react";
 
-export default function PinGate({ children }) {
+export default function PinGate({ children, tenantSlug }) {
   const { isLoggedIn, loading: sessionLoading, login } = useOrg();
 
-  const [step, setStep] = useState("org"); // org → user → pin
+  const [step, setStep] = useState(tenantSlug ? "loading" : "org"); // org → user → pin
   const [orgs, setOrgs] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedOrg, setSelectedOrg] = useState(null);
@@ -21,10 +21,25 @@ export default function PinGate({ children }) {
     if (!isLoggedIn) {
       fetch("/api/auth/organizations")
         .then((r) => r.json())
-        .then((data) => setOrgs(data.organizations || []))
-        .catch(() => {});
+        .then((data) => {
+          const orgList = data.organizations || [];
+          setOrgs(orgList);
+          // Auto-select org if tenantSlug provided
+          if (tenantSlug) {
+            const match = orgList.find((o) => o.slug === tenantSlug);
+            if (match) {
+              setSelectedOrg(match);
+              setStep("user");
+            } else {
+              setStep("org"); // fallback to org selection
+            }
+          }
+        })
+        .catch(() => {
+          if (tenantSlug) setStep("org");
+        });
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, tenantSlug]);
 
   // Fetch users when org is selected
   useEffect(() => {
@@ -73,13 +88,18 @@ export default function PinGate({ children }) {
       setStep("user");
       setSelectedUser(null);
     } else if (step === "user") {
+      if (tenantSlug) {
+        // Tenant URL — terug gaat naar algemene login
+        window.location.href = "/";
+        return;
+      }
       setStep("org");
       setSelectedOrg(null);
       setUsers([]);
     }
   }
 
-  if (sessionLoading) {
+  if (sessionLoading || step === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />

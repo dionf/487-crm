@@ -4,9 +4,10 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
+import RichEditor from "@/components/RichEditor";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Plus, Trash2, FileText } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, FileText, Mail, Pencil } from "lucide-react";
 import { LANGUAGES } from "@/lib/translations/quote";
 
 const BRANCH_KEYS = [
@@ -22,14 +23,18 @@ const BRANCH_KEYS = [
 export default function HipHotTekstenPage() {
   const router = useRouter();
 
-  const [tab, setTab] = useState("intro"); // intro | voorwaarden | branche
+  const [tab, setTab] = useState("intro"); // intro | voorwaarden | branche | email
   const [language, setLanguage] = useState("nl");
   const [settings, setSettings] = useState(null);
   const [introHtml, setIntroHtml] = useState("");
   const [termsHtml, setTermsHtml] = useState("");
 
   const [branchTexts, setBranchTexts] = useState([]);
-  const [editingBranch, setEditingBranch] = useState(null); // { branch_key, language, title, body, id? }
+  const [editingBranch, setEditingBranch] = useState(null);
+
+  // Email templates
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [editingTemplate, setEditingTemplate] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,16 +48,19 @@ export default function HipHotTekstenPage() {
   async function fetchAll() {
     setLoading(true);
     try {
-      const [sRes, bRes] = await Promise.all([
+      const [sRes, bRes, eRes] = await Promise.all([
         apiFetch("/api/hiphot/settings"),
         apiFetch("/api/hiphot/branch-texts"),
+        apiFetch("/api/email-templates"),
       ]);
       const s = await sRes.json();
       const b = await bRes.json();
+      const e = await eRes.json();
       setSettings(s.settings);
       setIntroHtml(s.settings?.intro_html?.[language] || "");
       setTermsHtml(s.settings?.terms_html?.[language] || "");
       setBranchTexts(b.texts || []);
+      setEmailTemplates(e.templates || []);
     } catch (e) {
       setError("Kon teksten niet laden");
     } finally {
@@ -140,6 +148,57 @@ export default function HipHotTekstenPage() {
     fetchAll();
   }
 
+  // Email template CRUD
+  async function saveEmailTemplate() {
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const payload = {
+        name: editingTemplate.name,
+        subject: editingTemplate.subject,
+        body_html: editingTemplate.body_html,
+        language: editingTemplate.language || "nl",
+        sort_order: editingTemplate.sort_order || 0,
+      };
+      let r;
+      if (editingTemplate.id) {
+        r = await apiFetch(`/api/email-templates/${editingTemplate.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        r = await apiFetch("/api/email-templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      if (!r.ok) {
+        const j = await r.json();
+        throw new Error(j.error || "Opslaan mislukt");
+      }
+      setEditingTemplate(null);
+      await fetchAll();
+      setMessage("Template opgeslagen");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteEmailTemplate(id) {
+    if (!confirm("Template verwijderen?")) return;
+    await apiFetch(`/api/email-templates/${id}`, { method: "DELETE" });
+    fetchAll();
+  }
+
+  // Filter email templates by selected language
+  const filteredTemplates = emailTemplates.filter((t) => t.language === language);
+
   return (
     <AppShell>
       <button
@@ -156,7 +215,7 @@ export default function HipHotTekstenPage() {
           Offerte teksten
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Beheer de standaard intro, voorwaarden en brancheteksten die in HipHot offertes verschijnen.
+          Beheer de standaard intro, voorwaarden, brancheteksten en e-mailtemplates.
         </p>
       </div>
 
@@ -184,6 +243,7 @@ export default function HipHotTekstenPage() {
           { id: "intro", label: "Intro tekst" },
           { id: "voorwaarden", label: "Voorwaarden" },
           { id: "branche", label: "Brancheteksten" },
+          { id: "email", label: "E-mail templates" },
         ].map((t) => (
           <button
             key={t.id}
@@ -218,16 +278,14 @@ export default function HipHotTekstenPage() {
               <div className="mb-3">
                 <h2 className="text-sm font-semibold text-gray-700">Intro tekst boven artikelen</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Verschijnt op elke offerte boven de productenlijst (bv. &quot;Waarom wij de zonnekoningen zijn&quot;).
-                  HTML toegestaan: &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;br&gt;.
+                  Verschijnt op elke offerte boven de productenlijst.
                 </p>
               </div>
-              <textarea
+              <RichEditor
                 value={introHtml}
-                onChange={(e) => setIntroHtml(e.target.value)}
-                rows={14}
-                className="w-full text-sm font-mono px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-200"
-                placeholder="<p><strong>Waarom wij...</strong></p><p>Onze dispensers...</p>"
+                onChange={setIntroHtml}
+                placeholder="Waarom wij de zonnekoningen zijn..."
+                minHeight="250px"
               />
               <div className="flex justify-between items-center mt-3">
                 <span className="text-xs text-gray-400">Taal: {LANGUAGES.find((l) => l.code === language)?.label}</span>
@@ -240,16 +298,6 @@ export default function HipHotTekstenPage() {
                   Opslaan
                 </button>
               </div>
-
-              {introHtml && (
-                <div className="mt-6 border-t border-gray-100 pt-4">
-                  <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Preview</p>
-                  <div
-                    className="prose prose-sm max-w-none text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: introHtml }}
-                  />
-                </div>
-              )}
             </div>
           )}
 
@@ -258,15 +306,14 @@ export default function HipHotTekstenPage() {
               <div className="mb-3">
                 <h2 className="text-sm font-semibold text-gray-700">Aankoopvoorwaarden onder offerte</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Verschijnt onderaan elke offerte (bv. &quot;Genoemde prijzen zijn excl. BTW...&quot;).
+                  Verschijnt onderaan elke offerte.
                 </p>
               </div>
-              <textarea
+              <RichEditor
                 value={termsHtml}
-                onChange={(e) => setTermsHtml(e.target.value)}
-                rows={10}
-                className="w-full text-sm font-mono px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-200"
-                placeholder="<p>Genoemde prijzen zijn excl. BTW.</p>..."
+                onChange={setTermsHtml}
+                placeholder="Genoemde prijzen zijn excl. BTW..."
+                minHeight="200px"
               />
               <div className="flex justify-between items-center mt-3">
                 <span className="text-xs text-gray-400">Taal: {LANGUAGES.find((l) => l.code === language)?.label}</span>
@@ -279,16 +326,6 @@ export default function HipHotTekstenPage() {
                   Opslaan
                 </button>
               </div>
-
-              {termsHtml && (
-                <div className="mt-6 border-t border-gray-100 pt-4">
-                  <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Preview</p>
-                  <div
-                    className="prose prose-sm max-w-none text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: termsHtml }}
-                  />
-                </div>
-              )}
             </div>
           )}
 
@@ -296,7 +333,7 @@ export default function HipHotTekstenPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-xs text-gray-500">
-                  Optionele branchespecifieke teksten (per branche × per taal). Worden automatisch toegevoegd
+                  Optionele branchespecifieke teksten (per branche x per taal). Worden automatisch toegevoegd
                   als de lead industrie matcht.
                 </p>
                 <button
@@ -360,6 +397,78 @@ export default function HipHotTekstenPage() {
               )}
             </div>
           )}
+
+          {tab === "email" && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-gray-500">
+                    E-mailtemplates die bij het mailen van offertes geselecteerd kunnen worden.
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Placeholders: {"{{voornaam}}"}, {"{{bedrijf}}"}, {"{{offerte_nummer}}"}, {"{{offerte_link}}"}, {"{{bedrag}}"}, {"{{afzender}}"}
+                  </p>
+                </div>
+                <button
+                  onClick={() =>
+                    setEditingTemplate({
+                      name: "",
+                      subject: "",
+                      body_html: "",
+                      language,
+                      sort_order: filteredTemplates.length,
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-pill flex-shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nieuw
+                </button>
+              </div>
+
+              {filteredTemplates.length === 0 ? (
+                <p className="text-sm text-gray-400 py-6 text-center bg-white border border-gray-100 rounded-card">
+                  Geen templates voor {LANGUAGES.find((l) => l.code === language)?.label || language}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredTemplates.map((tmpl) => (
+                    <div
+                      key={tmpl.id}
+                      className="bg-white border border-gray-100 rounded-card p-4 flex items-start justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Mail className="w-3.5 h-3.5 text-purple-500" />
+                          <span className="text-sm font-medium text-gray-800">{tmpl.name}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">
+                          Onderwerp: {tmpl.subject}
+                        </p>
+                        <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">
+                          {tmpl.body_html.replace(/<[^>]+>/g, "").substring(0, 150)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditingTemplate(tmpl)}
+                          className="px-2 py-1 text-xs font-semibold rounded-pill bg-purple-50 text-purple-700 hover:bg-purple-100"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => deleteEmailTemplate(tmpl.id)}
+                          className="p-1.5 text-gray-300 hover:text-red-500"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -407,13 +516,12 @@ export default function HipHotTekstenPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500">Body (HTML)</label>
-                <textarea
+                <label className="text-xs text-gray-500 mb-1 block">Body</label>
+                <RichEditor
                   value={editingBranch.body || ""}
-                  onChange={(e) => setEditingBranch({ ...editingBranch, body: e.target.value })}
-                  rows={10}
-                  className="w-full mt-0.5 px-3 py-2 text-sm font-mono border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
-                  placeholder="<p>Onze dispensers zijn perfect voor...</p>"
+                  onChange={(v) => setEditingBranch({ ...editingBranch, body: v })}
+                  placeholder="Onze dispensers zijn perfect voor..."
+                  minHeight="180px"
                 />
               </div>
             </div>
@@ -427,6 +535,79 @@ export default function HipHotTekstenPage() {
               <button
                 onClick={saveBranchText}
                 disabled={saving}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-pill disabled:opacity-40"
+              >
+                <Save className="w-4 h-4" />
+                Opslaan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email template editor modal */}
+      {editingTemplate && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold mb-4">
+              {editingTemplate.id ? "Template bewerken" : "Nieuw e-mailtemplate"}
+            </h2>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500">Naam *</label>
+                  <input
+                    value={editingTemplate.name}
+                    onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                    className="w-full mt-0.5 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                    placeholder="Bv. Offerte aanbieden"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Taal</label>
+                  <select
+                    value={editingTemplate.language}
+                    onChange={(e) => setEditingTemplate({ ...editingTemplate, language: e.target.value })}
+                    className="w-full mt-0.5 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option key={l.code} value={l.code}>{l.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Onderwerp *</label>
+                <input
+                  value={editingTemplate.subject}
+                  onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
+                  className="w-full mt-0.5 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                  placeholder="Offerte {{offerte_nummer}} — {{bedrijf}}"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Gebruik {"{{voornaam}}"}, {"{{bedrijf}}"}, {"{{offerte_nummer}}"}, {"{{offerte_link}}"}, {"{{bedrag}}"}, {"{{afzender}}"}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">E-mailtekst *</label>
+                <RichEditor
+                  value={editingTemplate.body_html}
+                  onChange={(v) => setEditingTemplate({ ...editingTemplate, body_html: v })}
+                  placeholder="Beste {{voornaam}},..."
+                  minHeight="250px"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setEditingTemplate(null)}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-pill hover:bg-gray-50"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={saveEmailTemplate}
+                disabled={saving || !editingTemplate.name || !editingTemplate.subject || !editingTemplate.body_html}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-pill disabled:opacity-40"
               >
                 <Save className="w-4 h-4" />

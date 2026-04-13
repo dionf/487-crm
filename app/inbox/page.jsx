@@ -382,9 +382,26 @@ function InboxPage() {
               )}
 
               {selected.replied_at && !showReply && !replySent && (
-                <div className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-green-500" />
-                  Beantwoord op {new Date(selected.replied_at).toLocaleString("nl-NL")}
+                <div className="bg-white rounded-2xl border border-gray-100 p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Reply className="w-4 h-4 text-green-500" />
+                    <span className="text-sm font-semibold text-gray-500">Verstuurd antwoord</span>
+                    <span className="text-xs text-gray-400 ml-auto">
+                      {selected.replied_by && `${selected.replied_by} · `}
+                      {new Date(selected.replied_at).toLocaleString("nl-NL")}
+                    </span>
+                  </div>
+                  {selected.reply_subject && (
+                    <p className="text-sm font-medium text-gray-700 mb-2">{selected.reply_subject}</p>
+                  )}
+                  {selected.reply_body_html ? (
+                    <div
+                      className="text-sm text-gray-600 prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: selected.reply_body_html }}
+                    />
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Antwoord niet opgeslagen</p>
+                  )}
                 </div>
               )}
             </div>

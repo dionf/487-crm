@@ -57,6 +57,9 @@ export async function POST(request, { params }) {
       .update({
         status: "beantwoord",
         replied_at: new Date().toISOString(),
+        reply_subject: subject,
+        reply_body_html: body_html,
+        replied_by: userName,
       })
       .eq("id", id);
 

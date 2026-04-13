@@ -130,7 +130,11 @@ function InboxPage() {
   function openReply() {
     if (!selected) return;
     setReplySubject(`Re: Contactaanvraag van ${selected.first_name} ${selected.last_name}`);
-    setReplyBody(`<p>Hallo ${selected.first_name},</p><p></p><p>Met vriendelijke groet</p>`);
+    const signature =
+      tenant === "hiphot"
+        ? `<p>Met zonnige groet,</p><p><br></p><p><strong>HIPHOT</strong><br>(+31) 085-505 56 64<br>hiphot.nl</p>`
+        : `<p>Met vriendelijke groet,</p><p><br></p><p><strong>48-7 AI Professionals</strong><br>(+31) 085-505 56 64<br>48-7.nl</p>`;
+    setReplyBody(`<p>Hallo ${selected.first_name},</p><p><br></p><p><br></p>${signature}`);
     setShowReply(true);
     setReplySent(false);
     setReplyError("");

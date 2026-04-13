@@ -47,29 +47,42 @@ const TENANT_CONFIG = {
   },
 };
 
+const CLOSINGS = {
+  hiphot: {
+    nl: "Met zonnige groet,",
+    en: "With sunny regards,",
+    de: "Mit sonnigen Grüßen,",
+  },
+  "48-7": {
+    nl: "Met vriendelijke groet,",
+    en: "Kind regards,",
+    de: "Mit freundlichen Grüßen,",
+  },
+};
+
 const TRANSLATIONS = {
   nl: {
     confirmSubject: "Bedankt voor je bericht",
-    confirmBody: (firstName) => `
+    confirmBody: (firstName, tenant) => `
       <p>Hallo ${firstName},</p>
       <p>Bedankt voor je bericht! We hebben je aanvraag ontvangen en nemen zo snel mogelijk contact met je op.</p>
-      <p>Met vriendelijke groet</p>
+      <p>${CLOSINGS[tenant]?.nl || CLOSINGS["48-7"].nl}</p>
     `,
   },
   en: {
     confirmSubject: "Thank you for your message",
-    confirmBody: (firstName) => `
+    confirmBody: (firstName, tenant) => `
       <p>Hello ${firstName},</p>
       <p>Thank you for your message! We have received your inquiry and will get back to you as soon as possible.</p>
-      <p>Kind regards</p>
+      <p>${CLOSINGS[tenant]?.en || CLOSINGS["48-7"].en}</p>
     `,
   },
   de: {
     confirmSubject: "Vielen Dank für Ihre Nachricht",
-    confirmBody: (firstName) => `
+    confirmBody: (firstName, tenant) => `
       <p>Hallo ${firstName},</p>
       <p>Vielen Dank für Ihre Nachricht! Wir haben Ihre Anfrage erhalten und werden uns so schnell wie möglich bei Ihnen melden.</p>
-      <p>Mit freundlichen Grüßen</p>
+      <p>${CLOSINGS[tenant]?.de || CLOSINGS["48-7"].de}</p>
     `,
   },
 };
@@ -216,7 +229,7 @@ export async function POST(request) {
         from: `${config.fromName} <${config.fromEmail}>`,
         to: [email.trim().toLowerCase()],
         subject: t.confirmSubject,
-        html: wrapEmailHtml(t.confirmBody(first_name.trim()), { tenant }),
+        html: wrapEmailHtml(t.confirmBody(first_name.trim(), tenant), { tenant }),
       });
     } catch (emailErr) {
       console.error("Confirmation email failed:", emailErr);

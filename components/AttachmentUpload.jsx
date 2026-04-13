@@ -184,7 +184,7 @@ export default function AttachmentUpload({
                     {att.file_name}
                   </p>
                   <p className="text-[10px] text-gray-400">
-                    {formatFileSize(att.file_size)} &middot;{" "}
+                    {formatFileSize(att.file_size)} ·{" "}
                     {formatRelativeTime(att.created_at)}
                     {att.uploaded_by && ` door ${att.uploaded_by}`}
                   </p>

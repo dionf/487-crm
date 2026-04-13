@@ -55,6 +55,7 @@ export default function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [followUps, setFollowUps] = useState([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [showAllFollowUps, setShowAllFollowUps] = useState(false);
   const notifRef = useRef(null);
 
   function getCurrentUser() {
@@ -103,10 +104,11 @@ export default function Navbar() {
   }
 
   // Fetch follow-up tasks
-  async function fetchFollowUps() {
+  async function fetchFollowUps(all) {
     setNotifLoading(true);
     try {
-      const res = await apiFetch("/api/follow-ups");
+      const url = all ? "/api/follow-ups?all=true" : "/api/follow-ups";
+      const res = await apiFetch(url);
       const data = await res.json();
       setFollowUps(data.tasks || []);
     } catch {}
@@ -322,6 +324,22 @@ export default function Navbar() {
                     <p className="text-xs font-bold uppercase text-gray-400 tracking-wide">
                       Follow-up taken ({followUps.length})
                     </p>
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          const next = !showAllFollowUps;
+                          setShowAllFollowUps(next);
+                          fetchFollowUps(next);
+                        }}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-pill transition-colors ${
+                          showAllFollowUps
+                            ? "bg-brand-amber/20 text-brand-orange"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        }`}
+                      >
+                        {showAllFollowUps ? "Alle taken" : "Mijn taken"}
+                      </button>
+                    )}
                   </div>
                   {notifLoading ? (
                     <div className="flex justify-center py-6">

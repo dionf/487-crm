@@ -313,7 +313,7 @@ export default function LeadDetailPage() {
                 ? `${lead.contact_first_name} ${lead.contact_last_name}`
                 : lead.contact_person}
               {lead.contact_function && <span className="text-gray-400"> — {lead.contact_function}</span>}
-              {" "}&middot; Aangemaakt {formatRelativeTime(lead.created_at)}
+              {" "}· Aangemaakt {formatRelativeTime(lead.created_at)}
             </p>
             {lead.website_url && (
               <a

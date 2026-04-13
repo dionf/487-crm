@@ -177,7 +177,7 @@ export default function StatsPanel({ leads }) {
                     <div>
                       <p className="text-sm font-medium">{serviceTypeLabels[type] || type}</p>
                       <p className="text-xs text-gray-400">
-                        {data.leads} leads &middot; {data.won} gewonnen &middot; {data.lost} verloren
+                        {data.leads} leads · {data.won} gewonnen · {data.lost} verloren
                       </p>
                     </div>
                     <div className="flex items-center gap-4 text-right">

@@ -69,8 +69,8 @@ export default function QuoteEmailLog({ leadId }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{email.subject}</p>
                   <p className="text-xs text-gray-500">
-                    Naar {email.to_email} &middot; {formatRelativeTime(email.sent_at)}
-                    {email.sent_by && ` &middot; door ${email.sent_by}`}
+                    Naar {email.to_email} · {formatRelativeTime(email.sent_at)}
+                    {email.sent_by && ` · door ${email.sent_by}`}
                   </p>
                 </div>
                 {isExpanded ? (

@@ -31,9 +31,18 @@ export async function PATCH(request, { params }) {
 
   // Sync primary contact to lead
   if (data.is_primary) {
+    const nameParts = (data.name || "").split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
     await supabase
       .from("leads")
-      .update({ contact_person: data.name, email: data.email, phone: data.phone })
+      .update({
+        contact_person: data.name,
+        contact_first_name: firstName,
+        contact_last_name: lastName,
+        email: data.email,
+        phone: data.phone,
+      })
       .eq("id", data.lead_id);
   }
 

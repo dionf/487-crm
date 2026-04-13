@@ -13,7 +13,9 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
 
   const [form, setForm] = useState({
     company_name: "",
-    contact_person: "",
+    contact_first_name: "",
+    contact_last_name: "",
+    contact_function: "",
     email: "",
     phone: "",
     service_type: "",
@@ -30,9 +32,19 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
   useEffect(() => {
     if (lead) {
       const suggestedUrl = !lead.website_url ? extractUrlFromEmail(lead.email) : "";
+      // For first/last name: use new fields, fallback to splitting contact_person
+      let firstName = lead.contact_first_name || "";
+      let lastName = lead.contact_last_name || "";
+      if (!firstName && lead.contact_person) {
+        const parts = lead.contact_person.split(" ");
+        firstName = parts[0] || "";
+        lastName = parts.slice(1).join(" ") || "";
+      }
       setForm({
         company_name: lead.company_name || "",
-        contact_person: lead.contact_person || "",
+        contact_first_name: firstName,
+        contact_last_name: lastName,
+        contact_function: lead.contact_function || "",
         email: lead.email || "",
         phone: lead.phone || "",
         service_type: lead.service_type || "",
@@ -45,7 +57,9 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     } else {
       setForm({
         company_name: "",
-        contact_person: "",
+        contact_first_name: "",
+        contact_last_name: "",
+        contact_function: "",
         email: "",
         phone: "",
         service_type: "",
@@ -116,6 +130,9 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     try {
       const payload = {
         ...form,
+        // Sync contact_person for backward compatibility
+        contact_person: `${form.contact_first_name} ${form.contact_last_name}`.trim(),
+        contact_function: form.contact_function || null,
         estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
         website_url: normalizeUrl(form.website_url) || null,
         commission_partner_percentage: form.commission_partner_percentage ? parseFloat(form.commission_partner_percentage) : null,
@@ -142,13 +159,17 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
       if (!isEdit) {
         setForm({
           company_name: "",
-          contact_person: "",
+          contact_first_name: "",
+          contact_last_name: "",
+          contact_function: "",
           email: "",
           phone: "",
           service_type: "",
+          industry: "",
           estimated_value: "",
           source: "",
           website_url: "",
+          commission_partner_percentage: "",
         });
       }
 
@@ -199,14 +220,41 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Contactpersoon *
+                Voornaam *
               </label>
               <input
                 type="text"
                 required
-                value={form.contact_person}
-                onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+                value={form.contact_first_name}
+                onChange={(e) => setForm({ ...form, contact_first_name: e.target.value })}
                 className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Achternaam *
+              </label>
+              <input
+                type="text"
+                required
+                value={form.contact_last_name}
+                onChange={(e) => setForm({ ...form, contact_last_name: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Functie
+              </label>
+              <input
+                type="text"
+                value={form.contact_function}
+                onChange={(e) => setForm({ ...form, contact_function: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                placeholder="bijv. Eigenaar, Directeur"
               />
             </div>
             <div>

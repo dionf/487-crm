@@ -427,7 +427,14 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">Contactpersoon</label>
-                    <p className="text-sm font-medium">{lead?.contact_person || "-"}</p>
+                    <p className="text-sm font-medium">
+                      {lead?.contact_first_name && lead?.contact_last_name
+                        ? `${lead.contact_first_name} ${lead.contact_last_name}`
+                        : lead?.contact_person || "-"}
+                    </p>
+                    {lead?.contact_function && (
+                      <p className="text-xs text-gray-400">{lead.contact_function}</p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">Email</label>

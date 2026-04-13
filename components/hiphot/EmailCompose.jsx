@@ -58,7 +58,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
 
   // Build placeholder variables from lead + quote data
   const placeholderVars = {
-    voornaam: lead?.contact_person?.split(" ")[0] || lead?.contact_person || "",
+    voornaam: lead?.contact_first_name || lead?.contact_person?.split(" ")[0] || "",
     bedrijf: lead?.company_name || "",
     offerte_nummer: quoteData?.quote_number || "",
     offerte_link: quoteData?.public_hash

@@ -53,7 +53,11 @@ export default function LeadCard({ lead, isDragging }) {
           <p className="font-semibold text-sm text-brand-black truncate">
             {lead.company_name}
           </p>
-          <p className="text-xs text-gray-500 truncate">{lead.contact_person}</p>
+          <p className="text-xs text-gray-500 truncate">
+            {lead.contact_first_name && lead.contact_last_name
+              ? `${lead.contact_first_name} ${lead.contact_last_name}`
+              : lead.contact_person}
+          </p>
 
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {serviceLabel && (

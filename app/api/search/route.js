@@ -12,9 +12,9 @@ export async function GET(request) {
   const [leadsRes, notesRes] = await Promise.all([
     supabase
       .from("leads")
-      .select("id, company_name, contact_person, status")
+      .select("id, company_name, contact_person, contact_first_name, contact_last_name, status")
       .eq("tenant", tenant)
-      .or(`company_name.ilike.%${q}%,contact_person.ilike.%${q}%,email.ilike.%${q}%`)
+      .or(`company_name.ilike.%${q}%,contact_person.ilike.%${q}%,contact_first_name.ilike.%${q}%,contact_last_name.ilike.%${q}%,email.ilike.%${q}%`)
       .limit(5),
     supabase
       .from("notes")

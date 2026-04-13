@@ -11,7 +11,7 @@ export async function POST(request, { params }) {
   // Verify quote
   const { data: quote } = await supabase
     .from("quotes")
-    .select("*, leads(company_name, contact_person, email, industry, language, tenant)")
+    .select("*, leads(company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, industry, language, tenant)")
     .eq("id", id)
     .single();
 
@@ -54,7 +54,9 @@ export async function POST(request, { params }) {
 
 Klantgegevens:
 - Bedrijf: ${lead?.company_name || "Onbekend"}
-- Contactpersoon: ${lead?.contact_person || ""}
+- Voornaam: ${lead?.contact_first_name || lead?.contact_person?.split(" ")[0] || ""}
+- Achternaam: ${lead?.contact_last_name || ""}
+- Functie: ${lead?.contact_function || "onbekend"}
 - Branche: ${lead?.industry || "onbekend"}
 - Taal: ${langMap[lang] || "Nederlands"}
 

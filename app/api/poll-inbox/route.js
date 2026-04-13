@@ -167,12 +167,20 @@ export async function GET(request) {
             fromName
           );
 
+          // Parse first/last name from contact_person or fromName
+          const fullName = leadData.contact_person || fromName || "Onbekend";
+          const nameParts = fullName.split(" ");
+          const inboxFirstName = nameParts[0] || "";
+          const inboxLastName = nameParts.slice(1).join(" ") || "";
+
           // Insert lead
           const { data: lead, error: leadError } = await supabase
             .from("leads")
             .insert({
               company_name: leadData.company_name || "Onbekend — handmatig beoordelen",
-              contact_person: leadData.contact_person || fromName || "Onbekend",
+              contact_person: fullName,
+              contact_first_name: inboxFirstName,
+              contact_last_name: inboxLastName,
               email: leadData.email || fromEmail,
               phone: leadData.phone || null,
               service_type: leadData.service_type || null,

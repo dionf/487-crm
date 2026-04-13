@@ -40,6 +40,13 @@ export async function PATCH(request, { params }) {
     body.won_at = new Date().toISOString();
   }
 
+  // Sync contact_person when first/last name changes
+  if (body.contact_first_name !== undefined || body.contact_last_name !== undefined) {
+    const first = body.contact_first_name ?? "";
+    const last = body.contact_last_name ?? "";
+    body.contact_person = `${first} ${last}`.trim();
+  }
+
   const { data, error } = await supabase
     .from("leads")
     .update(body)

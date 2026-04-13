@@ -31,7 +31,7 @@ export async function GET(request) {
   }
   if (search) {
     query = query.or(
-      `company_name.ilike.%${search}%,contact_person.ilike.%${search}%`
+      `company_name.ilike.%${search}%,contact_person.ilike.%${search}%,contact_first_name.ilike.%${search}%,contact_last_name.ilike.%${search}%`
     );
   }
 
@@ -58,11 +58,16 @@ export async function GET(request) {
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
-  const { company_name, contact_person, email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage } = body;
+  const { company_name, contact_first_name, contact_last_name, contact_function, contact_person, email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage } = body;
 
-  if (!company_name || !contact_person || !email) {
+  // Support both new fields and legacy contact_person
+  const firstName = contact_first_name || (contact_person ? contact_person.split(" ")[0] : "");
+  const lastName = contact_last_name || (contact_person ? contact_person.split(" ").slice(1).join(" ") : "");
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  if (!company_name || !fullName || !email) {
     return Response.json(
-      { error: "company_name, contact_person en email zijn verplicht" },
+      { error: "company_name, voornaam/achternaam en email zijn verplicht" },
       { status: 400 }
     );
   }
@@ -73,7 +78,10 @@ export async function POST(request) {
     .from("leads")
     .insert({
       company_name,
-      contact_person,
+      contact_first_name: firstName,
+      contact_last_name: lastName,
+      contact_function: contact_function || null,
+      contact_person: fullName,
       email,
       phone: phone || null,
       service_type: service_type || null,

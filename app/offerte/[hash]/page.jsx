@@ -195,10 +195,14 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
             </div>
           )}
           <div style={{ background: "#F4F4F4", borderRadius: 12, padding: "16px 24px", display: "inline-grid", gridTemplateColumns: "auto 1fr", gap: "4px 16px", fontSize: 14 }}>
-            {quote.leads?.contact_person && (
+            {(quote.leads?.contact_first_name || quote.leads?.contact_person) && (
               <>
                 <span style={{ fontWeight: 600 }}>Contactpersoon:</span>
-                <span style={{ color: "#292828" }}>{quote.leads.contact_person}</span>
+                <span style={{ color: "#292828" }}>
+                  {quote.leads?.contact_first_name && quote.leads?.contact_last_name
+                    ? `${quote.leads.contact_first_name} ${quote.leads.contact_last_name}`
+                    : quote.leads.contact_person}
+                </span>
               </>
             )}
             <span style={{ fontWeight: 600 }}>Datum:</span>

@@ -58,9 +58,18 @@ export async function POST(request) {
 
   // Update lead's primary contact fields if this is primary
   if (is_primary || data.is_primary) {
+    const nameParts = name.split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
     await supabase
       .from("leads")
-      .update({ contact_person: name, email: email || undefined, phone: phone || undefined })
+      .update({
+        contact_person: name,
+        contact_first_name: firstName,
+        contact_last_name: lastName,
+        email: email || undefined,
+        phone: phone || undefined,
+      })
       .eq("id", lead_id);
   }
 

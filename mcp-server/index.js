@@ -36,8 +36,8 @@ server.tool(
     service_type: z.string().optional().describe("Filter op service type: discovery, cowork_setup, training, maatwerk, support_contract, partner"),
   },
   async ({ query, status, service_type }) => {
-    let q = supabase.from("leads").select("id, company_name, contact_person, email, phone, status, service_type, estimated_value, source, website_url, created_at").order("created_at", { ascending: false }).limit(25);
-    if (query) q = q.or(`company_name.ilike.%${query}%,contact_person.ilike.%${query}%,email.ilike.%${query}%`);
+    let q = supabase.from("leads").select("id, company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, phone, status, service_type, estimated_value, source, website_url, created_at").order("created_at", { ascending: false }).limit(25);
+    if (query) q = q.or(`company_name.ilike.%${query}%,contact_person.ilike.%${query}%,contact_first_name.ilike.%${query}%,contact_last_name.ilike.%${query}%,email.ilike.%${query}%`);
     if (status) q = q.eq("status", status);
     if (service_type) q = q.eq("service_type", service_type);
     const { data, error } = await q;
@@ -82,7 +82,11 @@ server.tool(
 
     let text = `# ${leadData.company_name}\n`;
     text += `**Status:** ${leadData.status}\n`;
-    text += `**Contact:** ${leadData.contact_person} — ${leadData.email}${leadData.phone ? ` — ${leadData.phone}` : ""}\n`;
+    const contactName = leadData.contact_first_name && leadData.contact_last_name
+      ? `${leadData.contact_first_name} ${leadData.contact_last_name}`
+      : leadData.contact_person;
+    text += `**Contact:** ${contactName} — ${leadData.email}${leadData.phone ? ` — ${leadData.phone}` : ""}\n`;
+    if (leadData.contact_function) text += `**Functie:** ${leadData.contact_function}\n`;
     if (leadData.service_type) text += `**Service:** ${leadData.service_type}\n`;
     if (leadData.estimated_value) text += `**Waarde:** €${leadData.estimated_value}\n`;
     if (leadData.source) text += `**Bron:** ${leadData.source}\n`;
@@ -130,16 +134,21 @@ server.tool(
   "Maak een nieuwe lead aan in de 48-7 CRM (STANDALONE — geen Supabase MCP nodig).",
   {
     company_name: z.string().describe("Bedrijfsnaam"),
-    contact_person: z.string().describe("Naam contactpersoon"),
+    contact_first_name: z.string().describe("Voornaam contactpersoon"),
+    contact_last_name: z.string().describe("Achternaam contactpersoon"),
+    contact_function: z.string().optional().describe("Functie contactpersoon (bijv. Eigenaar, Directeur)"),
     email: z.string().describe("Email adres"),
     phone: z.string().optional().describe("Telefoonnummer"),
     service_type: z.string().optional().describe("Service type: discovery, cowork_setup, training, maatwerk, support_contract, partner"),
     estimated_value: z.number().optional().describe("Geschatte waarde in euro"),
     source: z.string().optional().describe("Bron: linkedin, website, referral, partner, event, overig"),
   },
-  async ({ company_name, contact_person, email, phone, service_type, estimated_value, source }) => {
+  async ({ company_name, contact_first_name, contact_last_name, contact_function, email, phone, service_type, estimated_value, source }) => {
+    const contact_person = `${contact_first_name} ${contact_last_name}`.trim();
     const { data, error } = await supabase.from("leads").insert({
-      company_name, contact_person, email, phone, service_type, estimated_value,
+      company_name, contact_person, contact_first_name, contact_last_name,
+      contact_function: contact_function || null,
+      email, phone, service_type, estimated_value,
       source: source || "overig", status: "nieuw",
     }).select().single();
     if (error) return { content: [{ type: "text", text: `Fout: ${error.message}` }] };

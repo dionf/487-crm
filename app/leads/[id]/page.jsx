@@ -65,6 +65,7 @@ export default function LeadDetailPage() {
   const [showHipHotBuilder, setShowHipHotBuilder] = useState(false);
   const [editHipHotQuoteId, setEditHipHotQuoteId] = useState(null);
   const [showEmailCompose, setShowEmailCompose] = useState(null); // quote ID
+  const [emailQuoteOverride, setEmailQuoteOverride] = useState(null); // quoteData from publish flow
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -975,6 +976,10 @@ export default function LeadDetailPage() {
           lead={lead}
           editQuoteId={editHipHotQuoteId}
           onSaved={fetchData}
+          onPublishedEmail={(quoteData) => {
+            setEmailQuoteOverride(quoteData);
+            setShowEmailCompose(quoteData.id);
+          }}
         />
       )}
       <QuoteForm
@@ -999,12 +1004,12 @@ export default function LeadDetailPage() {
       {showEmailCompose && (
         <EmailCompose
           open={!!showEmailCompose}
-          onClose={() => setShowEmailCompose(null)}
+          onClose={() => { setShowEmailCompose(null); setEmailQuoteOverride(null); }}
           quoteId={showEmailCompose}
           defaultTo={lead.email}
           onSent={fetchData}
           lead={lead}
-          quoteData={quotes.find((q) => q.id === showEmailCompose)}
+          quoteData={emailQuoteOverride || quotes.find((q) => q.id === showEmailCompose)}
         />
       )}
 

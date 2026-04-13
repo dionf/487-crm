@@ -10,10 +10,11 @@ import ProductSelector from "@/components/hiphot/ProductSelector";
 import LineItemsTable from "@/components/hiphot/LineItemsTable";
 import MarginPanel from "@/components/hiphot/MarginPanel";
 
-export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null }) {
+export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null, onPublishedEmail }) {
   const { user } = useOrg();
-  const [step, setStep] = useState("edit"); // edit | preview
+  const [step, setStep] = useState("edit"); // edit | preview | published
   const [loading, setLoading] = useState(false);
+  const [publishedQuote, setPublishedQuote] = useState(null);
   const [error, setError] = useState("");
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [addedFlash, setAddedFlash] = useState(0);
@@ -247,8 +248,9 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
       });
 
       // Publish if requested OR re-generate HTML if quote was already published
+      const wasPublish = publish && !quote.public_hash;
       if (publish || quote.public_hash) {
-        await apiFetch(`/api/quotes/${quote.id}/publish`, {
+        const pubRes = await apiFetch(`/api/quotes/${quote.id}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -258,6 +260,21 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
             keep_hash: !!quote.public_hash,
           }),
         });
+        const pubData = await pubRes.json();
+
+        // After first publish: show "want to email?" prompt
+        if (wasPublish && pubData.public_url) {
+          setPublishedQuote({
+            id: quote.id,
+            quote_number: quote.quote_number,
+            public_hash: pubData.public_url.split("/offerte/")[1],
+            amount_excl_vat: orderTotals.nettoVerkoop,
+          });
+          onSaved?.();
+          setStep("published");
+          setLoading(false);
+          return;
+        }
       }
 
       onSaved?.();
@@ -358,7 +375,36 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
           <div className="mx-6 mt-4 text-sm text-red-600 bg-red-50 px-4 py-2 rounded-xl">{error}</div>
         )}
 
-        {step === "preview" ? (
+        {step === "published" ? (
+          <div className="p-12 text-center">
+            <div className="text-4xl mb-4">🎉</div>
+            <h2 className="text-xl font-bold text-brand-black mb-2">Offerte gepubliceerd!</h2>
+            <p className="text-sm text-gray-500 mb-8">
+              {publishedQuote?.quote_number} is nu beschikbaar via de publieke link.
+              Wil je direct een e-mail versturen naar de klant?
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => {
+                  onClose();
+                }}
+                className="px-5 py-2.5 border border-gray-200 rounded-pill text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Later
+              </button>
+              <button
+                onClick={() => {
+                  onClose();
+                  onPublishedEmail?.(publishedQuote);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black"
+              >
+                <Send className="w-4 h-4" />
+                E-mail versturen
+              </button>
+            </div>
+          </div>
+        ) : step === "preview" ? (
           <div className="p-6">
             <iframe
               srcDoc={previewHtml}

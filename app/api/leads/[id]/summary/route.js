@@ -160,13 +160,21 @@ ${notesContext ? `--- CRM NOTITIES ---\n${notesContext}\n--- EINDE NOTITIES ---`
 
     if (!claudeRes.ok) {
       console.error("Claude API error:", claudeRes.status, JSON.stringify(claudeData));
-      return Response.json({
-        error: `AI fout: ${claudeData.error?.message || claudeRes.statusText}`,
-        summary: `Kon geen samenvatting genereren (${claudeRes.status}: ${claudeData.error?.message || "onbekende fout"}).`,
-      });
+      return Response.json(
+        { error: `AI fout (${claudeRes.status}): ${claudeData.error?.message || claudeRes.statusText}` },
+        { status: 502 }
+      );
     }
 
-    const summary = claudeData.content?.[0]?.text || "Kon geen samenvatting genereren.";
+    const summary = claudeData.content?.[0]?.text;
+
+    if (!summary) {
+      console.error("Claude returned empty content:", JSON.stringify(claudeData));
+      return Response.json(
+        { error: "Claude gaf een leeg antwoord terug" },
+        { status: 502 }
+      );
+    }
 
     // Save to database
     await supabase

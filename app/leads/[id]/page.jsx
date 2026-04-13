@@ -209,8 +209,13 @@ export default function LeadDetailPage() {
       const result = await res.json();
       if (result.summary) {
         fetchData();
+      } else if (result.error) {
+        console.error("AI summary error:", result.error);
+        alert(`AI analyse mislukt: ${result.error}`);
       }
-    } catch {}
+    } catch (err) {
+      console.error("AI summary fetch failed:", err);
+    }
     setAiLoading(false);
   }
 

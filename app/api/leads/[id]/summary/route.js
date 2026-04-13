@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 async function scrapeWebsite(url) {
   // Try multiple URL variations
   const urls = [url];
@@ -155,6 +157,15 @@ ${notesContext ? `--- CRM NOTITIES ---\n${notesContext}\n--- EINDE NOTITIES ---`
     });
 
     const claudeData = await claudeRes.json();
+
+    if (!claudeRes.ok) {
+      console.error("Claude API error:", claudeRes.status, JSON.stringify(claudeData));
+      return Response.json({
+        error: `AI fout: ${claudeData.error?.message || claudeRes.statusText}`,
+        summary: `Kon geen samenvatting genereren (${claudeRes.status}: ${claudeData.error?.message || "onbekende fout"}).`,
+      });
+    }
+
     const summary = claudeData.content?.[0]?.text || "Kon geen samenvatting genereren.";
 
     // Save to database
@@ -165,6 +176,7 @@ ${notesContext ? `--- CRM NOTITIES ---\n${notesContext}\n--- EINDE NOTITIES ---`
 
     return Response.json({ summary });
   } catch (err) {
-    return Response.json({ error: "AI samenvatting mislukt" }, { status: 500 });
+    console.error("AI summary failed:", err);
+    return Response.json({ error: "AI samenvatting mislukt: " + err.message }, { status: 500 });
   }
 }

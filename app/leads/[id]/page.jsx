@@ -624,6 +624,7 @@ export default function LeadDetailPage() {
                   { id: "gesprek", label: "Gesprekken" },
                   { id: "todo", label: "To-do's" },
                   { id: "intern", label: "Intern" },
+                  { id: "formulier", label: "Formulier" },
                 ].map((tab) => (
                   <button
                     key={tab.id}

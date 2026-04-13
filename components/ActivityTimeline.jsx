@@ -9,6 +9,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Inbox,
 } from "lucide-react";
 
 const ACTIVITY_ICONS = {
@@ -19,6 +20,7 @@ const ACTIVITY_ICONS = {
   quote_sent: FileText,
   quote_accepted: CheckCircle,
   quote_rejected: XCircle,
+  form_submission: Inbox,
 };
 
 const ACTIVITY_COLORS = {
@@ -29,6 +31,7 @@ const ACTIVITY_COLORS = {
   quote_sent: "bg-amber-100 text-amber-600",
   quote_accepted: "bg-green-100 text-green-600",
   quote_rejected: "bg-red-100 text-red-600",
+  form_submission: "bg-indigo-100 text-indigo-600",
 };
 
 export default function ActivityTimeline({ activities }) {

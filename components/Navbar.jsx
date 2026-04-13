@@ -26,9 +26,9 @@ import { apiFetch } from "@/lib/api";
 import StatusBadge from "./StatusBadge";
 
 const baseNavItems = [
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
 ];
 
 export default function Navbar() {

@@ -72,8 +72,8 @@
     ".crm-form textarea{min-height:120px;resize:vertical}" +
     ".crm-form input.crm-error,.crm-form textarea.crm-error{border-color:#dc2626}" +
     ".crm-form .crm-error-msg{font-size:12px;color:#dc2626;margin-top:4px}" +
-    ".crm-form-btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 32px;background:" + theme.accent + ";color:" + theme.text + ";font-size:15px;font-weight:600;border:none;border-radius:999px;cursor:pointer;transition:background .2s}" +
-    ".crm-form-btn:hover{background:" + theme.accentHover + "}" +
+    ".crm-form-btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 32px;background:#0d0d0d;color:#ffffff;font-size:15px;font-weight:600;border:none;border-radius:999px;cursor:pointer;transition:background .2s}" +
+    ".crm-form-btn:hover{background:#333333}" +
     ".crm-form-btn:disabled{opacity:.5;cursor:not-allowed}" +
     ".crm-form-success{background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;padding:24px;text-align:center;font-size:16px;color:#166534;font-weight:500}" +
     ".crm-form-error-banner{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;font-size:14px;color:#dc2626;margin-bottom:16px}" +

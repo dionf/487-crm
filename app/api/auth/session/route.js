@@ -13,20 +13,28 @@ export async function GET(request) {
     return Response.json({ session: null });
   }
 
-  // Fetch fresh org data (theme may have changed)
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("id, slug, display_name, pipeline_stages, service_types, theme")
-    .eq("slug", payload.tenant)
-    .single();
+  // Fetch fresh user + org data (may have changed since login)
+  const [{ data: freshUser }, { data: org }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name, email, role, phone")
+      .eq("id", payload.user_id)
+      .single(),
+    supabase
+      .from("organizations")
+      .select("id, slug, display_name, pipeline_stages, service_types, theme")
+      .eq("slug", payload.tenant)
+      .single(),
+  ]);
 
   return Response.json({
     session: {
       user: {
-        id: payload.user_id,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
+        id: freshUser?.id || payload.user_id,
+        name: freshUser?.name || payload.name,
+        email: freshUser?.email || payload.email,
+        role: freshUser?.role || payload.role,
+        phone: freshUser?.phone || null,
       },
       organization: org || { slug: payload.tenant },
       tenant: payload.tenant,

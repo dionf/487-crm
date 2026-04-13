@@ -7,6 +7,7 @@ export async function PATCH(request, { params }) {
 
   if (body.name) updates.name = body.name;
   if (body.email) updates.email = body.email;
+  if (body.phone !== undefined) updates.phone = body.phone || null;
   if (body.role) updates.role = body.role;
   if (body.is_active !== undefined) updates.is_active = body.is_active;
   if (body.pin) updates.pin_hash = createHash("sha256").update(body.pin).digest("hex");
@@ -15,7 +16,7 @@ export async function PATCH(request, { params }) {
     .from("users")
     .update(updates)
     .eq("id", params.id)
-    .select("id, name, email, role, is_active")
+    .select("id, name, email, phone, role, is_active")
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

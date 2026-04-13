@@ -56,7 +56,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
     // Reset form — sender info from logged-in user (klantinfo komt rechtstreeks van lead)
     setContactName(user?.name || "");
     setContactEmail(user?.email || "");
-    setContactPhone("");
+    setContactPhone(user?.phone || "");
     setLanguage(lead?.language || "nl");
     setItems([]);
     setRemarksHtml("");

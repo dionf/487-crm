@@ -16,7 +16,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from("users")
-    .select("id, name, email, role, is_active, created_at")
+    .select("id, name, email, phone, role, is_active, created_at")
     .eq("organization_id", org.id)
     .order("name");
 
@@ -58,10 +58,11 @@ export async function POST(request) {
       organization_id: org.id,
       name,
       email,
+      phone: body.phone || null,
       pin_hash: pinHash,
       role: body.role || "agent",
     })
-    .select("id, name, email, role, is_active, created_at")
+    .select("id, name, email, phone, role, is_active, created_at")
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

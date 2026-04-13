@@ -16,7 +16,7 @@ export default function UserManagementPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", pin: "", role: "agent" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", pin: "", role: "agent" });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function UserManagementPage() {
 
     setShowForm(false);
     setEditingId(null);
-    setForm({ name: "", email: "", pin: "", role: "agent" });
+    setForm({ name: "", email: "", phone: "", pin: "", role: "agent" });
     fetchUsers();
   }
 
@@ -70,7 +70,7 @@ export default function UserManagementPage() {
   }
 
   function startEdit(user) {
-    setForm({ name: user.name, email: user.email, pin: "", role: user.role });
+    setForm({ name: user.name, email: user.email, phone: user.phone || "", pin: "", role: user.role });
     setEditingId(user.id);
     setShowForm(true);
   }
@@ -210,6 +210,16 @@ export default function UserManagementPage() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase">Telefoon</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                  placeholder="+31 6..."
                 />
               </div>
               <div>

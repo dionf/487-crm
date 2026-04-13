@@ -164,7 +164,7 @@ function InboxPage() {
     <AppShell fullWidth>
       <div className="flex h-[calc(100vh-64px)]">
         {/* Sidebar */}
-        <div className="w-80 border-r border-gray-100 flex flex-col bg-white">
+        <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
           <div className="px-4 py-3 border-b border-gray-100">
             <h1 className="text-lg font-bold text-brand-black flex items-center gap-2">
               <Inbox className="w-5 h-5" />

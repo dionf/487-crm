@@ -325,20 +325,24 @@ export default function Navbar() {
                       Follow-up taken ({followUps.length})
                     </p>
                     {isAdmin && (
-                      <button
-                        onClick={() => {
-                          const next = !showAllFollowUps;
-                          setShowAllFollowUps(next);
-                          fetchFollowUps(next);
-                        }}
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-pill transition-colors ${
-                          showAllFollowUps
-                            ? "bg-brand-amber/20 text-brand-orange"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                        }`}
-                      >
-                        {showAllFollowUps ? "Mijn taken" : "Alle taken"}
-                      </button>
+                      <div className="flex gap-1">
+                        {[false, true].map((isAll) => (
+                          <button
+                            key={isAll ? "all" : "mine"}
+                            onClick={() => {
+                              setShowAllFollowUps(isAll);
+                              fetchFollowUps(isAll);
+                            }}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-pill transition-colors ${
+                              showAllFollowUps === isAll
+                                ? "bg-brand-amber text-brand-black"
+                                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                            }`}
+                          >
+                            {isAll ? "Alle taken" : "Mijn taken"}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                   {notifLoading ? (

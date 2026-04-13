@@ -52,13 +52,17 @@ export async function POST(request, { params }) {
     }
 
     // Update submission status
-    await supabase
+    const { error: updateError } = await supabase
       .from("form_submissions")
       .update({
         status: "beantwoord",
         replied_at: new Date().toISOString(),
       })
       .eq("id", id);
+
+    if (updateError) {
+      console.error("Failed to update form_submission status:", updateError);
+    }
 
     // Log activity on linked lead
     if (submission.lead_id) {

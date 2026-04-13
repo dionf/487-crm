@@ -157,6 +157,8 @@ function InboxPage() {
         prev.map((s) => (s.id === selected.id ? { ...s, status: "beantwoord" } : s))
       );
       window.dispatchEvent(new Event("inbox-updated"));
+      // Re-fetch from server to ensure consistency
+      setTimeout(() => fetchSubmissions(), 500);
     } catch (err) {
       setReplyError(err.message);
     } finally {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Sparkles, Send, Loader2, Paperclip, FileText, ChevronDown } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import RichEditor from "@/components/RichEditor";
 
 function replacePlaceholders(text, vars) {
   return text
@@ -225,7 +226,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   E-mailtekst *
                 </label>
@@ -242,25 +243,13 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
                   AI genereren
                 </button>
               </div>
-              <textarea
+              <RichEditor
                 value={bodyHtml}
-                onChange={(e) => setBodyHtml(e.target.value)}
-                rows={10}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber resize-none font-mono"
-                placeholder="<p>Beste ...</p>"
+                onChange={setBodyHtml}
+                placeholder="Beste ..."
+                minHeight="220px"
               />
             </div>
-
-            {/* Preview */}
-            {bodyHtml && (
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Preview</label>
-                <div
-                  className="mt-1 p-4 bg-gray-50 rounded-xl text-sm border border-gray-100 prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: bodyHtml }}
-                />
-              </div>
-            )}
 
             {/* Attachments */}
             {stdAttachments.length > 0 && (

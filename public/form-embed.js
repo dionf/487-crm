@@ -5,7 +5,7 @@
   var tenant = script.getAttribute("data-tenant") || "hiphot";
   var lang = script.getAttribute("data-lang") || "nl";
   var targetId = script.getAttribute("data-target");
-  var apiBase = script.src.replace(/\/form-embed\.js.*$/, "");
+  var apiBase = script.src.replace(/\/(?:form-embed\.js|api\/public\/embed).*$/, "");
 
   var i18n = {
     nl: {

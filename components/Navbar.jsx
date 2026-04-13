@@ -337,7 +337,7 @@ export default function Navbar() {
                             : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                         }`}
                       >
-                        {showAllFollowUps ? "Alle taken" : "Mijn taken"}
+                        {showAllFollowUps ? "Mijn taken" : "Alle taken"}
                       </button>
                     )}
                   </div>

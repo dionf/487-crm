@@ -161,7 +161,7 @@ function InboxPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell fullWidth>
       <div className="flex h-[calc(100vh-64px)]">
         {/* Sidebar */}
         <div className="w-80 border-r border-gray-100 flex flex-col bg-white">

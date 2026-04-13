@@ -43,17 +43,30 @@ export default function EmailBijlagenPage() {
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("name", name.trim());
-
+      // Step 1: Get signed upload URL from API
       const res = await apiFetch("/api/email-attachments", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          file_name: file.name,
+          file_size: file.size,
+          content_type: file.type,
+        }),
       });
       const data = await res.json();
-
       if (data.error) throw new Error(data.error);
+
+      // Step 2: Upload file directly to Supabase Storage via signed URL
+      const uploadRes = await fetch(data.upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error("Upload mislukt — probeer het opnieuw");
+      }
 
       setName("");
       fileRef.current.value = "";

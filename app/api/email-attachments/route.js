@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +21,7 @@ export async function GET(request) {
   return Response.json({ attachments: data });
 }
 
+// POST: create a signed upload URL + DB record (file uploads directly to Supabase from client)
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
   const role = request.headers.get("x-auth-role");
@@ -29,24 +29,19 @@ export async function POST(request) {
     return Response.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file");
-  const name = formData.get("name");
+  const body = await request.json();
+  const { name, file_name, file_size, content_type } = body;
 
-  if (!file || !name) {
-    return Response.json({ error: "file en name zijn verplicht" }, { status: 400 });
+  if (!name || !file_name) {
+    return Response.json({ error: "name en file_name zijn verplicht" }, { status: 400 });
   }
 
-  const fileName = file.name;
-  const storagePath = `email-attachments/${tenant}/${Date.now()}_${fileName}`;
+  const storagePath = `email-attachments/${tenant}/${Date.now()}_${file_name}`;
 
-  // Upload to Supabase Storage
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage
+  // Create signed upload URL (valid for 2 minutes)
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from("attachments")
-    .upload(storagePath, buffer, {
-      contentType: file.type || "application/octet-stream",
-    });
+    .createSignedUploadUrl(storagePath);
 
   if (uploadError) {
     return Response.json({ error: uploadError.message }, { status: 500 });
@@ -58,9 +53,9 @@ export async function POST(request) {
     .insert({
       tenant,
       name,
-      file_name: fileName,
+      file_name,
       storage_path: storagePath,
-      file_size: buffer.length,
+      file_size: file_size || null,
     })
     .select()
     .single();
@@ -69,7 +64,12 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  return Response.json({ attachment: data });
+  return Response.json({
+    attachment: data,
+    upload_url: uploadData.signedUrl,
+    upload_token: uploadData.token,
+    storage_path: storagePath,
+  });
 }
 
 export async function DELETE(request) {

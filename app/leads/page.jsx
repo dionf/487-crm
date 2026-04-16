@@ -53,6 +53,7 @@ export default function LeadsPage() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignAgents, setAssignAgents] = useState(new Set());
   const [polling, setPolling] = useState(false);
+  const [pollResult, setPollResult] = useState(null); // { results: [...], error: string }
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -168,49 +169,31 @@ export default function LeadsPage() {
   async function handlePollInbox() {
     if (polling) return;
     setPolling(true);
-    console.log("[check-mail] Starting poll...");
     try {
       const res = await apiFetch("/api/poll-inbox");
-      console.log("[check-mail] Response status:", res.status);
       const text = await res.text();
-      console.log("[check-mail] Response body:", text);
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch {
-        alert(`Ongeldige response (status ${res.status}):\n${text.substring(0, 300)}`);
+        setPollResult({ error: `Ongeldige response (status ${res.status})`, detail: text.substring(0, 500) });
         return;
       }
       if (!res.ok) {
-        alert(`Fout ${res.status}: ${data.error || "Kon mail niet ophalen"}\n${data.detail || ""}`);
+        setPollResult({ error: data.error || "Kon mail niet ophalen", detail: data.detail || "" });
         return;
       }
-      const processed = data.processed || 0;
       const mb = (data.mailboxes || [])[0] || {};
-      const successCount = (mb.results || []).filter((r) => r.status === "success").length;
-      const matchedCount = (mb.results || []).filter((r) => r.status === "matched_existing").length;
-      const skippedCount = (mb.results || []).filter((r) => r.status === "skipped_duplicate").length;
-      if (mb.error) {
-        const logs = (mb.imapLogs || []).slice(-5).map((l) => `[${l.level}] ${l.msg}`).join("\n");
-        alert(
-          `IMAP fout voor ${mb.tenant || "tenant"}\n\n` +
-          `Error: ${mb.error}\n` +
-          `Detail: ${mb.detail || "(leeg)"}\n` +
-          `Code: ${mb.code || mb.responseCode || "(geen)"}\n\n` +
-          `Laatste IMAP logs:\n${logs || "(geen)"}`
-        );
-      } else if (processed === 0) {
-        alert(`Geen nieuwe emails gevonden${mb.tenant ? ` (${mb.tenant})` : ""}.`);
-      } else {
-        alert(
-          `${processed} email(s) verwerkt:\n` +
-          `• ${successCount} nieuwe lead(s)\n` +
-          `• ${matchedCount} aan bestaande lead gekoppeld\n` +
-          `• ${skippedCount} dubbel (overgeslagen)`
-        );
+      setPollResult({
+        tenant: mb.tenant,
+        imapError: mb.error,
+        imapDetail: mb.detail,
+        imapLogs: mb.imapLogs,
+        results: mb.results || [],
+      });
+      if ((mb.results || []).some((r) => r.status === "success" || r.status === "matched_existing")) {
         fetchLeads();
       }
     } catch (err) {
-      console.error("[check-mail] Error:", err);
-      alert(`Fout: ${err.message}`);
+      setPollResult({ error: err.message });
     } finally {
       setPolling(false);
     }
@@ -531,6 +514,121 @@ export default function LeadsPage() {
                 {assigning ? "Verdelen..." : `Verdeel over ${assignAgents.size || "alle"} agents`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Poll-inbox result modal */}
+      {pollResult && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPollResult(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {(() => {
+              const results = pollResult.results || [];
+              const successCount = results.filter((r) => r.status === "success").length;
+              const matchedCount = results.filter((r) => r.status === "matched_existing").length;
+              const skippedCount = results.filter((r) => r.status === "skipped_duplicate").length;
+              const errorCount = results.filter((r) => r.status === "error" || r.status === "fallback").length;
+              return (
+                <>
+                  <div className="p-6 border-b border-gray-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Mail className="w-5 h-5 text-brand-amber" />
+                      <h2 className="font-semibold text-lg">
+                        {pollResult.error ? "Ophalen mislukt" : pollResult.imapError ? "IMAP fout" : results.length === 0 ? "Geen nieuwe emails" : `${results.length} email${results.length === 1 ? "" : "s"} verwerkt`}
+                      </h2>
+                    </div>
+                    {!pollResult.error && !pollResult.imapError && results.length > 0 && (
+                      <p className="text-sm text-gray-500">
+                        {successCount > 0 && <span className="mr-3">✨ {successCount} nieuw</span>}
+                        {matchedCount > 0 && <span className="mr-3">🔗 {matchedCount} gekoppeld</span>}
+                        {skippedCount > 0 && <span className="mr-3">⏭️ {skippedCount} dubbel</span>}
+                        {errorCount > 0 && <span className="text-red-600">⚠️ {errorCount} fout</span>}
+                      </p>
+                    )}
+                    {pollResult.tenant && !pollResult.error && !pollResult.imapError && results.length === 0 && (
+                      <p className="text-sm text-gray-500">Inbox van {pollResult.tenant} is doorzocht, geen nieuwe berichten.</p>
+                    )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                    {pollResult.error && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-red-700 mb-1">{pollResult.error}</p>
+                        {pollResult.detail && <p className="text-xs text-red-600 whitespace-pre-wrap">{pollResult.detail}</p>}
+                      </div>
+                    )}
+                    {pollResult.imapError && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-red-700 mb-1">{pollResult.imapError}</p>
+                        {pollResult.imapDetail && <p className="text-xs text-red-600 mb-2">{pollResult.imapDetail}</p>}
+                        {pollResult.imapLogs && pollResult.imapLogs.length > 0 && (
+                          <details className="mt-2">
+                            <summary className="text-xs text-red-700 cursor-pointer">Server logs</summary>
+                            <pre className="text-[10px] text-red-600 mt-1 whitespace-pre-wrap">
+                              {pollResult.imapLogs.slice(-5).map((l, i) => `[${l.level}] ${l.msg}`).join("\n")}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    )}
+
+                    {results.map((r, idx) => {
+                      const isNew = r.status === "success";
+                      const isMatched = r.status === "matched_existing";
+                      const isSkipped = r.status === "skipped_duplicate";
+                      const isError = r.status === "error" || r.status === "fallback";
+                      const badgeCls = isNew
+                        ? "bg-green-100 text-green-700"
+                        : isMatched
+                        ? "bg-blue-100 text-blue-700"
+                        : isSkipped
+                        ? "bg-gray-100 text-gray-600"
+                        : "bg-red-100 text-red-700";
+                      const badgeLabel = isNew ? "Nieuwe lead" : isMatched ? "Gekoppeld" : isSkipped ? "Dubbel" : "Fout";
+                      return (
+                        <div key={idx} className="border border-gray-100 rounded-xl p-3 hover:border-gray-200">
+                          <div className="flex items-start justify-between gap-3 mb-1.5">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${badgeCls}`}>
+                              {badgeLabel}
+                            </span>
+                            {r.lead_id && (
+                              <Link
+                                href={`/leads/${r.lead_id}`}
+                                onClick={() => setPollResult(null)}
+                                className="text-xs font-medium text-brand-amber hover:underline flex items-center gap-0.5"
+                              >
+                                Bekijk <ArrowRight className="w-3 h-3" />
+                              </Link>
+                            )}
+                          </div>
+                          <p className="text-sm font-semibold text-brand-black truncate">
+                            {r.company_name || r.email_from || "Onbekend"}
+                          </p>
+                          {r.contact_person && (
+                            <p className="text-xs text-gray-500 truncate">{r.contact_person}</p>
+                          )}
+                          {r.email_subject && (
+                            <p className="text-xs text-gray-400 truncate mt-1 italic">"{r.email_subject}"</p>
+                          )}
+                          {isError && r.error_message && (
+                            <p className="text-xs text-red-600 mt-1">{r.error_message}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-4 border-t border-gray-100 flex justify-end">
+                    <button
+                      onClick={() => setPollResult(null)}
+                      className="px-6 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black"
+                    >
+                      Sluiten
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

@@ -211,7 +211,11 @@ async function pollMailbox(mailbox) {
             logEntry.status = "matched_existing";
             logEntry.lead_id = existingLead.id;
             await insertLog(logEntry);
-            results.push({ ...logEntry, matched: existingLead.company_name });
+            results.push({
+              ...logEntry,
+              company_name: existingLead.company_name,
+              contact_person: existingLead.contact_person,
+            });
             continue;
           }
 
@@ -288,7 +292,11 @@ async function pollMailbox(mailbox) {
           logEntry.status = "success";
           logEntry.lead_id = lead.id;
           await insertLog(logEntry);
-          results.push({ ...logEntry });
+          results.push({
+            ...logEntry,
+            company_name: lead.company_name,
+            contact_person: fullName,
+          });
         } catch (emailError) {
           logEntry.status = "error";
           logEntry.error_message = emailError.message;

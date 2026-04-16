@@ -608,7 +608,7 @@ export default function LeadsPage() {
                             <p className="text-xs text-gray-500 truncate">{r.contact_person}</p>
                           )}
                           {r.email_subject && (
-                            <p className="text-xs text-gray-400 truncate mt-1 italic">"{r.email_subject}"</p>
+                            <p className="text-xs text-gray-400 truncate mt-1 italic">&ldquo;{r.email_subject}&rdquo;</p>
                           )}
                           {isError && r.error_message && (
                             <p className="text-xs text-red-600 mt-1">{r.error_message}</p>

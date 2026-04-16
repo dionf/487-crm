@@ -623,7 +623,7 @@ export default function LeadDetailPage() {
                     </button>
                   </div>
                   {colleagues.length === 0 ? (
-                    <p className="text-xs text-purple-600/70 italic">Geen collega's gevonden</p>
+                    <p className="text-xs text-purple-600/70 italic">Geen collega&apos;s gevonden</p>
                   ) : (
                     <div className="grid grid-cols-1 gap-1.5">
                       {colleagues.map((c) => (

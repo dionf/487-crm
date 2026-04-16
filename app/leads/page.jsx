@@ -189,7 +189,14 @@ export default function LeadsPage() {
       const matchedCount = (mb.results || []).filter((r) => r.status === "matched_existing").length;
       const skippedCount = (mb.results || []).filter((r) => r.status === "skipped_duplicate").length;
       if (mb.error) {
-        alert(`IMAP fout voor ${mb.tenant || "tenant"}: ${mb.detail || mb.error}`);
+        const logs = (mb.imapLogs || []).slice(-5).map((l) => `[${l.level}] ${l.msg}`).join("\n");
+        alert(
+          `IMAP fout voor ${mb.tenant || "tenant"}\n\n` +
+          `Error: ${mb.error}\n` +
+          `Detail: ${mb.detail || "(leeg)"}\n` +
+          `Code: ${mb.code || mb.responseCode || "(geen)"}\n\n` +
+          `Laatste IMAP logs:\n${logs || "(geen)"}`
+        );
       } else if (processed === 0) {
         alert(`Geen nieuwe emails gevonden${mb.tenant ? ` (${mb.tenant})` : ""}.`);
       } else {

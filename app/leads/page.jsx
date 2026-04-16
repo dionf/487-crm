@@ -21,6 +21,8 @@ import {
   Users,
   Shuffle,
   Trash2,
+  Mail,
+  Loader2,
 } from "lucide-react";
 
 const CALL_OUTCOME_LABELS = {
@@ -50,6 +52,7 @@ export default function LeadsPage() {
   const [assigning, setAssigning] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignAgents, setAssignAgents] = useState(new Set());
+  const [polling, setPolling] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -162,6 +165,40 @@ export default function LeadsPage() {
 
   const nextLead = isHipHot ? getNextToBell() : null;
 
+  async function handlePollInbox() {
+    if (polling) return;
+    setPolling(true);
+    try {
+      const res = await apiFetch("/api/poll-inbox");
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Kon mail niet ophalen");
+        return;
+      }
+      const processed = data.processed || 0;
+      const mb = (data.mailboxes || [])[0] || {};
+      const successCount = (mb.results || []).filter((r) => r.status === "success").length;
+      const matchedCount = (mb.results || []).filter((r) => r.status === "matched_existing").length;
+      const skippedCount = (mb.results || []).filter((r) => r.status === "skipped_duplicate").length;
+      if (mb.error) {
+        alert(`IMAP fout: ${mb.detail || mb.error}`);
+      } else if (processed === 0) {
+        alert("Geen nieuwe emails gevonden.");
+      } else {
+        alert(
+          `${processed} email(s) verwerkt:\n` +
+          `• ${successCount} nieuwe lead(s)\n` +
+          `• ${matchedCount} aan bestaande lead gekoppeld\n` +
+          `• ${skippedCount} dubbel (overgeslagen)`
+        );
+        fetchLeads();
+      }
+    } catch (err) {
+      alert(`Fout: ${err.message}`);
+    } finally {
+      setPolling(false);
+    }
+  }
 
   return (
     <AppShell>
@@ -195,6 +232,15 @@ export default function LeadsPage() {
               Auto-verdelen
             </button>
           )}
+          <button
+            onClick={handlePollInbox}
+            disabled={polling}
+            title="Haal nieuwe emails op uit de intake-inbox"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:border-brand-amber transition-colors disabled:opacity-50"
+          >
+            {polling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+            {polling ? "Bezig..." : "Check mail"}
+          </button>
           <button
             onClick={() => setShowLeadForm(true)}
             className="flex items-center gap-2 px-4 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black transition-colors"

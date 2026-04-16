@@ -18,6 +18,7 @@ export async function POST(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
   const resend = new Resend(getResendKey(tenant));
   const userName = decodeURIComponent(request.headers.get("x-auth-name") || "CRM");
+  const userId = request.headers.get("x-auth-user-id");
   const { id } = await params;
 
   // Verify quote
@@ -32,7 +33,7 @@ export async function POST(request, { params }) {
   }
 
   const body = await request.json();
-  const { to, cc, subject, body_html, attachment_ids } = body;
+  const { to, cc, subject, body_html, attachment_ids, reminder_days } = body;
 
   if (!to || !subject || !body_html) {
     return Response.json({ error: "to, subject en body_html zijn verplicht" }, { status: 400 });
@@ -132,13 +133,27 @@ export async function POST(request, { params }) {
         .eq("id", quote.lead_id);
     }
 
+    // Optional: schedule a reminder follow-up for the sender
+    const validReminderDays = [3, 5].includes(Number(reminder_days)) ? Number(reminder_days) : null;
+    if (validReminderDays && userId) {
+      await supabase.from("follow_up_tasks").insert({
+        lead_id: quote.lead_id,
+        task_type: "quote_reminder",
+        description: `Offerte ${quote.quote_number} opvolgen`,
+        due_date: new Date(Date.now() + validReminderDays * 24 * 60 * 60 * 1000).toISOString(),
+        assigned_to: userId,
+        tenant,
+      });
+    }
+
     // Log activity
     const attSuffix = attachmentRecords.length ? ` (${attachmentRecords.length} bijlage${attachmentRecords.length > 1 ? "n" : ""})` : "";
+    const reminderSuffix = validReminderDays ? ` — herinnering over ${validReminderDays} dagen` : "";
     await supabase.from("activities").insert({
       lead_id: quote.lead_id,
       activity_type: "quote_emailed",
-      description: `Offerte ${quote.quote_number} gemaild naar ${to}${attSuffix}`,
-      metadata: { quote_id: id, email_id: emailRecord?.id },
+      description: `Offerte ${quote.quote_number} gemaild naar ${to}${attSuffix}${reminderSuffix}`,
+      metadata: { quote_id: id, email_id: emailRecord?.id, reminder_days: validReminderDays },
       created_by: userName,
       tenant,
     });

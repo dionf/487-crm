@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Sparkles, Send, Loader2, Paperclip, FileText, ChevronDown } from "lucide-react";
+import { X, Sparkles, Send, Loader2, Paperclip, FileText, ChevronDown, Bell } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import RichEditor from "@/components/RichEditor";
+import { useOrg } from "@/lib/org-context";
 
 function replacePlaceholders(text, vars) {
   return text
@@ -12,10 +13,36 @@ function replacePlaceholders(text, vars) {
     .replace(/\{\{offerte_nummer\}\}/g, vars.offerte_nummer || "")
     .replace(/\{\{offerte_link\}\}/g, vars.offerte_link || "")
     .replace(/\{\{bedrag\}\}/g, vars.bedrag || "")
-    .replace(/\{\{afzender\}\}/g, vars.afzender || "");
+    .replace(/\{\{afzender\}\}/g, vars.afzender || "")
+    .replace(/\{\{handtekening\}\}/g, vars.handtekening || "");
+}
+
+function buildSignatureHtml(user, tenant) {
+  const lines = [];
+  const closing = tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
+  lines.push(`<p>${closing}</p>`);
+  lines.push("<p><br></p>");
+  const userName = user?.name?.trim();
+  const userPhone = user?.phone?.trim();
+  const userEmail = user?.email?.trim();
+  const personalLines = [];
+  if (userName) personalLines.push(`<strong>${userName}</strong>`);
+  if (userPhone) personalLines.push(userPhone);
+  if (userEmail) personalLines.push(userEmail);
+  if (personalLines.length) {
+    lines.push(`<p>${personalLines.join("<br>")}</p>`);
+    lines.push("<p><br></p>");
+  }
+  if (tenant === "hiphot") {
+    lines.push(`<p><strong>HIPHOT</strong><br>(+31) 085-505 56 64<br>hiphot.nl</p>`);
+  } else {
+    lines.push(`<p><strong>48-7 AI Professionals</strong><br>(+31) 085-06 01 487<br>48-7.nl</p>`);
+  }
+  return lines.join("");
 }
 
 export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent, lead, quoteData }) {
+  const { user, tenant } = useOrg();
   const [to, setTo] = useState(defaultTo || "");
   const [cc, setCc] = useState("");
   const [subject, setSubject] = useState("");
@@ -33,17 +60,25 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
   const [stdAttachments, setStdAttachments] = useState([]);
   const [selectedAttachments, setSelectedAttachments] = useState([]);
 
+  // Reminder
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderDays, setReminderDays] = useState(3);
+
   // Load templates + attachments on open
   useEffect(() => {
     if (!open) return;
     setTo(defaultTo || "");
     setCc("");
     setSubject("");
-    setBodyHtml("");
+    const firstName = lead?.contact_first_name || lead?.contact_person?.split(" ")[0] || "";
+    const signature = buildSignatureHtml(user, tenant);
+    setBodyHtml(`<p>Hallo ${firstName},</p><p><br></p><p><br></p>${signature}`);
     setError("");
     setSent(false);
     setSelectedTemplate("");
     setSelectedAttachments([]);
+    setReminderEnabled(false);
+    setReminderDays(3);
 
     apiFetch("/api/email-templates")
       .then((r) => r.json())
@@ -54,7 +89,8 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
       .then((r) => r.json())
       .then((d) => setStdAttachments(d.attachments || []))
       .catch(() => {});
-  }, [open, defaultTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultTo, user?.id, tenant, lead?.id]);
 
   // Build placeholder variables from lead + quote data
   const placeholderVars = {
@@ -67,7 +103,8 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
     bedrag: quoteData?.amount_excl_vat
       ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(quoteData.amount_excl_vat)
       : "",
-    afzender: "", // Will be filled from user context if available
+    afzender: user?.name || "",
+    handtekening: buildSignatureHtml(user, tenant),
   };
 
   function handleTemplateSelect(templateId) {
@@ -123,6 +160,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
           subject,
           body_html: bodyHtml,
           attachment_ids: selectedAttachments.length ? selectedAttachments : undefined,
+          reminder_days: reminderEnabled ? reminderDays : null,
         }),
       });
       const data = await res.json();
@@ -163,6 +201,12 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
             {selectedAttachments.length > 0 && (
               <p className="text-sm text-gray-500 mt-1">
                 {selectedAttachments.length} bijlage{selectedAttachments.length > 1 ? "n" : ""} meegestuurd
+              </p>
+            )}
+            {reminderEnabled && (
+              <p className="text-sm text-purple-700 mt-2 flex items-center justify-center gap-1.5">
+                <Bell className="w-3.5 h-3.5" />
+                Herinnering over {reminderDays} dagen ingesteld
               </p>
             )}
           </div>
@@ -282,6 +326,40 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
                 </div>
               </div>
             )}
+
+            {/* Reminder option */}
+            <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reminderEnabled}
+                  onChange={(e) => setReminderEnabled(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-amber focus:ring-brand-amber"
+                />
+                <Bell className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  Stel een herinnering in voor mezelf
+                </span>
+              </label>
+              {reminderEnabled && (
+                <div className="mt-2 pl-7 flex items-center gap-2">
+                  {[3, 5].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setReminderDays(days)}
+                      className={`px-3 py-1 rounded-pill text-xs font-semibold transition-colors ${
+                        reminderDays === days
+                          ? "bg-purple-100 text-purple-800 border-2 border-purple-300"
+                          : "bg-white text-gray-600 border-2 border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      Over {days} dagen
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="flex gap-3 pt-2">
               <button

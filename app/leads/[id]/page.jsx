@@ -44,12 +44,13 @@ import {
   PhoneForwarded,
   MailPlus,
   UserX,
+  Users,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 const CALL_OUTCOMES = [
   { id: "voorstel_mailen", label: "Voorstel mailen", icon: MailPlus, color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" },
-  { id: "terugbellen_5_dagen", label: "Terugbellen (5 dagen)", icon: PhoneForwarded, color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
+  { id: "terugbellen_5_dagen", label: "Terugbellen", icon: PhoneForwarded, color: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" },
   { id: "geen_gehoor_terugbellen", label: "Geen gehoor", icon: PhoneOff, color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100" },
   { id: "niet_geinteresseerd", label: "Niet geïnteresseerd", icon: UserX, color: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" },
   { id: "vraag_opvolgen_collega", label: "Interne collega opvolgen", icon: PhoneCall, color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" },
@@ -72,6 +73,8 @@ export default function LeadDetailPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [callNote, setCallNote] = useState("");
   const [callingOutcome, setCallingOutcome] = useState(null);
+  const [colleaguePickerOpen, setColleaguePickerOpen] = useState(false);
+  const [colleagues, setColleagues] = useState([]);
 
   // Collapsible sections
   const [quotesOpen, setQuotesOpen] = useState(false);
@@ -183,7 +186,7 @@ export default function LeadDetailPage() {
     fetchData();
   }
 
-  async function submitCallOutcome(outcomeId) {
+  async function submitCallOutcome(outcomeId, extra = {}) {
     setCallingOutcome(outcomeId);
     try {
       await apiFetch(`/api/leads/${params.id}/call-outcome`, {
@@ -194,12 +197,26 @@ export default function LeadDetailPage() {
           note: callNote || null,
           user_id: user?.id,
           user_name: user?.name,
+          ...extra,
         }),
       });
       setCallNote("");
+      setColleaguePickerOpen(false);
       fetchData();
     } catch {}
     setCallingOutcome(null);
+  }
+
+  async function openColleaguePicker() {
+    setColleaguePickerOpen(true);
+    if (colleagues.length === 0) {
+      try {
+        const res = await apiFetch("/api/admin/users");
+        const data = await res.json();
+        const list = (data.users || []).filter((u) => u.is_active !== false && u.id !== user?.id);
+        setColleagues(list);
+      } catch {}
+    }
   }
 
   async function generateAiSummary() {
@@ -571,10 +588,11 @@ export default function LeadDetailPage() {
               <div className="grid grid-cols-1 gap-2">
                 {CALL_OUTCOMES.map((outcome) => {
                   const isActive = lead.call_outcome === outcome.id;
+                  const isColleague = outcome.id === "vraag_opvolgen_collega";
                   return (
                   <button
                     key={outcome.id}
-                    onClick={() => submitCallOutcome(outcome.id)}
+                    onClick={() => (isColleague ? openColleaguePicker() : submitCallOutcome(outcome.id))}
                     disabled={callingOutcome === outcome.id}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-colors ${outcome.color} ${
                       isActive ? "!border-brand-black ring-1 ring-brand-black/20" : ""
@@ -587,6 +605,47 @@ export default function LeadDetailPage() {
                   );
                 })}
               </div>
+
+              {/* Colleague picker for "Interne collega opvolgen" */}
+              {colleaguePickerOpen && (
+                <div className="mt-3 px-3 py-3 bg-purple-50/60 border border-purple-200 rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 uppercase tracking-wide">
+                      <Users className="w-3.5 h-3.5" />
+                      Kies collega
+                    </div>
+                    <button
+                      onClick={() => setColleaguePickerOpen(false)}
+                      className="p-1 rounded-md hover:bg-purple-100 text-purple-500"
+                      aria-label="Sluiten"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {colleagues.length === 0 ? (
+                    <p className="text-xs text-purple-600/70 italic">Geen collega's gevonden</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {colleagues.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() =>
+                            submitCallOutcome("vraag_opvolgen_collega", {
+                              follow_up_user_id: c.id,
+                              follow_up_user_name: c.name,
+                            })
+                          }
+                          disabled={callingOutcome === "vraag_opvolgen_collega"}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-purple-200 hover:bg-purple-100 text-sm font-medium text-purple-800 transition-colors disabled:opacity-50"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5" />
+                          <span>{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Volgende bellen button */}
               {lead.call_outcome && (

@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 export async function POST(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
-  const { outcome, note, user_id, user_name } = body;
+  const { outcome, note, user_id, user_name, follow_up_user_id, follow_up_user_name } = body;
 
   const validOutcomes = [
     "voorstel_mailen",
@@ -44,7 +44,7 @@ export async function POST(request, { params }) {
   } else if (outcome === "terugbellen_5_dagen" || outcome === "geen_gehoor_terugbellen") {
     if (tenant === "hiphot") leadUpdate.status = "terugbellen";
   } else if (outcome === "vraag_opvolgen_collega") {
-    leadUpdate.assigned_to = null; // Unassign
+    leadUpdate.assigned_to = follow_up_user_id || null;
   }
 
   await supabase.from("leads").update(leadUpdate).eq("id", leadId);
@@ -52,13 +52,16 @@ export async function POST(request, { params }) {
   // Add note
   const outcomeLabels = {
     voorstel_mailen: "Voorstel mailen",
-    terugbellen_5_dagen: "Terugbellen over 5 dagen",
+    terugbellen_5_dagen: "Terugbellen",
     geen_gehoor_terugbellen: "Geen gehoor — terugbellen",
     niet_geinteresseerd: "Niet geïnteresseerd",
     vraag_opvolgen_collega: "Interne collega opvolgen",
   };
 
   let noteContent = `Bel-uitkomst: ${outcomeLabels[outcome]}`;
+  if (outcome === "vraag_opvolgen_collega" && follow_up_user_name) {
+    noteContent += ` → ${follow_up_user_name}`;
+  }
   if (note) noteContent += `\n\n${note}`;
 
   await supabase.from("notes").insert({
@@ -74,7 +77,7 @@ export async function POST(request, { params }) {
     await supabase.from("follow_up_tasks").insert({
       lead_id: leadId,
       task_type: "check_in",
-      description: "Terugbellen (5 dagen na laatste gesprek)",
+      description: "Terugbellen",
       due_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
       assigned_to: user_id || null,
       tenant,
@@ -86,6 +89,15 @@ export async function POST(request, { params }) {
       description: "Terugbellen (geen gehoor vorige keer)",
       due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       assigned_to: user_id || null,
+      tenant,
+    });
+  } else if (outcome === "vraag_opvolgen_collega" && follow_up_user_id) {
+    await supabase.from("follow_up_tasks").insert({
+      lead_id: leadId,
+      task_type: "internal_followup",
+      description: `Lead opvolgen — doorgegeven door ${user_name || "collega"}`,
+      due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      assigned_to: follow_up_user_id,
       tenant,
     });
   }

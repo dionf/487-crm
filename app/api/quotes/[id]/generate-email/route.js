@@ -6,7 +6,19 @@ export const dynamic = "force-dynamic";
 export async function POST(request, { params }) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const tenant = request.headers.get("x-auth-tenant");
+  const userId = request.headers.get("x-auth-user-id");
   const { id } = await params;
+
+  // Fetch sender info for signature
+  let sender = null;
+  if (userId) {
+    const { data } = await supabase
+      .from("users")
+      .select("name, email, phone")
+      .eq("id", userId)
+      .single();
+    sender = data;
+  }
 
   // Verify quote
   const { data: quote } = await supabase
@@ -50,7 +62,18 @@ export async function POST(request, { params }) {
     .map((n) => `- [${n.note_type}] ${n.content?.substring(0, 150)}`)
     .join("\n");
 
-  const prompt = `Je schrijft een professionele, persoonlijke e-mail namens HipHot B.V. om een offerte te versturen.
+  const companyName = tenant === "hiphot" ? "HipHot B.V." : "48-7 AI Professionals";
+  const companyClosing = tenant === "hiphot" ? "Met zonnige groet" : "Met vriendelijke groet";
+  const senderName = sender?.name?.trim();
+  const senderPhone = sender?.phone?.trim();
+  const senderEmail = sender?.email?.trim();
+  const signatureInstruction = senderName
+    ? `- Sluit af met "${companyClosing}," gevolgd door een witregel en dan de afzender:
+  ${senderName}${senderPhone ? `\n  ${senderPhone}` : ""}${senderEmail ? `\n  ${senderEmail}` : ""}
+  (gebruik <p> blokken en <br> tussen naam/telefoon/e-mail; ZET de naam in <strong>)`
+    : `- Onderteken namens ${companyName} team`;
+
+  const prompt = `Je schrijft een professionele, persoonlijke e-mail namens ${companyName} om een offerte te versturen.
 
 Klantgegevens:
 - Bedrijf: ${lead?.company_name || "Onbekend"}
@@ -76,9 +99,9 @@ Instructies:
 - Kort: max 150 woorden
 - Geen "Geachte", gebruik de voornaam als beschikbaar
 - Eindig met een uitnodiging om contact op te nemen bij vragen
-- Onderteken namens HipHot team
+${signatureInstruction}
 
-Geef ALLEEN de e-mailtekst in HTML format terug (geen subject, geen uitleg). Gebruik <p> tags, geen <br>.`;
+Geef ALLEEN de e-mailtekst in HTML format terug (geen subject, geen uitleg). Gebruik <p> tags, en <br> alleen binnen de handtekening.`;
 
   try {
     const message = await anthropic.messages.create({

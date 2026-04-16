@@ -168,11 +168,19 @@ export default function LeadsPage() {
   async function handlePollInbox() {
     if (polling) return;
     setPolling(true);
+    console.log("[check-mail] Starting poll...");
     try {
       const res = await apiFetch("/api/poll-inbox");
-      const data = await res.json();
+      console.log("[check-mail] Response status:", res.status);
+      const text = await res.text();
+      console.log("[check-mail] Response body:", text);
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch {
+        alert(`Ongeldige response (status ${res.status}):\n${text.substring(0, 300)}`);
+        return;
+      }
       if (!res.ok) {
-        alert(data.error || "Kon mail niet ophalen");
+        alert(`Fout ${res.status}: ${data.error || "Kon mail niet ophalen"}\n${data.detail || ""}`);
         return;
       }
       const processed = data.processed || 0;
@@ -181,9 +189,9 @@ export default function LeadsPage() {
       const matchedCount = (mb.results || []).filter((r) => r.status === "matched_existing").length;
       const skippedCount = (mb.results || []).filter((r) => r.status === "skipped_duplicate").length;
       if (mb.error) {
-        alert(`IMAP fout: ${mb.detail || mb.error}`);
+        alert(`IMAP fout voor ${mb.tenant || "tenant"}: ${mb.detail || mb.error}`);
       } else if (processed === 0) {
-        alert("Geen nieuwe emails gevonden.");
+        alert(`Geen nieuwe emails gevonden${mb.tenant ? ` (${mb.tenant})` : ""}.`);
       } else {
         alert(
           `${processed} email(s) verwerkt:\n` +
@@ -194,6 +202,7 @@ export default function LeadsPage() {
         fetchLeads();
       }
     } catch (err) {
+      console.error("[check-mail] Error:", err);
       alert(`Fout: ${err.message}`);
     } finally {
       setPolling(false);

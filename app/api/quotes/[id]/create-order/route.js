@@ -66,6 +66,10 @@ export async function POST(request, { params }) {
   // Normalize addresses — prefer body-overrides, fallback to lead
   const b = billing || {};
   const s = shipping || {};
+  // Order-updates e-mail (billing.email in WC) — default lead.email
+  const orderUpdateEmail = b.email ?? lead.email ?? "";
+  // Factuur e-mail (meta _factuur_email) — default lead.billing_email; leeg = WC plugins vallen zelf terug op billing.email
+  const invoiceEmail = (b.invoice_email ?? lead.billing_email ?? "").toString().trim();
   const billingBlock = {
     first_name: b.first_name ?? firstName,
     last_name: b.last_name ?? lastName,
@@ -76,7 +80,7 @@ export async function POST(request, { params }) {
     postcode: b.postal_code ?? lead.billing_postal_code ?? "",
     city: b.city ?? lead.billing_city ?? "",
     country: b.country ?? lead.billing_country ?? "NL",
-    email: b.email ?? lead.billing_email ?? lead.email ?? "",
+    email: orderUpdateEmail,
     phone: b.phone ?? lead.phone ?? "",
   };
 
@@ -121,17 +125,25 @@ export async function POST(request, { params }) {
 
   const ref = (customer_reference ?? lead.customer_reference ?? "").toString().trim();
 
+  const metaData = [
+    { key: "_crm_quote_id", value: quote.id },
+    { key: "_quote_reference", value: quote.quote_number },
+  ];
+  if (invoiceEmail) {
+    metaData.push({ key: "_factuur_email", value: invoiceEmail });
+  }
+  if (ref) {
+    metaData.push({ key: "_customer_reference", value: ref });
+    metaData.push({ key: "po_reference", value: ref });
+  }
+
   const payload = {
     status: "on-hold",
     billing: billingBlock,
     shipping: shippingBlock,
     line_items: wcLineItems,
     customer_note: `CRM Offerte ${quote.quote_number}${ref ? ` — Ref: ${ref}` : ""}`,
-    meta_data: [
-      { key: "_crm_quote_id", value: quote.id },
-      { key: "_crm_quote_number", value: quote.quote_number },
-      ...(ref ? [{ key: "_customer_reference", value: ref }] : []),
-    ],
+    meta_data: metaData,
   };
 
   if (quote.shipping_cost && Number(quote.shipping_cost) > 0) {

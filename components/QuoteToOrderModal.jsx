@@ -11,7 +11,10 @@ function buildDefaultBilling(lead) {
     postal_code: lead?.billing_postal_code || "",
     city: lead?.billing_city || "",
     country: lead?.billing_country || "NL",
-    email: lead?.billing_email || lead?.email || "",
+    // Order-updates e-mail (verzendbevestiging, status-updates)
+    email: lead?.email || "",
+    // Factuur e-mail (crediteuren / Moneybird / WCPDF)
+    invoice_email: lead?.billing_email || "",
   };
 }
 
@@ -202,25 +205,49 @@ export default function QuoteToOrderModal({ quote, lead, lineItems = [], onClose
                       onChange={(e) => setBilling({ ...billing, city: e.target.value })}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
-                      value={billing.country}
-                      onChange={(e) => setBilling({ ...billing, country: e.target.value })}
-                    >
-                      <option value="NL">Nederland</option>
-                      <option value="BE">België</option>
-                      <option value="DE">Duitsland</option>
-                      <option value="FR">Frankrijk</option>
-                      <option value="LU">Luxemburg</option>
-                    </select>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+                    value={billing.country}
+                    onChange={(e) => setBilling({ ...billing, country: e.target.value })}
+                  >
+                    <option value="NL">Nederland</option>
+                    <option value="BE">België</option>
+                    <option value="DE">Duitsland</option>
+                    <option value="FR">Frankrijk</option>
+                    <option value="LU">Luxemburg</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* E-mailadressen — gescheiden: order updates vs factuur */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">
+                  E-mailadressen
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  <div>
                     <input
                       type="email"
-                      className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                      placeholder="E-mail factuur"
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      placeholder="E-mail (order updates)"
                       value={billing.email}
                       onChange={(e) => setBilling({ ...billing, email: e.target.value })}
                     />
+                    <p className="text-[10px] text-gray-400 mt-0.5 px-1">
+                      Ontvangt orderbevestiging, verzendupdates, status-mails
+                    </p>
+                  </div>
+                  <div>
+                    <input
+                      type="email"
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      placeholder="Factuur-e-mailadres (optioneel)"
+                      value={billing.invoice_email}
+                      onChange={(e) => setBilling({ ...billing, invoice_email: e.target.value })}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5 px-1">
+                      Gaat naar crediteuren / Moneybird. Leeg = valt terug op bovenstaande.
+                    </p>
                   </div>
                 </div>
               </div>

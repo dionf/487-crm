@@ -125,20 +125,24 @@ export async function POST(request, { params }) {
 
   const ref = (customer_reference ?? lead.customer_reference ?? "").toString().trim();
 
+  // HipHot-specifieke meta keys die door Moneybird / WCPDF worden opgepikt
   const metaData = [
     { key: "_crm_quote_id", value: quote.id },
-    { key: "_quote_reference", value: quote.quote_number },
   ];
   if (invoiceEmail) {
     metaData.push({ key: "_factuur_email", value: invoiceEmail });
   }
   if (ref) {
-    metaData.push({ key: "_customer_reference", value: ref });
-    metaData.push({ key: "po_reference", value: ref });
+    metaData.push({ key: "_factuur_referentie", value: ref });
   }
 
   const payload = {
-    status: "on-hold",
+    // 'pending' = nieuwe order, wacht op betaling (= concept in HipHot flow)
+    status: "pending",
+    // Betaalmethode: op rekening (bankoverschrijving)
+    payment_method: "bacs",
+    payment_method_title: "Betalen op rekening",
+    set_paid: false,
     billing: billingBlock,
     shipping: shippingBlock,
     line_items: wcLineItems,

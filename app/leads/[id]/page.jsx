@@ -1077,7 +1077,7 @@ export default function LeadDetailPage() {
                           </div>
                           {q.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{q.description}</p>}
                           {/* Publish / Link */}
-                          <div className="flex items-center gap-1.5 mt-1.5">
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
                             {q.public_hash ? (
                               <>
                                 <button
@@ -1086,7 +1086,7 @@ export default function LeadDetailPage() {
                                     navigator.clipboard.writeText(url);
                                     alert("Link gekopieerd!");
                                   }}
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700 hover:bg-green-100"
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700 hover:bg-green-100 whitespace-nowrap"
                                 >
                                   Link kopiëren
                                 </button>
@@ -1094,29 +1094,23 @@ export default function LeadDetailPage() {
                                   href={`/offerte/${q.public_hash}`}
                                   target="_blank"
                                   rel="noopener"
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-blue-50 text-blue-600 hover:bg-blue-100 whitespace-nowrap"
                                 >
                                   Bekijken ↗
                                 </a>
                                 <button
                                   onClick={() => setShowEmailCompose(q.id)}
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-purple-50 text-purple-600 hover:bg-purple-100 whitespace-nowrap"
                                 >
                                   Mailen
                                 </button>
-                                {q.accepted_at && !q.external_order_id && (
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700">
-                                    ✓ Geaccepteerd
-                                  </span>
-                                )}
                                 {isHipHot && q.status === "geaccepteerd" && !q.external_order_id && (
                                   <button
                                     onClick={() => openOrderModal(q)}
                                     disabled={loadingOrderModal}
-                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-brand-amber/20 text-brand-orange hover:bg-brand-amber/30 flex items-center gap-1 disabled:opacity-50"
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-brand-amber/20 text-brand-orange hover:bg-brand-amber/30 disabled:opacity-50 whitespace-nowrap"
                                     title="Offerte omzetten naar webshop-order"
                                   >
-                                    <ShoppingBag className="w-3 h-3" />
                                     Maak order
                                   </button>
                                 )}
@@ -1125,10 +1119,9 @@ export default function LeadDetailPage() {
                                     href={q.external_order_url || "#"}
                                     target="_blank"
                                     rel="noopener"
-                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700 hover:bg-green-200 flex items-center gap-1"
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700 hover:bg-green-200 whitespace-nowrap"
                                     title={`Order in ${q.external_order_platform || "webshop"}`}
                                   >
-                                    <ShoppingBag className="w-3 h-3" />
                                     Order #{q.external_order_id} ↗
                                   </a>
                                 )}

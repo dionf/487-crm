@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { SERVICE_TYPES, SOURCES, INDUSTRIES } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
@@ -11,7 +11,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
   const isHipHot = tenant === "hiphot";
   const isEdit = !!lead;
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     company_name: "",
     contact_first_name: "",
     contact_last_name: "",
@@ -24,9 +24,26 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     source: "",
     website_url: "",
     commission_partner_percentage: "",
-  });
+    // Factuur- en leveradres
+    billing_street: "",
+    billing_house_number: "",
+    billing_postal_code: "",
+    billing_city: "",
+    billing_country: "NL",
+    billing_email: "",
+    customer_reference: "",
+    delivery_same_as_billing: true,
+    delivery_street: "",
+    delivery_house_number: "",
+    delivery_postal_code: "",
+    delivery_city: "",
+    delivery_country: "NL",
+  };
+
+  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showAddresses, setShowAddresses] = useState(false);
 
   // Pre-fill when editing, auto-extract website from email if empty
   useEffect(() => {
@@ -41,6 +58,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         lastName = parts.slice(1).join(" ") || "";
       }
       setForm({
+        ...emptyForm,
         company_name: lead.company_name || "",
         contact_first_name: firstName,
         contact_last_name: lastName,
@@ -53,22 +71,27 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         source: lead.source || "",
         website_url: lead.website_url || suggestedUrl || "",
         commission_partner_percentage: lead.commission_partner_percentage || "",
+        billing_street: lead.billing_street || "",
+        billing_house_number: lead.billing_house_number || "",
+        billing_postal_code: lead.billing_postal_code || "",
+        billing_city: lead.billing_city || "",
+        billing_country: lead.billing_country || "NL",
+        billing_email: lead.billing_email || "",
+        customer_reference: lead.customer_reference || "",
+        delivery_same_as_billing: lead.delivery_same_as_billing !== false,
+        delivery_street: lead.delivery_street || "",
+        delivery_house_number: lead.delivery_house_number || "",
+        delivery_postal_code: lead.delivery_postal_code || "",
+        delivery_city: lead.delivery_city || "",
+        delivery_country: lead.delivery_country || "NL",
       });
+      // Klap open als er al adres-data is
+      if (lead.billing_street || lead.billing_city || lead.customer_reference) {
+        setShowAddresses(true);
+      }
     } else {
-      setForm({
-        company_name: "",
-        contact_first_name: "",
-        contact_last_name: "",
-        contact_function: "",
-        email: "",
-        phone: "",
-        service_type: "",
-        industry: "",
-        estimated_value: "",
-        source: "",
-        website_url: "",
-        commission_partner_percentage: "",
-      });
+      setForm(emptyForm);
+      setShowAddresses(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead, open]);
@@ -157,20 +180,8 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
       }
 
       if (!isEdit) {
-        setForm({
-          company_name: "",
-          contact_first_name: "",
-          contact_last_name: "",
-          contact_function: "",
-          email: "",
-          phone: "",
-          service_type: "",
-          industry: "",
-          estimated_value: "",
-          source: "",
-          website_url: "",
-          commission_partner_percentage: "",
-        });
+        setForm(emptyForm);
+        setShowAddresses(false);
       }
 
       onSaved?.();
@@ -186,8 +197,8 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-semibold text-lg">{isEdit ? "Lead bewerken" : "Nieuwe Lead"}</h2>
           <button
             onClick={onClose}
@@ -197,7 +208,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">
               {error}
@@ -383,6 +394,179 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
                 placeholder="0"
               />
             </div>
+          </div>
+
+          {/* Adressen & facturatie (uitklapbaar) */}
+          <div className="border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowAddresses(!showAddresses)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-brand-black"
+            >
+              {showAddresses ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              Adressen &amp; facturatie
+            </button>
+
+            {showAddresses && (
+              <div className="mt-3 space-y-4">
+                {/* Klantreferentie + factuur-email */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Klantreferentie
+                    </label>
+                    <input
+                      type="text"
+                      value={form.customer_reference}
+                      onChange={(e) => setForm({ ...form, customer_reference: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      placeholder="bijv. PO nummer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Factuur-e-mail
+                    </label>
+                    <input
+                      type="email"
+                      value={form.billing_email}
+                      onChange={(e) => setForm({ ...form, billing_email: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      placeholder="facturen@..."
+                    />
+                  </div>
+                </div>
+
+                {/* Factuuradres */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-2">Factuuradres</p>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          value={form.billing_street}
+                          onChange={(e) => setForm({ ...form, billing_street: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                          placeholder="Straat"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={form.billing_house_number}
+                          onChange={(e) => setForm({ ...form, billing_house_number: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                          placeholder="Nr."
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <input
+                          type="text"
+                          value={form.billing_postal_code}
+                          onChange={(e) => setForm({ ...form, billing_postal_code: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                          placeholder="Postcode"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          value={form.billing_city}
+                          onChange={(e) => setForm({ ...form, billing_city: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                          placeholder="Plaats"
+                        />
+                      </div>
+                    </div>
+                    <select
+                      value={form.billing_country}
+                      onChange={(e) => setForm({ ...form, billing_country: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+                    >
+                      <option value="NL">Nederland</option>
+                      <option value="BE">België</option>
+                      <option value="DE">Duitsland</option>
+                      <option value="FR">Frankrijk</option>
+                      <option value="LU">Luxemburg</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Same-as toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.delivery_same_as_billing}
+                    onChange={(e) => setForm({ ...form, delivery_same_as_billing: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Leveradres is hetzelfde als factuuradres</span>
+                </label>
+
+                {/* Leveradres (alleen als checkbox uit) */}
+                {!form.delivery_same_as_billing && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Leveradres</p>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <input
+                            type="text"
+                            value={form.delivery_street}
+                            onChange={(e) => setForm({ ...form, delivery_street: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                            placeholder="Straat"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            value={form.delivery_house_number}
+                            onChange={(e) => setForm({ ...form, delivery_house_number: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                            placeholder="Nr."
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <input
+                            type="text"
+                            value={form.delivery_postal_code}
+                            onChange={(e) => setForm({ ...form, delivery_postal_code: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                            placeholder="Postcode"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="text"
+                            value={form.delivery_city}
+                            onChange={(e) => setForm({ ...form, delivery_city: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                            placeholder="Plaats"
+                          />
+                        </div>
+                      </div>
+                      <select
+                        value={form.delivery_country}
+                        onChange={(e) => setForm({ ...form, delivery_country: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+                      >
+                        <option value="NL">Nederland</option>
+                        <option value="BE">België</option>
+                        <option value="DE">Duitsland</option>
+                        <option value="FR">Frankrijk</option>
+                        <option value="LU">Luxemburg</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

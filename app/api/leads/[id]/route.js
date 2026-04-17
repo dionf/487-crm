@@ -47,6 +47,15 @@ export async function PATCH(request, { params }) {
     body.contact_person = `${first} ${last}`.trim();
   }
 
+  // Als delivery_same_as_billing aan staat en er staan billing velden in body, kopieer ze naar delivery
+  if (body.delivery_same_as_billing === true) {
+    if (body.billing_street !== undefined) body.delivery_street = body.billing_street;
+    if (body.billing_house_number !== undefined) body.delivery_house_number = body.billing_house_number;
+    if (body.billing_postal_code !== undefined) body.delivery_postal_code = body.billing_postal_code;
+    if (body.billing_city !== undefined) body.delivery_city = body.billing_city;
+    if (body.billing_country !== undefined) body.delivery_country = body.billing_country;
+  }
+
   const { data, error } = await supabase
     .from("leads")
     .update(body)

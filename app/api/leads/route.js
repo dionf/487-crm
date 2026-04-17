@@ -58,7 +58,15 @@ export async function GET(request) {
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
   const body = await request.json();
-  const { company_name, contact_first_name, contact_last_name, contact_function, contact_person, email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage } = body;
+  const {
+    company_name, contact_first_name, contact_last_name, contact_function, contact_person,
+    email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage,
+    // Adressen & facturatie
+    billing_street, billing_house_number, billing_postal_code, billing_city, billing_country,
+    billing_email, customer_reference,
+    delivery_same_as_billing,
+    delivery_street, delivery_house_number, delivery_postal_code, delivery_city, delivery_country,
+  } = body;
 
   // Support both new fields and legacy contact_person
   const firstName = contact_first_name || (contact_person ? contact_person.split(" ")[0] : "");
@@ -73,6 +81,26 @@ export async function POST(request) {
   }
 
   const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
+
+  // Als 'leveradres = factuuradres', kopieer billing → delivery server-side
+  const useSame = delivery_same_as_billing !== false;
+  const deliveryFields = useSame
+    ? {
+        delivery_same_as_billing: true,
+        delivery_street: billing_street || null,
+        delivery_house_number: billing_house_number || null,
+        delivery_postal_code: billing_postal_code || null,
+        delivery_city: billing_city || null,
+        delivery_country: billing_country || "NL",
+      }
+    : {
+        delivery_same_as_billing: false,
+        delivery_street: delivery_street || null,
+        delivery_house_number: delivery_house_number || null,
+        delivery_postal_code: delivery_postal_code || null,
+        delivery_city: delivery_city || null,
+        delivery_country: delivery_country || "NL",
+      };
 
   const { data, error } = await supabase
     .from("leads")
@@ -91,6 +119,14 @@ export async function POST(request) {
       commission_partner_percentage: commission_partner_percentage || null,
       status: defaultStatus,
       tenant,
+      billing_street: billing_street || null,
+      billing_house_number: billing_house_number || null,
+      billing_postal_code: billing_postal_code || null,
+      billing_city: billing_city || null,
+      billing_country: billing_country || "NL",
+      billing_email: billing_email || null,
+      customer_reference: customer_reference || null,
+      ...deliveryFields,
     })
     .select()
     .single();

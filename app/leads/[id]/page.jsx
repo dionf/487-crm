@@ -11,6 +11,7 @@ import QuoteEmailLog from "@/components/hiphot/QuoteEmailLog";
 import EmailCompose from "@/components/hiphot/EmailCompose";
 import NoteForm from "@/components/NoteForm";
 import LeadForm from "@/components/LeadForm";
+import QuoteToOrderModal from "@/components/QuoteToOrderModal";
 import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
@@ -45,6 +46,10 @@ import {
   MailPlus,
   UserX,
   Users,
+  MapPin,
+  Building2,
+  ShoppingBag,
+  Hash,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -75,6 +80,8 @@ export default function LeadDetailPage() {
   const [callingOutcome, setCallingOutcome] = useState(null);
   const [colleaguePickerOpen, setColleaguePickerOpen] = useState(false);
   const [colleagues, setColleagues] = useState([]);
+  const [orderModalQuote, setOrderModalQuote] = useState(null); // { quote, lineItems }
+  const [loadingOrderModal, setLoadingOrderModal] = useState(false);
 
   // Collapsible sections
   const [quotesOpen, setQuotesOpen] = useState(false);
@@ -184,6 +191,24 @@ export default function LeadDetailPage() {
       body: JSON.stringify({}),
     });
     fetchData();
+  }
+
+  async function openOrderModal(quote) {
+    if (loadingOrderModal) return;
+    setLoadingOrderModal(true);
+    try {
+      const res = await apiFetch(`/api/hiphot/quote-items?quote_id=${quote.id}`);
+      const d = await res.json();
+      if (!res.ok) {
+        alert(d.error || "Kon regels niet ophalen");
+        return;
+      }
+      setOrderModalQuote({ quote, lineItems: d.items || [] });
+    } catch (err) {
+      alert(`Fout: ${err.message}`);
+    } finally {
+      setLoadingOrderModal(false);
+    }
   }
 
   async function submitCallOutcome(outcomeId, extra = {}) {
@@ -533,6 +558,105 @@ export default function LeadDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Addresses & facturatie */}
+          <div className="bg-white border border-gray-100 rounded-card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Adressen &amp; facturatie
+              </h3>
+              <button
+                onClick={() => setShowLeadForm(true)}
+                className="text-xs font-semibold text-brand-amber hover:underline"
+              >
+                Bewerken
+              </button>
+            </div>
+
+            {(() => {
+              const hasBilling = lead.billing_street || lead.billing_city || lead.billing_postal_code;
+              const sameAsBilling = lead.delivery_same_as_billing !== false;
+              const hasDelivery = !sameAsBilling && (lead.delivery_street || lead.delivery_city || lead.delivery_postal_code);
+              if (!hasBilling && !lead.billing_email && !lead.customer_reference) {
+                return (
+                  <p className="text-sm text-gray-400 italic">
+                    Geen factuur- of leveradres opgegeven.{" "}
+                    <button
+                      onClick={() => setShowLeadForm(true)}
+                      className="text-brand-amber font-medium hover:underline not-italic"
+                    >
+                      Toevoegen →
+                    </button>
+                  </p>
+                );
+              }
+              return (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-3">
+                    {lead.customer_reference && (
+                      <div className="flex items-start gap-2">
+                        <Hash className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Klantreferentie</p>
+                          <p className="text-sm text-gray-700">{lead.customer_reference}</p>
+                        </div>
+                      </div>
+                    )}
+                    {lead.billing_email && (
+                      <div className="flex items-start gap-2">
+                        <Mail className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Factuur-e-mail</p>
+                          <a href={`mailto:${lead.billing_email}`} className="text-sm text-gray-700 hover:text-brand-amber break-all">
+                            {lead.billing_email}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {hasBilling && (
+                    <div className="flex items-start gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Factuuradres</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          {[lead.billing_street, lead.billing_house_number].filter(Boolean).join(" ")}
+                          {lead.billing_street && <br />}
+                          {[lead.billing_postal_code, lead.billing_city].filter(Boolean).join(" ")}
+                          {(lead.billing_postal_code || lead.billing_city) && <br />}
+                          {lead.billing_country && lead.billing_country !== "NL" ? lead.billing_country : ""}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {hasDelivery && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Leveradres</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          {[lead.delivery_street, lead.delivery_house_number].filter(Boolean).join(" ")}
+                          {lead.delivery_street && <br />}
+                          {[lead.delivery_postal_code, lead.delivery_city].filter(Boolean).join(" ")}
+                          {(lead.delivery_postal_code || lead.delivery_city) && <br />}
+                          {lead.delivery_country && lead.delivery_country !== "NL" ? lead.delivery_country : ""}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {sameAsBilling && hasBilling && (
+                    <p className="text-xs text-gray-400 italic flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3" />
+                      Leveradres is hetzelfde als factuuradres
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Contacts */}
@@ -980,10 +1104,33 @@ export default function LeadDetailPage() {
                                 >
                                   Mailen
                                 </button>
-                                {q.accepted_at && (
+                                {q.accepted_at && !q.external_order_id && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700">
                                     ✓ Geaccepteerd
                                   </span>
+                                )}
+                                {isHipHot && q.status === "geaccepteerd" && !q.external_order_id && (
+                                  <button
+                                    onClick={() => openOrderModal(q)}
+                                    disabled={loadingOrderModal}
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-brand-amber/20 text-brand-orange hover:bg-brand-amber/30 flex items-center gap-1 disabled:opacity-50"
+                                    title="Offerte omzetten naar webshop-order"
+                                  >
+                                    <ShoppingBag className="w-3 h-3" />
+                                    Maak order
+                                  </button>
+                                )}
+                                {q.external_order_id && (
+                                  <a
+                                    href={q.external_order_url || "#"}
+                                    target="_blank"
+                                    rel="noopener"
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-100 text-green-700 hover:bg-green-200 flex items-center gap-1"
+                                    title={`Order in ${q.external_order_platform || "webshop"}`}
+                                  >
+                                    <ShoppingBag className="w-3 h-3" />
+                                    Order #{q.external_order_id} ↗
+                                  </a>
                                 )}
                               </>
                             ) : (
@@ -1038,6 +1185,18 @@ export default function LeadDetailPage() {
       </div>
 
       {/* Modals */}
+      {orderModalQuote && (
+        <QuoteToOrderModal
+          quote={orderModalQuote.quote}
+          lead={lead}
+          lineItems={orderModalQuote.lineItems}
+          onClose={() => setOrderModalQuote(null)}
+          onSuccess={() => {
+            setOrderModalQuote(null);
+            fetchData();
+          }}
+        />
+      )}
       {isHipHot && (
         <HipHotQuoteBuilder
           open={showHipHotBuilder}

@@ -4,11 +4,19 @@ export async function GET(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
   const { id } = await params;
 
-  const [leadRes, quotesRes, notesRes, activitiesRes] = await Promise.all([
+  const [leadRes, quotesRes, notesRes, activitiesRes, chatbotRes] = await Promise.all([
     supabase.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
     supabase.from("quotes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     supabase.from("notes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     supabase.from("activities").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
+    supabase
+      .from("form_submissions")
+      .select("id")
+      .eq("lead_id", id)
+      .eq("source", "chatbot")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (leadRes.error) {
@@ -20,6 +28,7 @@ export async function GET(request, { params }) {
     quotes: quotesRes.data || [],
     notes: notesRes.data || [],
     activities: activitiesRes.data || [],
+    chatbot_submission_id: chatbotRes?.data?.id || null,
   });
 }
 

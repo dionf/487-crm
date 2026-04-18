@@ -6,6 +6,7 @@ import AppShell from "@/components/AppShell";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import RichEditor from "@/components/RichEditor";
+import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
 import {
   Inbox,
   Mail,
@@ -25,6 +26,7 @@ import {
   ChevronDown,
   ChevronRight,
   MessageSquare,
+  Sparkles,
 } from "lucide-react";
 
 function formatDate(dateStr) {
@@ -115,6 +117,9 @@ function InboxPage() {
 
   // Chatbot expanded panels
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+
+  // AI offerte-advies modal
+  const [showAdvisor, setShowAdvisor] = useState(false);
 
   async function fetchSubmissions() {
     try {
@@ -442,6 +447,16 @@ function InboxPage() {
                   <Reply className="w-4 h-4" />
                   Beantwoorden
                 </button>
+                {selected.source === "chatbot" && selected.conversation_data && tenant === "hiphot" && (
+                  <button
+                    onClick={() => setShowAdvisor(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-brand-amber to-amber-400 hover:opacity-90 rounded-pill text-sm font-semibold text-brand-black transition-opacity"
+                    title="Genereer offerte-advies op basis van dit gesprek"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI offerte-advies
+                  </button>
+                )}
                 {selected.status !== "gearchiveerd" && (
                   <button
                     onClick={() => handleArchive(selected.id)}
@@ -533,6 +548,16 @@ function InboxPage() {
           )}
         </div>
       </div>
+
+      <AIQuoteAdvisor
+        open={showAdvisor}
+        onClose={() => setShowAdvisor(false)}
+        formSubmissionId={selected?.id}
+        leadId={selected?.lead_id}
+        onCommitted={({ quote_id, lead_id }) => {
+          // Optioneel: kun je de inbox-submission hier als "behandeld" markeren
+        }}
+      />
     </AppShell>
   );
 }

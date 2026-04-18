@@ -12,6 +12,7 @@ import EmailCompose from "@/components/hiphot/EmailCompose";
 import NoteForm from "@/components/NoteForm";
 import LeadForm from "@/components/LeadForm";
 import QuoteToOrderModal from "@/components/QuoteToOrderModal";
+import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
 import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
@@ -82,6 +83,7 @@ export default function LeadDetailPage() {
   const [colleagues, setColleagues] = useState([]);
   const [orderModalQuote, setOrderModalQuote] = useState(null); // { quote, lineItems }
   const [loadingOrderModal, setLoadingOrderModal] = useState(false);
+  const [showAdvisor, setShowAdvisor] = useState(false);
 
   // Collapsible sections
   const [quotesOpen, setQuotesOpen] = useState(false);
@@ -1024,12 +1026,24 @@ export default function LeadDetailPage() {
                   Offertes ({quotes.length})
                 </h3>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true); }}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                {isHipHot && data?.chatbot_submission_id && (
+                  <button
+                    onClick={() => setShowAdvisor(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-gradient-to-r from-brand-amber to-amber-400 text-brand-black text-[10px] font-semibold hover:opacity-90 transition-opacity"
+                    title="AI offerte-advies op basis van chatbot-gesprek"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    AI-advies
+                  </button>
+                )}
+                <button
+                  onClick={() => { isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true); }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             </button>
             {quotesOpen && (
               <div className="px-5 pb-4">
@@ -1190,6 +1204,17 @@ export default function LeadDetailPage() {
           }}
         />
       )}
+      <AIQuoteAdvisor
+        open={showAdvisor}
+        onClose={() => setShowAdvisor(false)}
+        leadId={params.id}
+        formSubmissionId={data?.chatbot_submission_id}
+        onCommitted={() => {
+          setShowAdvisor(false);
+          fetchData();
+        }}
+      />
+
       {isHipHot && (
         <HipHotQuoteBuilder
           open={showHipHotBuilder}

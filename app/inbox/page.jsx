@@ -20,6 +20,11 @@ import {
   Loader2,
   Check,
   X,
+  Bot,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 
 function formatDate(dateStr) {
@@ -40,6 +45,46 @@ const STATUS_LABELS = {
   beantwoord: { label: "Beantwoord", color: "bg-green-100 text-green-700" },
   gearchiveerd: { label: "Gearchiveerd", color: "bg-gray-100 text-gray-400" },
 };
+
+const SITUATIE_LABELS = {
+  branche: "Branche",
+  aantal_medewerkers: "Aantal medewerkers",
+  binnen_buiten: "Binnen/Buiten",
+  schaduw: "Schaduw",
+  plaatsing: "Plaatsing",
+  ondergrond: "Ondergrond",
+  custom_design: "Eigen ontwerp/logo",
+  opmerkingen: "Opmerkingen",
+};
+
+const ADVIES_LABELS = {
+  spf: "SPF",
+  aantal_dispensers: "Aantal dispensers",
+  formaat: "Formaat",
+  accessoires: "Accessoires",
+  geschat_jaarverbruik: "Geschat jaarverbruik",
+  rationale: "Rationale",
+};
+
+function renderKV(obj, labels) {
+  if (!obj) return null;
+  const rows = Object.entries(labels)
+    .map(([key, label]) => [key, label, obj[key]])
+    .filter(([, , value]) => value != null && value !== "" && !(Array.isArray(value) && value.length === 0));
+  if (rows.length === 0) return <p className="text-xs text-gray-400 italic">Geen gegevens</p>;
+  return (
+    <dl className="space-y-1.5 text-sm">
+      {rows.map(([key, label, value]) => (
+        <div key={key} className="flex gap-3">
+          <dt className="text-gray-500 w-40 flex-shrink-0">{label}</dt>
+          <dd className="text-gray-800 flex-1">
+            {Array.isArray(value) ? value.join(", ") : String(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export default function InboxPageWrapper() {
   return (
@@ -67,6 +112,9 @@ function InboxPage() {
   const [sending, setSending] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [replySent, setReplySent] = useState(false);
+
+  // Chatbot expanded panels
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   async function fetchSubmissions() {
     try {
@@ -99,6 +147,7 @@ function InboxPage() {
     setShowReply(false);
     setReplySent(false);
     setReplyError("");
+    setTranscriptOpen(false);
 
     // Mark as read only if status is "nieuw" (don't downgrade beantwoord/gearchiveerd)
     if (sub.status === "nieuw") {
@@ -216,7 +265,10 @@ function InboxPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-sm font-semibold ${sub.status === "nieuw" ? "text-brand-black" : "text-gray-600"}`}>
+                    <span className={`text-sm font-semibold flex items-center gap-1.5 ${sub.status === "nieuw" ? "text-brand-black" : "text-gray-600"}`}>
+                      {sub.source === "chatbot" && (
+                        <Bot className="w-3.5 h-3.5 text-brand-amber flex-shrink-0" />
+                      )}
                       {sub.first_name} {sub.last_name}
                     </span>
                     <span className="text-[10px] text-gray-400">{formatDate(sub.created_at)}</span>
@@ -227,6 +279,11 @@ function InboxPage() {
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-pill ${STATUS_LABELS[sub.status]?.color || "bg-gray-100"}`}>
                       {STATUS_LABELS[sub.status]?.label || sub.status}
                     </span>
+                    {sub.source === "chatbot" && (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-pill bg-amber-100 text-amber-700">
+                        Chatbot
+                      </span>
+                    )}
                     {sub.status === "nieuw" && (
                       <span className="w-2 h-2 rounded-full bg-blue-500" />
                     )}
@@ -291,7 +348,75 @@ function InboxPage() {
                 </div>
               </div>
 
-              {/* Message */}
+              {/* Chatbot-specifieke blokken (situatie, advies, openstaande vragen, transcript) */}
+              {selected.source === "chatbot" && selected.conversation_data && (
+                <>
+                  {selected.conversation_data.situatie && (
+                    <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                        <Bot className="w-3.5 h-3.5 text-brand-amber" />
+                        Situatie
+                      </h3>
+                      {renderKV(selected.conversation_data.situatie, SITUATIE_LABELS)}
+                    </div>
+                  )}
+
+                  {selected.conversation_data.advies && (
+                    <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                        Advies
+                      </h3>
+                      {renderKV(selected.conversation_data.advies, ADVIES_LABELS)}
+                    </div>
+                  )}
+
+                  {Array.isArray(selected.conversation_data.openstaande_vragen) &&
+                    selected.conversation_data.openstaande_vragen.length > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-4">
+                        <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Openstaande vragen
+                        </h3>
+                        <ul className="list-disc pl-5 space-y-1 text-sm text-amber-900">
+                          {selected.conversation_data.openstaande_vragen.map((q, i) => (
+                            <li key={i}>{String(q)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {selected.conversation_transcript && (
+                    <div className="bg-white rounded-2xl border border-gray-100 mb-4 overflow-hidden">
+                      <button
+                        onClick={() => setTranscriptOpen(!transcriptOpen)}
+                        className="w-full flex items-center gap-2 px-6 py-4 hover:bg-gray-50/50 transition-colors"
+                      >
+                        {transcriptOpen ? (
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        )}
+                        <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Volledig gesprek
+                        </h3>
+                        <span className="ml-auto text-[10px] text-gray-400">
+                          {selected.conversation_transcript.split("\n").length} regels
+                        </span>
+                      </button>
+                      {transcriptOpen && (
+                        <div className="px-6 pb-6 -mt-1">
+                          <pre className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-gray-50 rounded-xl p-4 max-h-[60vh] overflow-y-auto">
+                            {selected.conversation_transcript}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Message (samenvatting) */}
               <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4">
                 <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                   {selected.message}

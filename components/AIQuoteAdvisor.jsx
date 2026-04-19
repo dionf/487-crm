@@ -24,7 +24,10 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
   const [input, setInput] = useState("");
   const [committing, setCommitting] = useState(false);
   const [committed, setCommitted] = useState(null); // { quote_id, quote_number }
+  const [learnChecked, setLearnChecked] = useState(false);
 
+  const initialQuoteRef = useRef(null); // bewaar eerste AI-voorstel voor learning
+  const refinementCountRef = useRef(0); // aantal keer dat user iets heeft gecorrigeerd
   const chatEndRef = useRef(null);
 
   // Reset + initiële generate bij openen
@@ -38,6 +41,9 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
     setInput("");
     setResolvedFormSubmissionId(null);
     setResolvedLeadId(null);
+    setLearnChecked(false);
+    initialQuoteRef.current = null;
+    refinementCountRef.current = 0;
     fetchAdvice({ initial: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, formSubmissionId, leadId]);
@@ -77,6 +83,16 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
       if (data.form_submission_id) setResolvedFormSubmissionId(data.form_submission_id);
       if (data.lead_id) setResolvedLeadId(data.lead_id);
       setChatLog((prev) => [...prev, { from: "ai", text: data.ai_message || "(geen toelichting)" }]);
+
+      // Bewaar het EERSTE voorstel voor learning-diff
+      if (initial && !initialQuoteRef.current) {
+        initialQuoteRef.current = data.quote_state;
+      }
+      // Als er ook een refinement-bericht was, tel 'm mee → default de checkbox 'aan'
+      if (userMessage) {
+        refinementCountRef.current += 1;
+        setLearnChecked(true);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -117,6 +133,8 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
           form_submission_id: formSubmissionId || resolvedFormSubmissionId,
           quote_state: quoteState,
           chat_log: chatLog,
+          initial_quote_state: initialQuoteRef.current,
+          learn: learnChecked,
         }),
       });
       const data = await res.json();
@@ -347,6 +365,23 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                 </button>
               </div>
             </div>
+
+            {/* Learn checkbox — alleen zinvol als er refinements zijn gedaan */}
+            {refinementCountRef.current > 0 && (
+              <div className="px-4 pt-3 flex-shrink-0">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={learnChecked}
+                    onChange={(e) => setLearnChecked(e.target.checked)}
+                    disabled={committing}
+                    className="rounded border-gray-300 accent-brand-amber"
+                  />
+                  <Sparkles className="w-3.5 h-3.5 text-brand-amber" />
+                  <span>Leer van mijn correcties — voeg lessen toe aan de AI-regels</span>
+                </label>
+              </div>
+            )}
 
             {/* Footer actions */}
             <div className="flex gap-3 p-4 border-t border-gray-100 flex-shrink-0">

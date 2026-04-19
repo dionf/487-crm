@@ -59,6 +59,7 @@ export async function POST(request) {
   }
 
   const result = await generateOrRefine({
+    tenant,
     conversationData: formSubmission.conversation_data,
     history: history || [],
     userMessage: message || null,

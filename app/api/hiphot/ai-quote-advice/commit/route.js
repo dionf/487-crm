@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function POST(request) {
     return Response.json({ error: "Ongeldige request body" }, { status: 400 });
   }
 
-  const { lead_id, quote_state, chat_log, form_submission_id } = body || {};
+  const { lead_id, quote_state, chat_log, form_submission_id, initial_quote_state, learn } = body || {};
 
   if (!lead_id || !quote_state || !Array.isArray(quote_state.line_items) || quote_state.line_items.length === 0) {
     return Response.json(
@@ -199,10 +200,82 @@ export async function POST(request) {
     tenant,
   });
 
+  // Learning: extraheer lessen uit het verschil (alleen als agent opt-in aanvinkt)
+  // Fire-and-forget: commit-response is al klaar als dit wegvalt.
+  if (learn === true && initial_quote_state && form_submission_id) {
+    // Haal conversation_data op voor extractor + tag-verrijking
+    const { data: fs } = await supabase
+      .from("form_submissions")
+      .select("conversation_data")
+      .eq("id", form_submission_id)
+      .maybeSingle();
+    const conversationData = fs?.conversation_data || null;
+
+    // Finaal quote-state zoals we het net hebben opgeslagen (niet de enriched DB versie — de AI-ziet versie)
+    const finalQuoteForExtract = {
+      line_items: quote_state.line_items,
+      discount_pct: quote_state.discount_pct || 0,
+      shipping_cost: quote_state.shipping_cost || 0,
+      rationale: quote_state.rationale || "",
+    };
+
+    // Fire-and-forget — niet awaiten, gebruiker hoeft niet te wachten
+    (async () => {
+      try {
+        const lessons = await extractLessons({
+          initialQuote: initial_quote_state,
+          finalQuote: finalQuoteForExtract,
+          chatLog: Array.isArray(chat_log) ? chat_log : [],
+          conversationData,
+        });
+        if (!lessons || lessons.length === 0) return;
+
+        // Dedup: merge bestaande lessen met dezelfde tekst (bump priority ipv duplicate)
+        const extraTags = buildContextTags(conversationData);
+        for (const l of lessons) {
+          const mergedTags = [...new Set([...(l.context_tags || []), ...extraTags])].slice(0, 8);
+          const { data: existing } = await supabase
+            .from("ai_quote_lessons")
+            .select("id, priority")
+            .eq("tenant", tenant)
+            .eq("lesson", l.lesson)
+            .maybeSingle();
+
+          if (existing) {
+            await supabase
+              .from("ai_quote_lessons")
+              .update({
+                priority: Math.min(10, (existing.priority || 5) + 1),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existing.id);
+          } else {
+            await supabase.from("ai_quote_lessons").insert({
+              tenant,
+              lesson: l.lesson,
+              context_tags: mergedTags,
+              priority: l.priority,
+              is_active: true,
+              source_quote_id: newQuote.id,
+              source_submission_id: form_submission_id,
+              initial_quote: initial_quote_state,
+              final_quote: finalQuoteForExtract,
+              chat_log: Array.isArray(chat_log) ? chat_log : [],
+              created_by: userName || "AI offerte-advies",
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[lesson-extractor] background failure:", err.message);
+      }
+    })();
+  }
+
   return Response.json({
     success: true,
     quote_id: newQuote.id,
     quote_number,
     amount_excl_vat: amountExclVat,
+    learning_triggered: learn === true,
   });
 }

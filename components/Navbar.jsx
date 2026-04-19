@@ -19,6 +19,7 @@ import {
   CheckCircle,
   FileText,
   Paperclip,
+  Sparkles,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -195,6 +196,10 @@ export default function Navbar() {
           <div className="flex items-center gap-1">
             {[
               ...baseNavItems,
+              // HipHot-only voor iedereen (agents + admins)
+              ...(tenant === "hiphot"
+                ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
+                : []),
               ...(isAdmin
                 ? [
                     { href: "/admin/users", label: "Users", icon: Settings },

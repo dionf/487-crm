@@ -17,7 +17,7 @@ import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
-import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses } from "@/lib/constants";
+import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, INDUSTRIES, SOURCES } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
 import {
   ArrowLeft,
@@ -464,7 +464,9 @@ export default function LeadDetailPage() {
                   {lead.industry && (
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm">{lead.industry}</span>
+                      <span className="text-sm">
+                        {INDUSTRIES.find((i) => i.id === lead.industry)?.label || lead.industry}
+                      </span>
                     </div>
                   )}
                   {lead.category && (
@@ -507,7 +509,9 @@ export default function LeadDetailPage() {
               {lead.source ? (
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm capitalize">{lead.source}</span>
+                  <span className="text-sm">
+                    {SOURCES.find((s) => s.id === lead.source)?.label || lead.source}
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">

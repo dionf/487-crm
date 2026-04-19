@@ -227,7 +227,7 @@ async function main() {
       billing_country: "NL",
       industry,
       source: SOURCE,
-      status: "nieuwe_aanvraag",
+      status: "prospect",
       language: "nl",
     };
     const noteContent = hoofdToNote(hoofd, rawBranche, opm, rawBranche);

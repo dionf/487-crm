@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase";
 import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
 
 export const dynamic = "force-dynamic";
+// Lesson-extraction doet een Claude call — bump timeout zodat die kan afronden
+export const maxDuration = 60;
 
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
@@ -201,36 +203,38 @@ export async function POST(request) {
   });
 
   // Learning: extraheer lessen uit het verschil (alleen als agent opt-in aanvinkt)
-  // Fire-and-forget: commit-response is al klaar als dit wegvalt.
+  // Synchroon afhandelen — in Vercel serverless werkt fire-and-forget niet:
+  // de function wordt gekild zodra de HTTP-response is teruggestuurd.
+  let lessonsCreated = 0;
+  let lessonsSkipped = 0;
+  let extractError = null;
+
   if (learn === true && initial_quote_state && form_submission_id) {
-    // Haal conversation_data op voor extractor + tag-verrijking
-    const { data: fs } = await supabase
-      .from("form_submissions")
-      .select("conversation_data")
-      .eq("id", form_submission_id)
-      .maybeSingle();
-    const conversationData = fs?.conversation_data || null;
+    try {
+      const { data: fs } = await supabase
+        .from("form_submissions")
+        .select("conversation_data")
+        .eq("id", form_submission_id)
+        .maybeSingle();
+      const conversationData = fs?.conversation_data || null;
 
-    // Finaal quote-state zoals we het net hebben opgeslagen (niet de enriched DB versie — de AI-ziet versie)
-    const finalQuoteForExtract = {
-      line_items: quote_state.line_items,
-      discount_pct: quote_state.discount_pct || 0,
-      shipping_cost: quote_state.shipping_cost || 0,
-      rationale: quote_state.rationale || "",
-    };
+      const finalQuoteForExtract = {
+        line_items: quote_state.line_items,
+        discount_pct: quote_state.discount_pct || 0,
+        shipping_cost: quote_state.shipping_cost || 0,
+        rationale: quote_state.rationale || "",
+      };
 
-    // Fire-and-forget — niet awaiten, gebruiker hoeft niet te wachten
-    (async () => {
-      try {
-        const lessons = await extractLessons({
-          initialQuote: initial_quote_state,
-          finalQuote: finalQuoteForExtract,
-          chatLog: Array.isArray(chat_log) ? chat_log : [],
-          conversationData,
-        });
-        if (!lessons || lessons.length === 0) return;
+      console.log("[lesson-extractor] Starting for quote", newQuote.quote_number);
+      const lessons = await extractLessons({
+        initialQuote: initial_quote_state,
+        finalQuote: finalQuoteForExtract,
+        chatLog: Array.isArray(chat_log) ? chat_log : [],
+        conversationData,
+      });
+      console.log("[lesson-extractor] Got", lessons?.length || 0, "lessons from AI");
 
-        // Dedup: merge bestaande lessen met dezelfde tekst (bump priority ipv duplicate)
+      if (lessons && lessons.length > 0) {
         const extraTags = buildContextTags(conversationData);
         for (const l of lessons) {
           const mergedTags = [...new Set([...(l.context_tags || []), ...extraTags])].slice(0, 8);
@@ -249,8 +253,9 @@ export async function POST(request) {
                 updated_at: new Date().toISOString(),
               })
               .eq("id", existing.id);
+            lessonsSkipped++;
           } else {
-            await supabase.from("ai_quote_lessons").insert({
+            const { error: insErr } = await supabase.from("ai_quote_lessons").insert({
               tenant,
               lesson: l.lesson,
               context_tags: mergedTags,
@@ -263,12 +268,19 @@ export async function POST(request) {
               chat_log: Array.isArray(chat_log) ? chat_log : [],
               created_by: userName || "AI offerte-advies",
             });
+            if (insErr) {
+              console.error("[lesson-extractor] insert failed:", insErr.message);
+              extractError = insErr.message;
+            } else {
+              lessonsCreated++;
+            }
           }
         }
-      } catch (err) {
-        console.error("[lesson-extractor] background failure:", err.message);
       }
-    })();
+    } catch (err) {
+      console.error("[lesson-extractor] synchronous failure:", err.message);
+      extractError = err.message;
+    }
   }
 
   return Response.json({
@@ -277,5 +289,8 @@ export async function POST(request) {
     quote_number,
     amount_excl_vat: amountExclVat,
     learning_triggered: learn === true,
+    lessons_created: lessonsCreated,
+    lessons_merged: lessonsSkipped,
+    extract_error: extractError,
   });
 }

@@ -143,7 +143,14 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
         setError(data.error || "Kon offerte niet aanmaken");
         return;
       }
-      setCommitted({ quote_id: data.quote_id, quote_number: data.quote_number, lead_id: targetLeadId });
+      setCommitted({
+        quote_id: data.quote_id,
+        quote_number: data.quote_number,
+        lead_id: targetLeadId,
+        lessons_created: data.lessons_created || 0,
+        lessons_merged: data.lessons_merged || 0,
+        extract_error: data.extract_error || null,
+      });
       onCommitted?.({ quote_id: data.quote_id, quote_number: data.quote_number, lead_id: targetLeadId });
     } catch (err) {
       setError(err.message);
@@ -183,9 +190,23 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
             <h3 className="font-semibold text-xl text-brand-black mb-2">
               Offerte {committed.quote_number} aangemaakt
             </h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-3">
               Concept-offerte is opgeslagen op de klantkaart. Je kunt &lsquo;m nu verder bewerken of publiceren.
             </p>
+            {(committed.lessons_created > 0 || committed.lessons_merged > 0) && (
+              <p className="text-xs text-brand-amber mb-3 flex items-center justify-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                {committed.lessons_created > 0 && `${committed.lessons_created} nieuwe regel${committed.lessons_created === 1 ? "" : "s"} geleerd`}
+                {committed.lessons_created > 0 && committed.lessons_merged > 0 && " · "}
+                {committed.lessons_merged > 0 && `${committed.lessons_merged} bestaande bevestigd`}
+              </p>
+            )}
+            {committed.extract_error && (
+              <p className="text-xs text-red-500 mb-3">
+                ⚠️ Kon lessen niet opslaan: {committed.extract_error}
+              </p>
+            )}
+            <div className="mb-3" />
             <button
               onClick={() => {
                 onClose();

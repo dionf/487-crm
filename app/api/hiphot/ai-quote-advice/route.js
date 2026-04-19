@@ -17,7 +17,7 @@ export async function POST(request) {
     return Response.json({ error: "Ongeldige request body" }, { status: 400 });
   }
 
-  const { form_submission_id, lead_id, history, message } = body || {};
+  const { form_submission_id, lead_id, history, message, quote_state } = body || {};
 
   // Haal conversation_data op — óf via form_submission_id, óf via lead_id (nieuwste chatbot submission)
   let formSubmission = null;
@@ -63,6 +63,7 @@ export async function POST(request) {
     conversationData: formSubmission.conversation_data,
     history: history || [],
     userMessage: message || null,
+    previousQuoteState: quote_state || null,
   });
 
   if (result.error) {
@@ -77,6 +78,7 @@ export async function POST(request) {
     quote_state: result.quote_state,
     history: result.history,
     warnings: result.warnings || [],
+    quote_unchanged: result.quote_unchanged || false,
     form_submission_id: formSubmission.id,
     lead_id: formSubmission.lead_id,
   });

@@ -63,6 +63,7 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
         lead_id: leadId || resolvedLeadId,
         history: initial ? [] : history,
         message: initial ? null : userMessage,
+        quote_state: initial ? null : quoteState,
       };
       const res = await apiFetch("/api/hiphot/ai-quote-advice", {
         method: "POST",
@@ -88,8 +89,8 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
       if (initial && !initialQuoteRef.current) {
         initialQuoteRef.current = data.quote_state;
       }
-      // Als er ook een refinement-bericht was, tel 'm mee → default de checkbox 'aan'
-      if (userMessage) {
+      // Tel alleen echte wijzigingen als refinement (info-vragen wijzigen niks)
+      if (userMessage && !data.quote_unchanged) {
         refinementCountRef.current += 1;
         setLearnChecked(true);
       }

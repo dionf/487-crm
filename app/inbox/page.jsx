@@ -121,6 +121,37 @@ function InboxPage() {
   // AI offerte-advies modal
   const [showAdvisor, setShowAdvisor] = useState(false);
 
+  // Refresh state
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshInfo, setRefreshInfo] = useState(null); // { new_leads, existing_matched, error }
+
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshInfo(null);
+    try {
+      // Poll IMAP-mailbox (fire-and-light-wait); nieuwe e-mails worden leads
+      const pollPromise = apiFetch("/api/poll-inbox").then((r) => r.json()).catch((e) => ({ error: e.message }));
+      // En herlaad form_submissions (chatbot/formulier intake)
+      const reloadPromise = fetchSubmissions();
+      const [pollResult] = await Promise.all([pollPromise, reloadPromise]);
+      const mb = (pollResult?.mailboxes || [])[0] || {};
+      const results = mb.results || [];
+      const newLeads = results.filter((r) => r.status === "success").length;
+      const matched = results.filter((r) => r.status === "matched_existing").length;
+      setRefreshInfo({
+        new_leads: newLeads,
+        matched,
+        error: pollResult?.error || mb.error || null,
+        detail: pollResult?.detail || mb.detail || null,
+      });
+      // Fade de melding weg na 6s
+      setTimeout(() => setRefreshInfo(null), 6000);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function fetchSubmissions() {
     try {
       const res = await apiFetch(`/api/inbox?status=${filter}`);
@@ -230,10 +261,44 @@ function InboxPage() {
         {/* Sidebar */}
         <div className="w-96 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
           <div className="px-4 py-3 border-b border-gray-100">
-            <h1 className="text-lg font-bold text-brand-black flex items-center gap-2">
-              <Inbox className="w-5 h-5" />
-              Inbox
-            </h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-bold text-brand-black flex items-center gap-2">
+                <Inbox className="w-5 h-5" />
+                Inbox
+              </h1>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                title="Haal nieuwe aanvragen op (formulieren + e-mail)"
+                className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-500 disabled:opacity-50 transition-colors"
+                aria-label="Ververs inbox"
+              >
+                {refreshing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 0 0-14-4M4 15a8 8 0 0 0 14 4" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            {refreshInfo && (
+              <div
+                className={`mt-2 px-2 py-1.5 rounded-lg text-xs ${
+                  refreshInfo.error
+                    ? "bg-red-50 text-red-700"
+                    : refreshInfo.new_leads === 0 && refreshInfo.matched === 0
+                    ? "bg-gray-50 text-gray-500"
+                    : "bg-green-50 text-green-700"
+                }`}
+              >
+                {refreshInfo.error
+                  ? `IMAP-fout: ${refreshInfo.detail || refreshInfo.error}`
+                  : refreshInfo.new_leads === 0 && refreshInfo.matched === 0
+                  ? "Geen nieuwe e-mails."
+                  : `${refreshInfo.new_leads} nieuwe lead${refreshInfo.new_leads === 1 ? "" : "s"}${refreshInfo.matched ? ` · ${refreshInfo.matched} aan bestaande gekoppeld` : ""} — zie Leads`}
+              </div>
+            )}
             <div className="flex gap-1 mt-3">
               {["nieuw", "beantwoord", "gearchiveerd", "alle"].map((f) => (
                 <button

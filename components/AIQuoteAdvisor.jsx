@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Sparkles, Send, Loader2, CheckCircle2, AlertTriangle, Bot, User, Trash2, Plus } from "lucide-react";
+import { X, Sparkles, Send, Loader2, CheckCircle2, AlertTriangle, Bot, User, Trash2, Plus, ChevronDown, ChevronRight, FileText, MessageSquare, Mail, Info, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 /**
@@ -19,18 +19,25 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
   const [chatLog, setChatLog] = useState([]); // [{ from: 'ai'|'you', text }]
   const [history, setHistory] = useState([]); // Claude messages (opaque)
   const [quoteState, setQuoteState] = useState(null);
-  const [resolvedFormSubmissionId, setResolvedFormSubmissionId] = useState(null);
   const [resolvedLeadId, setResolvedLeadId] = useState(null);
   const [input, setInput] = useState("");
   const [committing, setCommitting] = useState(false);
-  const [committed, setCommitted] = useState(null); // { quote_id, quote_number }
+  const [committed, setCommitted] = useState(null);
   const [learnChecked, setLearnChecked] = useState(false);
 
-  const initialQuoteRef = useRef(null); // bewaar eerste AI-voorstel voor learning
-  const refinementCountRef = useRef(0); // aantal keer dat user iets heeft gecorrigeerd
+  // Context-panel
+  const [context, setContext] = useState(null); // { lead, notes, submissions, default_selection }
+  const [selectedNoteIds, setSelectedNoteIds] = useState(new Set());
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState(new Set());
+  const [contextOpen, setContextOpen] = useState(true);
+  const [contextDirty, setContextDirty] = useState(false); // true wanneer selectie gewijzigd maar nog niet herregenereerd
+  const [contextSummary, setContextSummary] = useState(null); // welke items heeft AI meegekregen (voetnoot)
+
+  const initialQuoteRef = useRef(null);
+  const refinementCountRef = useRef(0);
   const chatEndRef = useRef(null);
 
-  // Reset + initiële generate bij openen
+  // Reset + initiële flow bij openen: eerst context, dan advies
   useEffect(() => {
     if (!open) return;
     setChatLog([]);
@@ -39,14 +46,69 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
     setError("");
     setCommitted(null);
     setInput("");
-    setResolvedFormSubmissionId(null);
     setResolvedLeadId(null);
     setLearnChecked(false);
+    setContext(null);
+    setSelectedNoteIds(new Set());
+    setSelectedSubmissionIds(new Set());
+    setContextOpen(true);
+    setContextDirty(false);
+    setContextSummary(null);
     initialQuoteRef.current = null;
     refinementCountRef.current = 0;
-    fetchAdvice({ initial: true });
+    loadContextAndAdvice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, formSubmissionId, leadId]);
+
+  async function resolveLeadId() {
+    if (leadId) return leadId;
+    if (formSubmissionId) {
+      // Zoek lead via form_submission
+      try {
+        const res = await apiFetch(`/api/inbox/${formSubmissionId}`);
+        if (res.ok) {
+          const d = await res.json();
+          return d.submission?.lead_id || null;
+        }
+      } catch { /* ignore */ }
+    }
+    return null;
+  }
+
+  async function loadContextAndAdvice() {
+    setLoading(true);
+    setError("");
+    try {
+      const target = await resolveLeadId();
+      if (!target) {
+        setError("Kon lead niet bepalen");
+        return;
+      }
+      setResolvedLeadId(target);
+      // 1. Haal context op
+      const ctxRes = await apiFetch(`/api/hiphot/ai-quote-advice/context?lead_id=${target}`);
+      const ctxData = await ctxRes.json();
+      if (!ctxRes.ok) {
+        setError(ctxData.error || "Kon context niet laden");
+        return;
+      }
+      setContext(ctxData);
+      const defaultNotes = new Set(ctxData.default_selection?.note_ids || []);
+      const defaultSubs = new Set(ctxData.default_selection?.submission_ids || []);
+      setSelectedNoteIds(defaultNotes);
+      setSelectedSubmissionIds(defaultSubs);
+      setContextOpen(defaultNotes.size + defaultSubs.size > 0 ? false : true);
+      // 2. Genereer initieel advies met die selectie
+      await fetchAdvice({
+        initial: true,
+        noteIds: [...defaultNotes],
+        submissionIds: [...defaultSubs],
+        targetLeadId: target,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -54,16 +116,20 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
     }
   }, [chatLog, loading]);
 
-  async function fetchAdvice({ initial = false, userMessage = null } = {}) {
+  async function fetchAdvice({ initial = false, userMessage = null, noteIds, submissionIds, targetLeadId } = {}) {
     setLoading(true);
     setError("");
     try {
+      const useLeadId = targetLeadId || leadId || resolvedLeadId;
+      const useNoteIds = Array.isArray(noteIds) ? noteIds : [...selectedNoteIds];
+      const useSubIds = Array.isArray(submissionIds) ? submissionIds : [...selectedSubmissionIds];
       const body = {
-        form_submission_id: formSubmissionId || resolvedFormSubmissionId,
-        lead_id: leadId || resolvedLeadId,
+        lead_id: useLeadId,
         history: initial ? [] : history,
         message: initial ? null : userMessage,
         quote_state: initial ? null : quoteState,
+        selected_note_ids: useNoteIds,
+        selected_submission_ids: useSubIds,
       };
       const res = await apiFetch("/api/hiphot/ai-quote-advice", {
         method: "POST",
@@ -73,23 +139,21 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "AI advies mislukt");
-        if (initial && userMessage == null) {
-          // Geef mislukking ook in chat weer
+        if (initial) {
           setChatLog((prev) => [...prev, { from: "ai", text: `⚠️ ${data.error || "Er ging iets mis"}${data.raw ? `\n\n${data.raw}` : ""}` }]);
         }
         return;
       }
       setHistory(data.history || []);
       setQuoteState(data.quote_state);
-      if (data.form_submission_id) setResolvedFormSubmissionId(data.form_submission_id);
       if (data.lead_id) setResolvedLeadId(data.lead_id);
+      if (data.context_summary) setContextSummary(data.context_summary);
+      setContextDirty(false);
       setChatLog((prev) => [...prev, { from: "ai", text: data.ai_message || "(geen toelichting)" }]);
 
-      // Bewaar het EERSTE voorstel voor learning-diff
       if (initial && !initialQuoteRef.current) {
         initialQuoteRef.current = data.quote_state;
       }
-      // Tel alleen echte wijzigingen als refinement (info-vragen wijzigen niks)
       if (userMessage && !data.quote_unchanged) {
         refinementCountRef.current += 1;
         setLearnChecked(true);
@@ -99,6 +163,35 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleNote(id) {
+    setSelectedNoteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setContextDirty(true);
+  }
+
+  function toggleSubmission(id) {
+    setSelectedSubmissionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setContextDirty(true);
+  }
+
+  async function regenerateWithCurrentSelection() {
+    // Reset gesprek + advies, verse initial-call met nieuwe selectie
+    setChatLog([]);
+    setHistory([]);
+    setQuoteState(null);
+    initialQuoteRef.current = null;
+    refinementCountRef.current = 0;
+    setLearnChecked(false);
+    await fetchAdvice({ initial: true });
   }
 
   function handleSend() {
@@ -131,7 +224,7 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: targetLeadId,
-          form_submission_id: formSubmissionId || resolvedFormSubmissionId,
+          form_submission_id: formSubmissionId,
           quote_state: quoteState,
           chat_log: chatLog,
           initial_quote_state: initialQuoteRef.current,
@@ -221,8 +314,127 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
           </div>
         ) : (
           <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Main content: quote panel (boven) + chat (onder) */}
+            {/* Main content: context (boven) + quote (midden) + chat (onder) */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50">
+              {/* Context selection */}
+              {context && (
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                  <button
+                    onClick={() => setContextOpen(!contextOpen)}
+                    className="w-full flex items-center gap-2 px-5 py-3 hover:bg-gray-50/50 transition-colors"
+                  >
+                    {contextOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    <Info className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-semibold text-brand-black">Context meenemen</span>
+                    <span className="ml-auto text-xs text-gray-400">
+                      {selectedNoteIds.size + selectedSubmissionIds.size} geselecteerd
+                    </span>
+                    {contextDirty && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-amber-100 text-amber-700 ml-2">
+                        Gewijzigd
+                      </span>
+                    )}
+                  </button>
+                  {contextOpen && (
+                    <div className="px-5 pb-4 space-y-3">
+                      <p className="text-xs text-gray-500">
+                        Alleen de aangevinkte items worden meegegeven aan de AI. Vink oude of irrelevante zaken uit.
+                        {context.last_quote_at && (
+                          <span className="ml-1 text-gray-400">
+                            Default: alles na offerte {new Date(context.last_quote_at).toLocaleDateString("nl-NL")}.
+                          </span>
+                        )}
+                      </p>
+
+                      {context.submissions && context.submissions.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                            Aanvragen / formulieren ({context.submissions.length})
+                          </p>
+                          <div className="space-y-1">
+                            {context.submissions.map((s) => {
+                              const checked = selectedSubmissionIds.has(s.id);
+                              const Icon = s.source === "chatbot" ? Bot : s.source === "email" ? Mail : FileText;
+                              return (
+                                <label key={s.id} className="flex items-start gap-2 p-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleSubmission(s.id)}
+                                    className="mt-0.5 rounded border-gray-300 accent-brand-amber"
+                                  />
+                                  <Icon className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${s.source === "chatbot" ? "text-brand-amber" : s.source === "email" ? "text-blue-500" : "text-gray-500"}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <span className="font-semibold capitalize">{s.source || "form"}</span>
+                                      <span className="text-gray-400">{new Date(s.created_at).toLocaleDateString("nl-NL")}</span>
+                                      {s.contact && <span className="text-gray-500 truncate">· {s.contact}</span>}
+                                      {s.has_structured_data && (
+                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-pill bg-amber-50 text-amber-700">gestructureerd</span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate">{s.message_preview || "(geen preview)"}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {context.notes && context.notes.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                            Notities ({context.notes.length})
+                          </p>
+                          <div className="space-y-1">
+                            {context.notes.map((n) => {
+                              const checked = selectedNoteIds.has(n.id);
+                              return (
+                                <label key={n.id} className="flex items-start gap-2 p-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleNote(n.id)}
+                                    className="mt-0.5 rounded border-gray-300 accent-brand-amber"
+                                  />
+                                  <MessageSquare className="w-3.5 h-3.5 mt-0.5 text-gray-400 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <span className="font-semibold capitalize">{n.note_type || "notitie"}</span>
+                                      <span className="text-gray-400">{new Date(n.created_at).toLocaleDateString("nl-NL")}</span>
+                                      {n.created_by && <span className="text-gray-500 truncate">· {n.created_by}</span>}
+                                    </div>
+                                    <p className="text-xs text-gray-500 line-clamp-2 whitespace-pre-wrap">{n.content_preview || "(leeg)"}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {(context.notes.length === 0 && context.submissions.length === 0) && (
+                        <p className="text-xs text-gray-400 italic">Geen notities of aanvragen op deze lead.</p>
+                      )}
+
+                      {contextDirty && (
+                        <div className="pt-2 border-t border-gray-100">
+                          <button
+                            onClick={regenerateWithCurrentSelection}
+                            disabled={loading}
+                            className="px-3 py-1.5 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+                            Advies opnieuw genereren met nieuwe selectie
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Current quote */}
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -305,6 +517,26 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                         </p>
                         <p className="text-xs text-amber-900 leading-relaxed">{quoteState.rationale}</p>
                       </div>
+                    )}
+
+                    {/* Rapportage-voetnoot: welke context is meegenomen */}
+                    {contextSummary && (contextSummary.notes.length + contextSummary.submissions.length > 0) && (
+                      <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
+                        <Info className="inline-block w-3 h-3 mr-1 -mt-0.5" />
+                        Advies op basis van:{" "}
+                        {[
+                          ...contextSummary.submissions.map((s) => `${s.source || "form"} ${new Date(s.created_at).toLocaleDateString("nl-NL")}`),
+                          ...contextSummary.notes.map((n) => `${n.note_type || "notitie"} ${new Date(n.created_at).toLocaleDateString("nl-NL")}`),
+                        ].join(", ")}
+                        {context && (
+                          (() => {
+                            const skippedNotes = (context.notes?.length || 0) - contextSummary.notes.length;
+                            const skippedSubs = (context.submissions?.length || 0) - contextSummary.submissions.length;
+                            const skipped = skippedNotes + skippedSubs;
+                            return skipped > 0 ? ` · ${skipped} item${skipped === 1 ? "" : "s"} overgeslagen (vink aan in Context als je die mee wilt nemen)` : "";
+                          })()
+                        )}
+                      </p>
                     )}
                   </>
                 )}

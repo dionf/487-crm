@@ -520,11 +520,11 @@ function InboxPage() {
                   <Reply className="w-4 h-4" />
                   Beantwoorden
                 </button>
-                {selected.source === "chatbot" && selected.conversation_data && tenant === "hiphot" && (
+                {tenant === "hiphot" && selected.lead_id && (
                   <button
                     onClick={() => setShowAdvisor(true)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-brand-amber to-amber-400 hover:opacity-90 rounded-pill text-sm font-semibold text-brand-black transition-opacity"
-                    title="Genereer offerte-advies op basis van dit gesprek"
+                    title="Genereer offerte-advies op basis van lead-context"
                   >
                     <Sparkles className="w-4 h-4" />
                     AI offerte-advies

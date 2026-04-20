@@ -1031,11 +1031,11 @@ export default function LeadDetailPage() {
                 </h3>
               </div>
               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {isHipHot && data?.chatbot_submission_id && (
+                {isHipHot && (
                   <button
                     onClick={() => setShowAdvisor(true)}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-gradient-to-r from-brand-amber to-amber-400 text-brand-black text-[10px] font-semibold hover:opacity-90 transition-opacity"
-                    title="AI offerte-advies op basis van chatbot-gesprek"
+                    title="AI offerte-advies op basis van notities, aanvragen en lead-info"
                   >
                     <Sparkles className="w-3 h-3" />
                     AI-advies

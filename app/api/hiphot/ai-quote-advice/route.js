@@ -17,50 +17,96 @@ export async function POST(request) {
     return Response.json({ error: "Ongeldige request body" }, { status: 400 });
   }
 
-  const { form_submission_id, lead_id, history, message, quote_state } = body || {};
+  const {
+    lead_id,
+    form_submission_id,   // legacy — wordt vertaald naar lead_id
+    history,
+    message,
+    quote_state,
+    selected_note_ids,    // array van note UUIDs
+    selected_submission_ids, // array van form_submission UUIDs
+  } = body || {};
 
-  // Haal conversation_data op — óf via form_submission_id, óf via lead_id (nieuwste chatbot submission)
-  let formSubmission = null;
-  if (form_submission_id) {
-    const { data } = await supabase
+  // Resolve lead_id (legacy pad: via form_submission_id)
+  let resolvedLeadId = lead_id;
+  if (!resolvedLeadId && form_submission_id) {
+    const { data: fs } = await supabase
       .from("form_submissions")
-      .select("id, lead_id, tenant, conversation_data, first_name, last_name, email")
+      .select("lead_id, tenant")
       .eq("id", form_submission_id)
-      .single();
-    formSubmission = data;
-  } else if (lead_id) {
-    const { data } = await supabase
-      .from("form_submissions")
-      .select("id, lead_id, tenant, conversation_data, first_name, last_name, email")
-      .eq("lead_id", lead_id)
-      .eq("source", "chatbot")
-      .order("created_at", { ascending: false })
-      .limit(1)
       .maybeSingle();
-    formSubmission = data;
+    if (fs && fs.tenant === tenant) resolvedLeadId = fs.lead_id;
   }
 
-  if (!formSubmission) {
-    return Response.json(
-      { error: "Geen chatbot-submission gevonden voor deze lead" },
-      { status: 404 }
-    );
+  if (!resolvedLeadId) {
+    return Response.json({ error: "lead_id is verplicht" }, { status: 400 });
   }
 
-  if (formSubmission.tenant !== tenant) {
-    return Response.json({ error: "Geen toegang" }, { status: 403 });
+  // Fetch lead + gebruikersselectie
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, email, phone")
+    .eq("id", resolvedLeadId)
+    .single();
+
+  if (!lead || lead.tenant !== tenant) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
   }
 
-  if (!formSubmission.conversation_data) {
-    return Response.json(
-      { error: "Chatbot-submission heeft geen gestructureerde data" },
-      { status: 400 }
-    );
-  }
+  // Haal de geselecteerde notes + submissions op
+  const noteIds = Array.isArray(selected_note_ids) ? selected_note_ids : [];
+  const subIds = Array.isArray(selected_submission_ids) ? selected_submission_ids : [];
+
+  const [notesRes, submissionsRes] = await Promise.all([
+    noteIds.length > 0
+      ? supabase
+          .from("notes")
+          .select("id, created_at, note_type, content, created_by")
+          .in("id", noteIds)
+          .eq("lead_id", resolvedLeadId)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    subIds.length > 0
+      ? supabase
+          .from("form_submissions")
+          .select("id, created_at, source, message, conversation_data, first_name, last_name")
+          .in("id", subIds)
+          .eq("lead_id", resolvedLeadId)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const leadContext = {
+    lead: {
+      company_name: lead.company_name,
+      contact_person: lead.contact_person,
+      contact_first_name: lead.contact_first_name,
+      contact_last_name: lead.contact_last_name,
+      industry: lead.industry,
+      city: lead.city || lead.billing_city,
+      country: lead.billing_country || "NL",
+      phone: lead.phone,
+    },
+    notes: (notesRes.data || []).map((n) => ({
+      id: n.id,
+      note_type: n.note_type,
+      content: n.content,
+      created_at: n.created_at,
+      created_by: n.created_by,
+    })),
+    submissions: (submissionsRes.data || []).map((s) => ({
+      id: s.id,
+      source: s.source,
+      message: s.message,
+      conversation_data: s.conversation_data,
+      contact: [s.first_name, s.last_name].filter(Boolean).join(" "),
+      created_at: s.created_at,
+    })),
+  };
 
   const result = await generateOrRefine({
     tenant,
-    conversationData: formSubmission.conversation_data,
+    leadContext,
     history: history || [],
     userMessage: message || null,
     previousQuoteState: quote_state || null,
@@ -73,13 +119,30 @@ export async function POST(request) {
     );
   }
 
+  // Voetnoot-items: welke items zijn meegenomen (voor AI-rapportage voetnoot in de UI)
+  const contextSummary = {
+    notes: leadContext.notes.map((n) => ({
+      id: n.id,
+      note_type: n.note_type,
+      created_at: n.created_at,
+      preview: String(n.content || "").slice(0, 80),
+    })),
+    submissions: leadContext.submissions.map((s) => ({
+      id: s.id,
+      source: s.source,
+      created_at: s.created_at,
+      preview: String(s.message || "").slice(0, 80),
+    })),
+    lead: leadContext.lead,
+  };
+
   return Response.json({
     ai_message: result.ai_message,
     quote_state: result.quote_state,
     history: result.history,
     warnings: result.warnings || [],
     quote_unchanged: result.quote_unchanged || false,
-    form_submission_id: formSubmission.id,
-    lead_id: formSubmission.lead_id,
+    lead_id: resolvedLeadId,
+    context_summary: contextSummary,
   });
 }

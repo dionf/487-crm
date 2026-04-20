@@ -8,8 +8,10 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 const SYSTEM_PROMPT = `Je bent de Cowork assistent voor het 48-7 CRM systeem. Je helpt met lead management via natural language commands.
 
 Beschikbare acties die je kunt uitvoeren:
-- list_leads: Toon leads (optioneel: filter op status of service_type)
+- list_leads: Toon leads (optioneel: filter op status, service_type, email, phone, of search voor algemene tekst)
 - get_lead_detail: Details van een specifieke lead (zoek op bedrijfsnaam)
+- find_lead_by_email: Zoek lead(s) op exact e-mailadres
+- find_lead_by_phone: Zoek lead(s) op telefoonnummer (laatste 6 cijfers volstaat)
 - create_lead: Maak een nieuwe lead aan
 - update_status: Wijzig de status van een lead
 - add_note: Voeg een notitie toe aan een lead
@@ -37,7 +39,10 @@ Voorbeelden:
 - "maak offerte voor Enablemi van 5000 voor Cowork setup" → {"action": "create_quote", "params": {"company_name": "Enablemi", "amount": 5000, "description": "Cowork setup"}, "message": "Offerte aanmaken voor Enablemi..."}
 - "offerte 2M Recruitment 12000 RADAR platform" → {"action": "create_quote", "params": {"company_name": "2M Recruitment", "amount": 12000, "description": "RADAR platform"}, "message": "Offerte aanmaken voor 2M Recruitment..."}
 - "check inbox" → {"action": "check_inbox", "params": {}, "message": "Email inbox checken voor nieuwe leads..."}
-- "update mailbox" → {"action": "check_inbox", "params": {}, "message": "Mailbox updaten..."}`;
+- "update mailbox" → {"action": "check_inbox", "params": {}, "message": "Mailbox updaten..."}
+- "welke lead heeft email X" → {"action": "find_lead_by_email", "params": {"email": "X"}, "message": "Zoeken op e-mail X..."}
+- "zoek lead met telefoon 0612345678" → {"action": "find_lead_by_phone", "params": {"phone": "0612345678"}, "message": "Zoeken op telefoonnummer..."}
+- "zoek leads met 'kinderopvang' in naam" → {"action": "list_leads", "params": {"search": "kinderopvang"}, "message": "Leads met 'kinderopvang' zoeken..."}`;
 
 
 // Fallback regex parser when no API key
@@ -165,12 +170,72 @@ export async function POST(request) {
         let query = supabase.from("leads").select("*").eq("tenant", tenant).order("updated_at", { ascending: false });
         if (parsed.params.status) query = query.eq("status", parsed.params.status);
         if (parsed.params.service_type) query = query.eq("service_type", parsed.params.service_type);
+        if (parsed.params.email) query = query.ilike("email", `%${parsed.params.email.trim()}%`);
+        if (parsed.params.phone) {
+          const digits = String(parsed.params.phone).replace(/\D/g, "");
+          if (digits) query = query.ilike("phone", `%${digits.slice(-6)}%`);
+        }
+        if (parsed.params.search) {
+          const q = String(parsed.params.search).trim();
+          query = query.or(
+            `company_name.ilike.%${q}%,contact_person.ilike.%${q}%,contact_first_name.ilike.%${q}%,contact_last_name.ilike.%${q}%,email.ilike.%${q}%`
+          );
+        }
+        // Default max 50 om lange dumps te voorkomen
+        query = query.limit(50);
         const { data: leads } = await query;
+
+        const names = (leads || []).slice(0, 10).map((l) => l.company_name).filter(Boolean);
+        const extra = leads && leads.length > 0
+          ? `\n\n${names.join(", ")}${leads.length > 10 ? ` … en ${leads.length - 10} meer` : ""}`
+          : "";
 
         return Response.json({
           action: "list_leads",
           result: leads,
-          message: `Gevonden: ${leads?.length || 0} leads`,
+          message: `Gevonden: ${leads?.length || 0} lead${leads?.length === 1 ? "" : "s"}${extra}`,
+        });
+      }
+
+      case "find_lead_by_email": {
+        const email = String(parsed.params.email || "").trim();
+        if (!email) {
+          return Response.json({ action: "find_lead_by_email", message: "Geen e-mailadres opgegeven." });
+        }
+        const { data: leads } = await supabase
+          .from("leads")
+          .select("id, company_name, contact_person, email, phone, status")
+          .eq("tenant", tenant)
+          .ilike("email", email);
+        if (!leads || leads.length === 0) {
+          return Response.json({ action: "find_lead_by_email", result: [], message: `Geen lead gevonden met e-mail "${email}".` });
+        }
+        const lines = leads.map((l) => `• ${l.company_name} — ${l.contact_person || "(geen contact)"} — ${l.status}`);
+        return Response.json({
+          action: "find_lead_by_email",
+          result: leads,
+          message: `Gevonden (${leads.length}):\n${lines.join("\n")}`,
+        });
+      }
+
+      case "find_lead_by_phone": {
+        const digits = String(parsed.params.phone || "").replace(/\D/g, "");
+        if (!digits) {
+          return Response.json({ action: "find_lead_by_phone", message: "Geen telefoonnummer opgegeven." });
+        }
+        const { data: leads } = await supabase
+          .from("leads")
+          .select("id, company_name, contact_person, email, phone, status")
+          .eq("tenant", tenant)
+          .ilike("phone", `%${digits.slice(-6)}%`);
+        if (!leads || leads.length === 0) {
+          return Response.json({ action: "find_lead_by_phone", result: [], message: `Geen lead gevonden met telefoon "${digits}".` });
+        }
+        const lines = leads.map((l) => `• ${l.company_name} — ${l.phone} — ${l.status}`);
+        return Response.json({
+          action: "find_lead_by_phone",
+          result: leads,
+          message: `Gevonden (${leads.length}):\n${lines.join("\n")}`,
         });
       }
 

@@ -18,6 +18,11 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Ongeldige uitkomst" }, { status: 400 });
   }
 
+  // "Interne collega opvolgen" heeft verplicht een user_id nodig, anders gaat de taak verloren
+  if (outcome === "vraag_opvolgen_collega" && !follow_up_user_id) {
+    return Response.json({ error: "Kies een collega om de lead aan over te dragen" }, { status: 400 });
+  }
+
   const leadId = (await params).id;
 
   // Verify lead belongs to tenant
@@ -92,7 +97,7 @@ export async function POST(request, { params }) {
       tenant,
     });
   } else if (outcome === "vraag_opvolgen_collega" && follow_up_user_id) {
-    await supabase.from("follow_up_tasks").insert({
+    const { error: taskErr } = await supabase.from("follow_up_tasks").insert({
       lead_id: leadId,
       task_type: "internal_followup",
       description: `Lead opvolgen — doorgegeven door ${user_name || "collega"}`,
@@ -100,6 +105,13 @@ export async function POST(request, { params }) {
       assigned_to: follow_up_user_id,
       tenant,
     });
+    if (taskErr) {
+      console.error("[call-outcome] follow_up_task insert failed:", taskErr.message);
+      return Response.json(
+        { error: `Lead bijgewerkt maar opvolgtaak voor collega niet aangemaakt: ${taskErr.message}` },
+        { status: 500 }
+      );
+    }
   }
 
   // Activity log

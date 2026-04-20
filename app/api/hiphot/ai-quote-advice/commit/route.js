@@ -111,7 +111,7 @@ export async function POST(request) {
       remarks_html: quote_state.rationale
         ? `<p><em>Onderbouwing AI-advies:</em> ${quote_state.rationale}</p>`
         : null,
-      status: "draft",
+      status: "concept",
     })
     .select()
     .single();
@@ -226,13 +226,21 @@ export async function POST(request) {
       };
 
       console.log("[lesson-extractor] Starting for quote", newQuote.quote_number);
-      const lessons = await extractLessons({
+      const extractResult = await extractLessons({
         initialQuote: initial_quote_state,
         finalQuote: finalQuoteForExtract,
         chatLog: Array.isArray(chat_log) ? chat_log : [],
         conversationData,
       });
-      console.log("[lesson-extractor] Got", lessons?.length || 0, "lessons from AI");
+      // Compat: extractLessons kan nu een {lessons, skipReason} object zijn of een array
+      const lessons = Array.isArray(extractResult)
+        ? extractResult
+        : extractResult?.lessons || [];
+      const skipReason = Array.isArray(extractResult) ? null : extractResult?.skipReason || null;
+      console.log("[lesson-extractor] Got", lessons.length, "lessons", skipReason ? `(skip: ${skipReason})` : "");
+      if (skipReason && lessons.length === 0) {
+        extractError = skipReason;
+      }
 
       if (lessons && lessons.length > 0) {
         const extraTags = buildContextTags(conversationData);

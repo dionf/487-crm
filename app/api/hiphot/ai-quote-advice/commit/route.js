@@ -221,15 +221,35 @@ export async function POST(request) {
   let lessonsCreated = 0;
   let lessonsSkipped = 0;
   let extractError = null;
+  let learningSkippedReason = null;
 
-  if (learn === true && initial_quote_state && form_submission_id) {
+  if (learn !== true) {
+    learningSkippedReason = "Leer-vinkje was niet aangevinkt";
+  } else if (!initial_quote_state) {
+    learningSkippedReason = "Geen initieel AI-voorstel bewaard (kan geen diff berekenen)";
+  }
+
+  if (learn === true && initial_quote_state) {
     try {
-      const { data: fs } = await supabase
-        .from("form_submissions")
-        .select("conversation_data")
-        .eq("id", form_submission_id)
-        .maybeSingle();
-      const conversationData = fs?.conversation_data || null;
+      // conversation_data is optioneel — alleen als deze lead een chatbot-submission heeft
+      let conversationData = null;
+      if (form_submission_id) {
+        const { data: fs } = await supabase
+          .from("form_submissions")
+          .select("conversation_data")
+          .eq("id", form_submission_id)
+          .maybeSingle();
+        conversationData = fs?.conversation_data || null;
+      }
+      // Fallback: geen chatbot-data? Bouw minimal context uit de lead zelf voor de extractor.
+      if (!conversationData) {
+        conversationData = {
+          situatie: {
+            branche: lead.industry || null,
+            opmerkingen: `Lead ${lead.company_name || ""} — voorstel handmatig door medewerker aangepast.`,
+          },
+        };
+      }
 
       const finalQuoteForExtract = {
         line_items: quote_state.line_items,
@@ -302,6 +322,11 @@ export async function POST(request) {
       console.error("[lesson-extractor] synchronous failure:", err.message);
       extractError = err.message;
     }
+  }
+
+  // Combineer redenen voor transparantie in UI
+  if (!extractError && learningSkippedReason) {
+    extractError = learningSkippedReason;
   }
 
   return Response.json({

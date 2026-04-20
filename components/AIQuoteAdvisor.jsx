@@ -286,19 +286,24 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
             <p className="text-sm text-gray-500 mb-3">
               Concept-offerte is opgeslagen op de klantkaart. Je kunt &lsquo;m nu verder bewerken of publiceren.
             </p>
-            {(committed.lessons_created > 0 || committed.lessons_merged > 0) && (
+            {(committed.lessons_created > 0 || committed.lessons_merged > 0) ? (
               <p className="text-xs text-brand-amber mb-3 flex items-center justify-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
                 {committed.lessons_created > 0 && `${committed.lessons_created} nieuwe regel${committed.lessons_created === 1 ? "" : "s"} geleerd`}
                 {committed.lessons_created > 0 && committed.lessons_merged > 0 && " · "}
                 {committed.lessons_merged > 0 && `${committed.lessons_merged} bestaande bevestigd`}
               </p>
-            )}
-            {committed.extract_error && (
-              <p className="text-xs text-red-500 mb-3">
-                ⚠️ Kon lessen niet opslaan: {committed.extract_error}
-              </p>
-            )}
+            ) : committed.extract_error ? (
+              <div className="text-xs text-gray-500 mb-3 px-4">
+                <p className="flex items-center justify-center gap-1.5">
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Geen nieuwe AI-regels geleerd</span>
+                </p>
+                <p className="text-[11px] mt-1 text-gray-400">
+                  Reden: {committed.extract_error}
+                </p>
+              </div>
+            ) : null}
             <div className="mb-3" />
             <button
               onClick={() => {
@@ -621,7 +626,7 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
             </div>
 
             {/* Learn checkbox — alleen zinvol als er refinements zijn gedaan */}
-            {refinementCountRef.current > 0 && (
+            {refinementCountRef.current > 0 ? (
               <div className="px-4 pt-3 flex-shrink-0">
                 <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 select-none">
                   <input
@@ -632,10 +637,17 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                     className="rounded border-gray-300 accent-brand-amber"
                   />
                   <Sparkles className="w-3.5 h-3.5 text-brand-amber" />
-                  <span>Leer van mijn correcties — voeg lessen toe aan de AI-regels</span>
+                  <span>Leer van mijn correcties ({refinementCountRef.current}x gewijzigd) — voeg lessen toe aan AI-regels</span>
                 </label>
               </div>
-            )}
+            ) : quoteState?.line_items?.length > 0 ? (
+              <div className="px-4 pt-3 flex-shrink-0">
+                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <Info className="w-3 h-3" />
+                  Geef correcties via de chat hieronder (bv. &ldquo;haal drip tray eruit&rdquo;) zodat de AI ervan kan leren.
+                </p>
+              </div>
+            ) : null}
 
             {/* Footer actions */}
             <div className="flex gap-3 p-4 border-t border-gray-100 flex-shrink-0">

@@ -339,6 +339,9 @@ function InboxPage() {
                       {sub.source === "chatbot" && (
                         <Bot className="w-3.5 h-3.5 text-brand-amber flex-shrink-0" />
                       )}
+                      {sub.source === "email" && (
+                        <Mail className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                      )}
                       {sub.first_name} {sub.last_name}
                     </span>
                     <span className="text-[10px] text-gray-400">{formatDate(sub.created_at)}</span>
@@ -352,6 +355,11 @@ function InboxPage() {
                     {sub.source === "chatbot" && (
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-pill bg-amber-100 text-amber-700">
                         Chatbot
+                      </span>
+                    )}
+                    {sub.source === "email" && (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-pill bg-blue-100 text-blue-700">
+                        E-mail
                       </span>
                     )}
                     {sub.status === "nieuw" && (

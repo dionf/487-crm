@@ -206,6 +206,16 @@ async function pollMailbox(mailbox) {
               created_by: "Inbox",
             });
 
+            // Inbox-entry zodat e-mail ook in /inbox verschijnt
+            await insertEmailSubmission({
+              tenant: mailbox.tenant,
+              leadId: existingLead.id,
+              fromEmail,
+              fromName,
+              subject: logEntry.email_subject,
+              body: emailBody,
+            });
+
             await client.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true });
 
             logEntry.status = "matched_existing";
@@ -287,6 +297,16 @@ async function pollMailbox(mailbox) {
             created_by: "Inbox",
           });
 
+          // Inbox-entry zodat e-mail in /inbox verschijnt (naast nieuwe lead in /leads)
+          await insertEmailSubmission({
+            tenant: mailbox.tenant,
+            leadId: lead.id,
+            fromEmail,
+            fromName,
+            subject: logEntry.email_subject,
+            body: emailBody,
+          });
+
           await client.messageFlagsAdd(msg.uid, ["\\Seen"], { uid: true });
 
           logEntry.status = "success";
@@ -336,6 +356,15 @@ async function pollMailbox(mailbox) {
                 created_by: "Inbox",
               });
 
+              await insertEmailSubmission({
+                tenant: mailbox.tenant,
+                leadId: fallbackLead.id,
+                fromEmail,
+                fromName: parsed?.from?.value?.[0]?.name || "",
+                subject: logEntry.email_subject,
+                body: emailBody,
+              });
+
               logEntry.lead_id = fallbackLead.id;
               logEntry.status = "fallback";
             }
@@ -378,6 +407,33 @@ async function pollMailbox(mailbox) {
 }
 
 // ---- Helper functions ----
+
+async function insertEmailSubmission({ tenant, leadId, fromEmail, fromName, subject, body }) {
+  try {
+    if (!fromEmail) return; // kan geen inbox-entry zonder van-adres
+    const nameParts = String(fromName || "").trim().split(/\s+/).filter(Boolean);
+    const first = nameParts[0] || "Onbekend";
+    const last = nameParts.slice(1).join(" ") || "";
+    const safeSubject = subject || "(geen onderwerp)";
+    const safeBody = body || "(geen inhoud)";
+    await supabase.from("form_submissions").insert({
+      tenant,
+      first_name: first,
+      last_name: last,
+      email: String(fromEmail).toLowerCase().trim(),
+      phone: null,
+      message: `Onderwerp: ${safeSubject}\n\n${safeBody}`,
+      language: "nl",
+      source_url: `mailto:${fromEmail}`,
+      source: "email",
+      lead_id: leadId,
+      status: "nieuw",
+      conversation_transcript: safeBody,
+    });
+  } catch (err) {
+    console.error("[insertEmailSubmission]", err?.message || err);
+  }
+}
 
 async function insertLog(entry) {
   try {

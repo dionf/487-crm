@@ -8,6 +8,7 @@ export const maxDuration = 60;
 export async function POST(request) {
   const tenant = request.headers.get("x-auth-tenant");
   const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
+  const userId = request.headers.get("x-auth-user-id");
 
   if (tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
@@ -88,6 +89,18 @@ export async function POST(request) {
   // Valid until: 30 dagen vanaf nu
   const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
+  // Haal afzender-gegevens op (de ingelogde HipHot-medewerker).
+  // Deze vullen de contact_* velden op de quote, NIET de klant-gegevens.
+  let sender = null;
+  if (userId) {
+    const { data } = await supabase
+      .from("users")
+      .select("name, email, phone")
+      .eq("id", userId)
+      .maybeSingle();
+    sender = data || null;
+  }
+
   // Insert quote
   const { data: newQuote, error: quoteErr } = await supabase
     .from("quotes")
@@ -103,10 +116,10 @@ export async function POST(request) {
       quote_type: "simple",
       shipping_cost: shippingCost,
       shipping_discount_pct: 0,
-      contact_name: lead.contact_person || `${lead.contact_first_name || ""} ${lead.contact_last_name || ""}`.trim(),
-      contact_title: lead.contact_function || null,
-      contact_email: lead.email,
-      contact_phone: lead.phone,
+      contact_name: sender?.name || userName || null,
+      contact_title: null,
+      contact_email: sender?.email || null,
+      contact_phone: sender?.phone || null,
       language: lead.language || "nl",
       remarks_html: quote_state.rationale
         ? `<p><em>Onderbouwing AI-advies:</em> ${quote_state.rationale}</p>`

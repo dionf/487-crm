@@ -7,7 +7,6 @@ import AppShell from "@/components/AppShell";
 import KanbanBoard from "@/components/KanbanBoard";
 import StatsPanel from "@/components/StatsPanel";
 import LeadForm from "@/components/LeadForm";
-import CoworkBar from "@/components/CoworkBar";
 import { Plus, RefreshCw, LayoutGrid, List, Phone, PhoneForwarded, PhoneOff, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
@@ -93,12 +92,6 @@ export default function DashboardPage() {
       });
     } catch {
       fetchLeads(); // Rollback
-    }
-  }
-
-  function handleCoworkResult(data) {
-    if (data?.action) {
-      fetchLeads();
     }
   }
 
@@ -195,8 +188,6 @@ export default function DashboardPage() {
         onSaved={fetchLeads}
       />
 
-      {/* Cowork */}
-      <CoworkBar onResult={handleCoworkResult} />
     </AppShell>
   );
 }

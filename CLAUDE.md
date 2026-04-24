@@ -6,13 +6,13 @@ Dit is NIET HubSpot. Als de gebruiker "CRM", "487crm", "48-7 crm", "leads" of "o
 ## Stack
 - **Frontend**: Next.js 14 (App Router) op Vercel
 - **Backend**: Supabase (project `olzyffwotjtyvupomoiz`)
-- **AI**: Anthropic Claude API (Cowork bar + email intake + bedrijfsanalyse)
+- **AI**: Anthropic Claude API (email intake + bedrijfsanalyse + offerte-advies)
 - **URL**: https://487crm.vercel.app / https://crm.48-7.nl
 
 ## Belangrijke mappen
-- `app/api/` — API routes (leads, notes, quotes, attachments, cowork, poll-inbox)
+- `app/api/` — API routes (leads, notes, quotes, attachments, poll-inbox)
 - `app/leads/` — Lead detail pagina's
-- `components/` — React componenten (CoworkBar, LeadForm, NoteForm, QuoteForm, etc.)
+- `components/` — React componenten (LeadForm, NoteForm, QuoteForm, etc.)
 - `lib/` — Supabase client, constants, utils
 
 ## Database tabellen
@@ -25,7 +25,6 @@ Dit is NIET HubSpot. Als de gebruiker "CRM", "487crm", "48-7 crm", "leads" of "o
 
 ## Features
 - PIN-beveiligd dashboard (2025)
-- Cowork conversational bar voor snelle acties
 - Email-to-lead intake via IMAP polling (leads@48-7.nl)
 - AI bedrijfsanalyse per lead
 - Zoekfunctie in header

@@ -5,7 +5,6 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import StatusBadge from "@/components/StatusBadge";
 import LeadForm from "@/components/LeadForm";
-import CoworkBar from "@/components/CoworkBar";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
@@ -470,7 +469,6 @@ export default function LeadsPage() {
       </div>
 
       <LeadForm open={showLeadForm} onClose={() => setShowLeadForm(false)} onSaved={fetchLeads} />
-      <CoworkBar onResult={() => fetchLeads()} />
 
       {/* Auto-assign modal */}
       {showAssignModal && (

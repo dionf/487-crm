@@ -13,7 +13,6 @@ import NoteForm from "@/components/NoteForm";
 import LeadForm from "@/components/LeadForm";
 import QuoteToOrderModal from "@/components/QuoteToOrderModal";
 import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
-import CoworkBar from "@/components/CoworkBar";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
@@ -1262,8 +1261,6 @@ export default function LeadDetailPage() {
           quoteData={emailQuoteOverride || quotes.find((q) => q.id === showEmailCompose)}
         />
       )}
-
-      <CoworkBar onResult={() => fetchData()} />
     </AppShell>
   );
 }

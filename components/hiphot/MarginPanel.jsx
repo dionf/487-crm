@@ -100,7 +100,6 @@ export default function MarginPanel({ items, settings, useFulfillment, onToggleF
           value={fmtPct(totals.margePercentageVerkoop)}
           className={margeOnderDoel ? "text-amber-600 font-semibold" : margeColor}
         />
-        <Row label="Marge % op inkoop" value={fmtPct(totals.margePercentageInkoop)} className={margeColor} />
         {margeOnderDoel && (
           <div className="mt-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium flex items-start gap-2">
             <span aria-hidden="true">⚠️</span>

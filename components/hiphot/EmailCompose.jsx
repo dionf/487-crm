@@ -18,27 +18,24 @@ function replacePlaceholders(text, vars) {
 }
 
 function buildSignatureHtml(user, tenant) {
-  const lines = [];
   const closing = tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
-  lines.push(`<p>${closing}</p>`);
-  lines.push("<p><br></p>");
+  const companyShort = tenant === "hiphot" ? "HipHot" : "48-7 AI Professionals";
+  const companyPhone = tenant === "hiphot" ? "+31 (0)85-505 56 64" : "+31 (0)85-06 01 487";
   const userName = user?.name?.trim();
   const userPhone = user?.phone?.trim();
   const userEmail = user?.email?.trim();
-  const personalLines = [];
-  if (userName) personalLines.push(`<strong>${userName}</strong>`);
-  if (userPhone) personalLines.push(userPhone);
-  if (userEmail) personalLines.push(userEmail);
-  if (personalLines.length) {
-    lines.push(`<p>${personalLines.join("<br>")}</p>`);
-    lines.push("<p><br></p>");
-  }
-  if (tenant === "hiphot") {
-    lines.push(`<p><strong>HIPHOT</strong><br>(+31) 085-505 56 64<br>hiphot.nl</p>`);
-  } else {
-    lines.push(`<p><strong>48-7 AI Professionals</strong><br>(+31) 085-06 01 487<br>48-7.nl</p>`);
-  }
-  return lines.join("");
+
+  const sigLines = [];
+  if (userName) sigLines.push(`<strong>${userName}</strong>`);
+  sigLines.push(companyShort);
+  sigLines.push(userPhone || companyPhone);
+  if (userEmail) sigLines.push(userEmail);
+
+  return (
+    `<p>${closing}</p>` +
+    `<p><br></p>` +
+    `<p>${sigLines.join("<br>")}</p>`
+  );
 }
 
 export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent, lead, quoteData }) {

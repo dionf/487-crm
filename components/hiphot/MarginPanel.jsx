@@ -40,7 +40,15 @@ export default function MarginPanel({ items, settings, useFulfillment, onToggleF
           Verkoop overzicht
         </h3>
         <Row label="Bruto verkoop" value={fmt(totals.brutoVerkoop)} />
-        <Row label="Artikelkortingen" value={`- ${fmt(totals.artikelKortingen)}`} className="text-orange-600" />
+        <Row
+          label={
+            totals.brutoVerkoop > 0 && totals.artikelKortingen > 0
+              ? `Artikelkortingen (${fmtPct((totals.artikelKortingen / totals.brutoVerkoop) * 100)})`
+              : "Artikelkortingen"
+          }
+          value={`- ${fmt(totals.artikelKortingen)}`}
+          className="text-orange-600"
+        />
         <Row label="Netto na korting" value={fmt(totals.nettoNaArtikelKorting)} className="font-medium" />
         <Row
           label={gratisVerzending ? "Gratis verzending" : "Verzendkosten ontvangen"}

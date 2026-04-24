@@ -19,7 +19,7 @@ export async function POST(request) {
   // Fetch user with org info
   const { data: user, error } = await supabase
     .from("users")
-    .select("id, name, email, role, organization_id, pin_hash, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
+    .select("id, name, email, phone, role, organization_id, pin_hash, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
     .eq("id", user_id)
     .eq("is_active", true)
     .single();
@@ -50,6 +50,7 @@ export async function POST(request) {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone || null,
       role: user.role,
     },
     organization: user.organizations,

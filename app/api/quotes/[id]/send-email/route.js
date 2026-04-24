@@ -116,6 +116,14 @@ export async function POST(request, { params }) {
       );
     }
 
+    // Auto-update quote status naar "verstuurd" (als die nog op concept of leeg staat)
+    if (!quote.status || quote.status === "concept") {
+      await supabase
+        .from("quotes")
+        .update({ status: "verstuurd" })
+        .eq("id", id);
+    }
+
     // Auto-update lead status to "offerte gestuurd/verstuurd"
     const quoteStatusId = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
     const { data: currentLead } = await supabase
@@ -125,7 +133,7 @@ export async function POST(request, { params }) {
       .single();
 
     // Only upgrade status if lead is still in an early stage
-    const earlyStatuses = ["nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
+    const earlyStatuses = ["prospect", "nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
     if (currentLead && earlyStatuses.includes(currentLead.status)) {
       await supabase
         .from("leads")

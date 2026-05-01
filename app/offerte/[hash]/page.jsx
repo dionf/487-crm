@@ -52,7 +52,7 @@ function formatDate(dateStr) {
 export default async function PublicQuotePage({ params }) {
   const { data: quote } = await supabase
     .from("quotes")
-    .select("*, leads(company_name, contact_person, email, phone, tenant, industry)")
+    .select("*, leads(company_name, contact_person, contact_first_name, contact_last_name, email, phone, tenant, industry, billing_street, billing_house_number, billing_postal_code, billing_city, billing_country, billing_email, customer_reference, delivery_same_as_billing, delivery_street, delivery_house_number, delivery_postal_code, delivery_city, delivery_country)")
     .eq("public_hash", params.hash)
     .maybeSingle();
 
@@ -123,6 +123,26 @@ export default async function PublicQuotePage({ params }) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.48-7.nl";
   const trackUrl = `${baseUrl}/api/track/${params.hash}`;
 
+  const lead = quote.leads || {};
+  const acceptDefaults = {
+    company_name: lead.company_name,
+    contact_first_name: lead.contact_first_name,
+    contact_last_name: lead.contact_last_name,
+    billing_street: lead.billing_street,
+    billing_house_number: lead.billing_house_number,
+    billing_postal_code: lead.billing_postal_code,
+    billing_city: lead.billing_city,
+    billing_country: lead.billing_country,
+    billing_email: lead.billing_email,
+    customer_reference: lead.customer_reference,
+    delivery_same_as_billing: lead.delivery_same_as_billing,
+    delivery_street: lead.delivery_street,
+    delivery_house_number: lead.delivery_house_number,
+    delivery_postal_code: lead.delivery_postal_code,
+    delivery_city: lead.delivery_city,
+    delivery_country: lead.delivery_country,
+  };
+
   const vatAmount = (quote.amount_excl_vat * (quote.vat_percentage || 21)) / 100;
   const totalIncl = quote.amount_excl_vat + vatAmount;
 
@@ -147,7 +167,7 @@ export default async function PublicQuotePage({ params }) {
           {/* Acceptance section at bottom */}
           {!isAccepted && !isExpired && (
             <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px", textAlign: "center", background: "#fff" }}>
-              <AcceptQuoteButton hash={params.hash} />
+              <AcceptQuoteButton hash={params.hash} tenant={tenant} defaults={acceptDefaults} />
             </div>
           )}
           {isAccepted && (
@@ -167,13 +187,15 @@ export default async function PublicQuotePage({ params }) {
           hash={params.hash}
           brand={brand}
           isHipHot={isHipHot}
+          tenant={tenant}
+          acceptDefaults={acceptDefaults}
         />
       )}
     </>
   );
 }
 
-function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpired, hash, brand, isHipHot }) {
+function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpired, hash, brand, isHipHot, tenant, acceptDefaults }) {
   const accent = isHipHot ? "#FFD500" : "#FAB868";
   const accentDark = isHipHot ? "#D4B100" : "#D4731C";
   const label = isHipHot ? "HIPHOT" : "FULL SERVICE AI";
@@ -261,7 +283,7 @@ function DefaultQuoteTemplate({ quote, vatAmount, totalIncl, isAccepted, isExpir
           {isAccepted ? (
             <AcceptedBanner acceptedAt={quote.accepted_at} />
           ) : (
-            <AcceptQuoteButton hash={hash} />
+            <AcceptQuoteButton hash={hash} tenant={tenant} defaults={acceptDefaults} />
           )}
         </div>
 

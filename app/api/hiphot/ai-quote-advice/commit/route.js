@@ -121,9 +121,7 @@ export async function POST(request) {
       contact_email: sender?.email || null,
       contact_phone: sender?.phone || null,
       language: lead.language || "nl",
-      remarks_html: quote_state.rationale
-        ? `<p><em>Onderbouwing AI-advies:</em> ${quote_state.rationale}</p>`
-        : null,
+      remarks_html: null,
       status: "concept",
     })
     .select()

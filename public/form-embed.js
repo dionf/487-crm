@@ -7,6 +7,82 @@
   var targetId = script.getAttribute("data-target");
   var apiBase = script.src.replace(/\/(?:form-embed\.js|api\/public\/embed).*$/, "");
 
+  // ---- Google Ads / GA tracking ---------------------------------------------
+  // Wordt aangeroepen na een succesvolle form-submit (server-OK response).
+  // Zelfde patroon als de offerte-chatbot: GTM dataLayer + GA4 generate_lead +
+  // Google Ads conversion met enhanced user_data. HipHot deelt het Google Ads
+  // conversion-label met de chatbot zodat alle lead-aanvragen samen geteld worden.
+  // 48-7 leeg = graceful no-op tot er een conversion-actie is aangemaakt.
+  var GADS_CONVERSION = {
+    hiphot: "AW-410249570/CcR2CMq-rKocEOLSz8MB",
+    "48-7": "",
+  };
+  var GA_EVENT_NAME = {
+    hiphot: "hiphot_contact_aanvraag",
+    "48-7": "487_contact_aanvraag",
+  };
+  var CONVERSION_VALUE = 75; // EUR — proxy-waarde, zelfde als chatbot
+
+  // Format Dutch phone naar E.164 (+31...) voor Enhanced Conversions
+  function formatPhoneE164(raw) {
+    if (!raw) return null;
+    var digits = String(raw).replace(/[^\d+]/g, "");
+    if (digits.indexOf("+") === 0) return digits;
+    if (digits.indexOf("00") === 0) return "+" + digits.slice(2);
+    if (digits.indexOf("0") === 0) return "+31" + digits.slice(1);
+    if (digits.length >= 9) return "+31" + digits;
+    return null;
+  }
+
+  function fireConversionEvent(formData) {
+    var sendTo = GADS_CONVERSION[tenant] || "";
+    var eventName = GA_EVENT_NAME[tenant] || "contact_aanvraag";
+
+    var userData = {
+      email: formData.email || undefined,
+      phone_number: formatPhoneE164(formData.phone) || undefined,
+      address: {
+        first_name: formData.first_name || undefined,
+        last_name: formData.last_name || undefined,
+      },
+    };
+
+    try {
+      if (typeof window.dataLayer !== "undefined") {
+        window.dataLayer.push({
+          event: eventName,
+          tenant: tenant,
+          form_type: "contact",
+          value: CONVERSION_VALUE,
+          currency: "EUR",
+        });
+      }
+    } catch (e) {}
+
+    if (typeof window.gtag === "function") {
+      try {
+        window.gtag("event", "generate_lead", {
+          event_category: "contact",
+          event_label: tenant,
+          value: CONVERSION_VALUE,
+          currency: "EUR",
+        });
+      } catch (e) {}
+
+      if (sendTo) {
+        try {
+          window.gtag("event", "conversion", {
+            send_to: sendTo,
+            value: CONVERSION_VALUE,
+            currency: "EUR",
+            user_data: userData,
+          });
+        } catch (e) {}
+      }
+    }
+  }
+  // ---------------------------------------------------------------------------
+
   var i18n = {
     nl: {
       firstName: "Voornaam",
@@ -199,6 +275,8 @@
       .then(function () {
         form.style.display = "none";
         successEl.style.display = "block";
+        // Pas afvuren na bevestiging — geen conversion-event als de server faalt.
+        fireConversionEvent(data);
       })
       .catch(function () {
         errorBanner.textContent = t.error;

@@ -8,20 +8,21 @@
   var apiBase = script.src.replace(/\/(?:form-embed\.js|api\/public\/embed).*$/, "");
 
   // ---- Google Ads / GA tracking ---------------------------------------------
-  // Wordt aangeroepen na een succesvolle form-submit (server-OK response).
-  // Zelfde patroon als de offerte-chatbot: GTM dataLayer + GA4 generate_lead +
-  // Google Ads conversion met enhanced user_data. HipHot deelt het Google Ads
-  // conversion-label met de chatbot zodat alle lead-aanvragen samen geteld worden.
-  // 48-7 leeg = graceful no-op tot er een conversion-actie is aangemaakt.
+  // Wordt aangeroepen na een succesvolle form-submit (server-OK response),
+  // dus pas wanneer de bedanktmelding zichtbaar is — niet bij de klik zelf.
+  // Eigen Google Ads conversion-actie voor het contactformulier (apart van de
+  // offerte-chatbot zodat we per kanaal kunnen rapporteren in Google Ads).
   var GADS_CONVERSION = {
-    hiphot: "AW-410249570/CcR2CMq-rKocEOLSz8MB",
+    hiphot: "AW-410249570/giEoCNug_qwcEOLSz8MB",
     "48-7": "",
   };
   var GA_EVENT_NAME = {
     hiphot: "hiphot_contact_aanvraag",
     "48-7": "487_contact_aanvraag",
   };
-  var CONVERSION_VALUE = 75; // EUR — proxy-waarde, zelfde als chatbot
+  // Lead-waarde-model: brutomarge ~€45 × close-rate ~25% = ~€11. Contactformulier
+  // heeft lagere intent dan de chatbot (meer info-aanvragen) → afgerond op €10.
+  var CONVERSION_VALUE = 10;
 
   // Format Dutch phone naar E.164 (+31...) voor Enhanced Conversions
   function formatPhoneE164(raw) {

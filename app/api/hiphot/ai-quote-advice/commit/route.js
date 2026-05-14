@@ -121,7 +121,11 @@ export async function POST(request) {
       contact_email: sender?.email || null,
       contact_phone: sender?.phone || null,
       language: lead.language || "nl",
-      remarks_html: null,
+      // Rationale is klant-zichtbaar geschreven (zie ai-quote-advisor.js RATIONALE-sectie)
+      // en komt 1-op-1 in het opmerkingen-blok van de offerte.
+      remarks_html: quote_state.rationale
+        ? `<p>${quote_state.rationale}</p>`
+        : null,
       status: "concept",
     })
     .select()

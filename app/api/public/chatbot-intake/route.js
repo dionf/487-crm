@@ -129,12 +129,36 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { tenant, source_url, language, _hp, klant, situatie, advies, openstaande_vragen, transcript } = body || {};
+    const {
+      tenant, source_url, language, _hp, klant, situatie, advies, openstaande_vragen, transcript,
+      gclid, gbraid, wbraid, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer,
+    } = body || {};
 
     // Honeypot
     if (_hp) {
       return Response.json({ success: true }, { headers });
     }
+
+    // Tracking-attributie. Chatbot-widget moet deze meesturen vanuit cookies/URL.
+    // Lege strings → null zodat we lead-data niet overschrijven met "" als een
+    // latere submit zonder klik-context binnenkomt.
+    const cleanTrack = (v) => {
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t.length > 0 ? t.slice(0, 500) : null;
+    };
+    const tracking = {
+      gclid: cleanTrack(gclid),
+      gbraid: cleanTrack(gbraid),
+      wbraid: cleanTrack(wbraid),
+      utm_source: cleanTrack(utm_source),
+      utm_medium: cleanTrack(utm_medium),
+      utm_campaign: cleanTrack(utm_campaign),
+      utm_content: cleanTrack(utm_content),
+      utm_term: cleanTrack(utm_term),
+      referrer: cleanTrack(referrer),
+      lead_type: "chatbot",
+    };
 
     if (!tenant || !TENANT_CONFIG[tenant]) {
       return Response.json({ error: "Ongeldige tenant" }, { status: 400, headers });
@@ -199,21 +223,26 @@ export async function POST(request) {
 
     // 2. Maak nieuwe lead als niet gevonden
     if (!leadId) {
+      const leadInsert = {
+        company_name: bedrijf || `${fullName} (chatbot)`,
+        contact_person: fullName,
+        contact_first_name: firstName,
+        contact_last_name: lastName,
+        email,
+        phone: telefoon || null,
+        source: "chatbot",
+        status: "nieuwe_aanvraag",
+        language: lang,
+        industry: situatie?.branche || null,
+        tenant,
+      };
+      // Eerste-touchpoint wint (zie form-submit route voor toelichting).
+      for (const [k, v] of Object.entries(tracking)) {
+        if (v !== null) leadInsert[k] = v;
+      }
       const { data: newLead } = await supabase
         .from("leads")
-        .insert({
-          company_name: bedrijf || `${fullName} (chatbot)`,
-          contact_person: fullName,
-          contact_first_name: firstName,
-          contact_last_name: lastName,
-          email,
-          phone: telefoon || null,
-          source: "chatbot",
-          status: "nieuwe_aanvraag",
-          language: lang,
-          industry: situatie?.branche || null,
-          tenant,
-        })
+        .insert(leadInsert)
         .select("id")
         .single();
 
@@ -230,7 +259,7 @@ export async function POST(request) {
       }
     }
 
-    // 3. Insert form_submission met rijke data
+    // 3. Insert form_submission met rijke data + tracking-attributie van dit touchpoint
     const { data: submission } = await supabase
       .from("form_submissions")
       .insert({
@@ -251,6 +280,7 @@ export async function POST(request) {
           advies: advies || null,
           openstaande_vragen: Array.isArray(openstaande_vragen) ? openstaande_vragen : [],
         },
+        ...tracking,
       })
       .select("id")
       .single();

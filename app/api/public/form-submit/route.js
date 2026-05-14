@@ -93,12 +93,36 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { tenant, first_name, last_name, email, phone, message, language, source_url, _hp } = body;
+    const {
+      tenant, first_name, last_name, email, phone, message, language, source_url, _hp,
+      gclid, gbraid, wbraid, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+      referrer, lead_type,
+    } = body;
 
     // Honeypot check — if filled, silently succeed (bot)
     if (_hp) {
       return Response.json({ success: true }, { headers });
     }
+
+    // Trim/cap tracking-velden; lege strings → null zodat we lead-data niet
+    // overschrijven met "" als een latere submit zonder klik-context binnenkomt.
+    const cleanTrack = (v) => {
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t.length > 0 ? t.slice(0, 500) : null;
+    };
+    const tracking = {
+      gclid: cleanTrack(gclid),
+      gbraid: cleanTrack(gbraid),
+      wbraid: cleanTrack(wbraid),
+      utm_source: cleanTrack(utm_source),
+      utm_medium: cleanTrack(utm_medium),
+      utm_campaign: cleanTrack(utm_campaign),
+      utm_content: cleanTrack(utm_content),
+      utm_term: cleanTrack(utm_term),
+      referrer: cleanTrack(referrer),
+      lead_type: cleanTrack(lead_type) || "contact",
+    };
 
     // Validate required fields
     if (!tenant || !first_name || !last_name || !email || !message) {
@@ -151,20 +175,27 @@ export async function POST(request) {
     // 2. Create new lead if not found
     if (!leadId) {
       const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
+      const leadInsert = {
+        company_name: `${fullName} (contactformulier)`,
+        contact_person: fullName,
+        contact_first_name: first_name.trim(),
+        contact_last_name: last_name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone || null,
+        source: "website",
+        status: defaultStatus,
+        language: lang,
+        tenant,
+      };
+      // Eerste-touchpoint wint: tracking alleen bij nieuwe lead op leads-tabel.
+      // Bestaande leads krijgen attributie alleen via form_submission per touchpoint
+      // — anders zou een tweede submit zonder gclid de oorspronkelijke klik wissen.
+      for (const [k, v] of Object.entries(tracking)) {
+        if (v !== null) leadInsert[k] = v;
+      }
       const { data: newLead } = await supabase
         .from("leads")
-        .insert({
-          company_name: `${fullName} (contactformulier)`,
-          contact_person: fullName,
-          contact_first_name: first_name.trim(),
-          contact_last_name: last_name.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phone || null,
-          source: "website",
-          status: defaultStatus,
-          language: lang,
-          tenant,
-        })
+        .insert(leadInsert)
         .select("id")
         .single();
 
@@ -182,7 +213,7 @@ export async function POST(request) {
       }
     }
 
-    // 3. Insert form submission
+    // 3. Insert form submission (incl. tracking-attributie van dit touchpoint)
     const { data: submission } = await supabase
       .from("form_submissions")
       .insert({
@@ -196,6 +227,7 @@ export async function POST(request) {
         source_url: source_url || null,
         lead_id: leadId || null,
         status: "nieuw",
+        ...tracking,
       })
       .select("id")
       .single();

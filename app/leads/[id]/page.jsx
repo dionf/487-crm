@@ -50,6 +50,7 @@ import {
   Building2,
   ShoppingBag,
   Hash,
+  Megaphone,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -663,6 +664,66 @@ export default function LeadDetailPage() {
               );
             })()}
           </div>
+
+          {/* Marketing-attributie — alleen tonen als er klik-data is */}
+          {(lead.gclid || lead.gbraid || lead.wbraid || lead.utm_source || lead.utm_medium || lead.utm_campaign || lead.utm_content || lead.utm_term || lead.referrer) && (
+            <div className="bg-white border border-gray-100 rounded-card p-5">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <Megaphone className="w-3.5 h-3.5" />
+                Marketing-attributie
+              </h3>
+              <dl className="space-y-2 text-sm">
+                {lead.lead_type && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">Kanaal</dt>
+                    <dd className="text-gray-700">{lead.lead_type}</dd>
+                  </div>
+                )}
+                {lead.utm_source && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">Bron</dt>
+                    <dd className="text-gray-700">{lead.utm_source}{lead.utm_medium ? ` / ${lead.utm_medium}` : ""}</dd>
+                  </div>
+                )}
+                {lead.utm_campaign && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">Campagne</dt>
+                    <dd className="text-gray-700">{lead.utm_campaign}</dd>
+                  </div>
+                )}
+                {(lead.utm_content || lead.utm_term) && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">Variant</dt>
+                    <dd className="text-gray-700">{[lead.utm_content, lead.utm_term].filter(Boolean).join(" — ")}</dd>
+                  </div>
+                )}
+                {lead.gclid && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">gclid</dt>
+                    <dd className="text-gray-700 font-mono text-xs break-all">{lead.gclid}</dd>
+                  </div>
+                )}
+                {lead.gbraid && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">gbraid</dt>
+                    <dd className="text-gray-700 font-mono text-xs break-all">{lead.gbraid}</dd>
+                  </div>
+                )}
+                {lead.wbraid && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">wbraid</dt>
+                    <dd className="text-gray-700 font-mono text-xs break-all">{lead.wbraid}</dd>
+                  </div>
+                )}
+                {lead.referrer && (
+                  <div className="flex items-baseline gap-3">
+                    <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-24 flex-shrink-0">Referrer</dt>
+                    <dd className="text-xs text-gray-500 break-all">{lead.referrer}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
 
           {/* Contacts */}
           <div className="bg-white border border-gray-100 rounded-card p-5">

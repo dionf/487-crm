@@ -7,6 +7,49 @@
   var targetId = script.getAttribute("data-target");
   var apiBase = script.src.replace(/\/(?:form-embed\.js|api\/public\/embed).*$/, "");
 
+  // ---- Klik-attributie capture ----------------------------------------------
+  // Capturen op landing-pagina van de Google Ad (gclid/gbraid/wbraid + utm),
+  // 90 dagen bewaren in cookies, meesturen bij form-submit. CRM slaat ze op
+  // de lead op zodat we later (bij offerte-akkoord) een offline conversion
+  // upload naar Google Ads kunnen doen.
+  function setCookie(name, value, days) {
+    try {
+      var d = new Date();
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = name + "=" + encodeURIComponent(value) +
+        ";expires=" + d.toUTCString() + ";path=/;SameSite=Lax";
+    } catch (e) {}
+  }
+  function getCookie(name) {
+    try {
+      var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) { return null; }
+  }
+  (function captureClickIds() {
+    var p;
+    try { p = new URLSearchParams(window.location.search); } catch (e) { return; }
+    var keys = ["gclid", "gbraid", "wbraid",
+      "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+    for (var i = 0; i < keys.length; i++) {
+      var v = p.get(keys[i]);
+      if (v) setCookie("crm_" + keys[i], v, 90);
+    }
+  })();
+  function readClickIds() {
+    return {
+      gclid: getCookie("crm_gclid"),
+      gbraid: getCookie("crm_gbraid"),
+      wbraid: getCookie("crm_wbraid"),
+      utm_source: getCookie("crm_utm_source"),
+      utm_medium: getCookie("crm_utm_medium"),
+      utm_campaign: getCookie("crm_utm_campaign"),
+      utm_content: getCookie("crm_utm_content"),
+      utm_term: getCookie("crm_utm_term"),
+      referrer: document.referrer || null,
+    };
+  }
+
   // ---- Google Ads / GA tracking ---------------------------------------------
   // Wordt aangeroepen na een succesvolle form-submit (server-OK response),
   // dus pas wanneer de bedanktmelding zichtbaar is — niet bij de klik zelf.
@@ -252,6 +295,7 @@
     submitBtn.disabled = true;
     submitBtn.textContent = t.sending;
 
+    var clickIds = readClickIds();
     var data = {
       tenant: tenant,
       first_name: form.first_name.value.trim(),
@@ -262,6 +306,16 @@
       language: lang,
       source_url: window.location.href,
       _hp: form._hp.value,
+      lead_type: "contact",
+      gclid: clickIds.gclid,
+      gbraid: clickIds.gbraid,
+      wbraid: clickIds.wbraid,
+      utm_source: clickIds.utm_source,
+      utm_medium: clickIds.utm_medium,
+      utm_campaign: clickIds.utm_campaign,
+      utm_content: clickIds.utm_content,
+      utm_term: clickIds.utm_term,
+      referrer: clickIds.referrer,
     };
 
     fetch(apiBase + "/api/public/form-submit", {

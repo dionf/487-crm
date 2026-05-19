@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/auth/organizations — list all orgs for the start screen
 export async function GET() {
   const { data, error } = await supabase

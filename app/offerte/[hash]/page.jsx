@@ -4,9 +4,21 @@ import QuotePrintButtons from "@/components/QuotePrintButtons";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+let _supabaseClient = null;
+const supabase = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      if (!_supabaseClient) {
+        _supabaseClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        );
+      }
+      const value = _supabaseClient[prop];
+      return typeof value === "function" ? value.bind(_supabaseClient) : value;
+    },
+  }
 );
 
 const BRAND = {

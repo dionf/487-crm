@@ -122,9 +122,11 @@ export async function POST(request) {
       contact_phone: sender?.phone || null,
       language: lead.language || "nl",
       // Rationale is klant-zichtbaar geschreven (zie ai-quote-advisor.js RATIONALE-sectie)
-      // en komt 1-op-1 in het opmerkingen-blok van de offerte.
+      // en komt 1-op-1 in het opmerkingen-blok van de offerte. We strippen eventuele
+      // HTML-tags die Claude toch toevoegt en wrappen zelf in één <p> — anders krijg
+      // je dubbele <p> en zichtbare </p> in het opmerkingen-blok.
       remarks_html: quote_state.rationale
-        ? `<p>${quote_state.rationale}</p>`
+        ? `<p>${String(quote_state.rationale).replace(/<\/?[^>]+>/g, "").trim()}</p>`
         : null,
       status: "concept",
     })

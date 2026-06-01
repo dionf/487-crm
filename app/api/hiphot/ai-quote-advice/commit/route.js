@@ -121,12 +121,12 @@ export async function POST(request) {
       contact_email: sender?.email || null,
       contact_phone: sender?.phone || null,
       language: lead.language || "nl",
-      // Rationale is klant-zichtbaar geschreven (zie ai-quote-advisor.js RATIONALE-sectie)
-      // en komt 1-op-1 in het opmerkingen-blok van de offerte. We strippen eventuele
-      // HTML-tags die Claude toch toevoegt en wrappen zelf in één <p> — anders krijg
-      // je dubbele <p> en zichtbare </p> in het opmerkingen-blok.
+      // Rationale wordt als PLATTE TEKST opgeslagen — de medewerker bewerkt 'm in
+      // een textarea (HipHotQuoteBuilder), en de offerte-template doet de wrap
+      // naar HTML voor de klant-zichtbare versie. Strip eventuele HTML-tags die
+      // Claude alsnog toevoegt zodat de medewerker nooit "<p>" zichtbaar krijgt.
       remarks_html: quote_state.rationale
-        ? `<p>${String(quote_state.rationale).replace(/<\/?[^>]+>/g, "").trim()}</p>`
+        ? String(quote_state.rationale).replace(/<\/?[^>]+>/g, "").trim()
         : null,
       status: "concept",
     })

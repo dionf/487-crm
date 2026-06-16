@@ -139,9 +139,10 @@ export async function POST(request, { params }) {
   const payload = {
     // 'pending' = nieuwe order, wacht op betaling (= concept in HipHot flow)
     status: "pending",
-    // Betaalmethode: op rekening (bankoverschrijving)
-    payment_method: "bacs",
-    payment_method_title: "Betalen op rekening",
+    // Betaalmethode: "Op rekening" = WooCommerce 'cheque' gateway in HipHot's shop
+    // (hernoemd in WC-settings naar "Op rekening" voor B2B-flow)
+    payment_method: "cheque",
+    payment_method_title: "Op rekening",
     set_paid: false,
     billing: billingBlock,
     shipping: shippingBlock,

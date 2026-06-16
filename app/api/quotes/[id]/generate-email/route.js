@@ -115,7 +115,7 @@ Geef ALLEEN de e-mailtekst in HTML format terug (geen subject, geen uitleg, GEEN
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
@@ -139,7 +139,7 @@ Geef ALLEEN de e-mailtekst in HTML format terug (geen subject, geen uitleg, GEEN
     const subjectPrompt = `Genereer een kort e-mail onderwerp (max 60 tekens) in ${langMap[lang]} voor het versturen van offerte ${quote.quote_number} aan ${lead?.company_name}. Branche: ${lead?.industry || "onbekend"}. Geef ALLEEN het onderwerp terug, geen aanhalingstekens.`;
 
     const subjectMsg = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 100,
       messages: [{ role: "user", content: subjectPrompt }],
     });

@@ -195,6 +195,36 @@ export default function LeadDetailPage() {
     fetchData();
   }
 
+  async function extendQuote(quoteId) {
+    if (!window.confirm("Offerte met 30 dagen verlengen?")) return;
+    const res = await apiFetch(`/api/quotes/${quoteId}/extend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days: 30 }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      alert(d.error || "Kon offerte niet verlengen");
+      return;
+    }
+    fetchData();
+  }
+
+  async function duplicateQuote(quoteId) {
+    if (!window.confirm("Een kopie van deze offerte aanmaken als nieuwe concept?")) return;
+    const res = await apiFetch(`/api/quotes/${quoteId}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      alert(d.error || "Kon offerte niet dupliceren");
+      return;
+    }
+    fetchData();
+  }
+
   async function openOrderModal(quote) {
     if (loadingOrderModal) return;
     setLoadingOrderModal(true);
@@ -1212,6 +1242,23 @@ export default function LeadDetailPage() {
                                 Publiceer offerte
                               </button>
                             )}
+                            {/* Verlengen — alleen tonen bij verlopen / afgewezen, niet bij geaccepteerd */}
+                            {!q.accepted_at && (q.status === "verlopen" || q.status === "afgewezen" || (q.valid_until && new Date(q.valid_until) < new Date())) && (
+                              <button
+                                onClick={() => extendQuote(q.id)}
+                                className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-orange-50 text-orange-700 hover:bg-orange-100 whitespace-nowrap"
+                                title="Geldigheid met 30 dagen verlengen"
+                              >
+                                Verlengen
+                              </button>
+                            )}
+                            <button
+                              onClick={() => duplicateQuote(q.id)}
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap"
+                              title="Kopie maken als nieuwe concept-offerte"
+                            >
+                              Dupliceren
+                            </button>
                           </div>
                         </div>
                       );

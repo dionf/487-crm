@@ -41,6 +41,12 @@ export async function POST(request, { params }) {
     "external_order_created_at",
     "order_customer_reference",
     "leads",
+    // Generated columns (DB berekent automatisch — schrijven geeft fout)
+    "vat_amount",
+    "amount_incl_vat",
+    // Quote-specifieke artefacten — opnieuw genereren bij eerste publish/bewerking
+    "html_content",
+    "pdf_url",
   ]);
 
   const newQuote = {};

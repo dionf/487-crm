@@ -61,6 +61,7 @@ export async function POST(request) {
   const {
     company_name, contact_first_name, contact_last_name, contact_function, contact_person,
     email, phone, service_type, estimated_value, source, website_url, commission_partner_percentage,
+    industry,
     // Adressen & facturatie
     billing_street, billing_house_number, billing_postal_code, billing_city, billing_country,
     billing_email, customer_reference,
@@ -117,6 +118,7 @@ export async function POST(request) {
       source: source || null,
       website_url: website_url || null,
       commission_partner_percentage: commission_partner_percentage || null,
+      industry: industry || null,
       status: defaultStatus,
       tenant,
       billing_street: billing_street || null,

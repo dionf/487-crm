@@ -101,6 +101,79 @@ export async function POST(request) {
     sender = data || null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Article-lookup + deterministische berekening 'keer insmeren' voor de rationale.
+  // Claude rekent dit getal historisch verkeerd (verwart capaciteit-per-fles met
+  // seizoens-verbruik), dus we corrigeren 't server-side op basis van de line-items.
+  // Formule: L_F30 × 850 + L_F50 × 450 (capaciteit van de geleverde crème).
+  // ---------------------------------------------------------------------------
+  const skus = lineItems.map((l) => l.sku).filter(Boolean);
+  let articlesBySku = {};
+  if (skus.length > 0) {
+    const { data: articles } = await supabase
+      .from("hiphot_articles")
+      .select("id, sku, name, category, wc_product_id, inkoop_price")
+      .in("sku", skus);
+    articlesBySku = Object.fromEntries((articles || []).map((a) => [a.sku, a]));
+  }
+
+  // Liters uit een productnaam parsen. Bundels ("dispenser + 1 liter") worden
+  // ook opgepakt. Producten zonder crème (dispenser-only, lekbakje, sleutel)
+  // matchen niks en tellen als 0.
+  const extractLiters = (name) => {
+    if (!name) return 0;
+    if (/(?:^|\s)(?:1\/2|½)\s*liter/i.test(name)) return 0.5;
+    const literMatch = name.match(/(\d+(?:[.,]\d+)?)\s*liter/i);
+    if (literMatch) return parseFloat(literMatch[1].replace(",", "."));
+    const mlMatch = name.match(/(\d+(?:[.,]\d+)?)\s*ml\b/i);
+    if (mlMatch) return parseFloat(mlMatch[1].replace(",", ".")) / 1000;
+    return 0;
+  };
+
+  // Bepaal SPF-categorie: eerst uit article.category (schoonste bron),
+  // anders uit SKU/name-tekens.
+  const detectSpf = (article, name) => {
+    if (article?.category === "spf30") return "F30";
+    if (article?.category === "spf50") return "F50";
+    const haystack = `${article?.sku || ""} ${article?.name || ""} ${name || ""}`;
+    if (/(?:factor|spf|f)\s*30\b/i.test(haystack)) return "F30";
+    if (/(?:factor|spf|f)\s*50\b/i.test(haystack)) return "F50";
+    return null;
+  };
+
+  let litersF30 = 0;
+  let litersF50 = 0;
+  for (const item of lineItems) {
+    const article = item.sku ? articlesBySku[item.sku] : null;
+    const literPerUnit = extractLiters(article?.name || item.name);
+    if (literPerUnit === 0) continue;
+    const totalLiters = literPerUnit * (item.quantity || 0);
+    const spf = detectSpf(article, item.name);
+    if (spf === "F30") litersF30 += totalLiters;
+    else if (spf === "F50") litersF50 += totalLiters;
+  }
+  const keerInsmeren = Math.round(litersF30 * 850 + litersF50 * 450);
+  const keerInsmerenLabel = new Intl.NumberFormat("nl-NL").format(keerInsmeren);
+
+  // Patch rationale:
+  //  1) {{keer_insmeren}} placeholder → correct getal
+  //  2) losse getallen naast "keer insmeren" (regex) → correct getal
+  const patchRationale = (raw) => {
+    if (!raw) return raw;
+    let out = String(raw).replace(/<\/?[^>]+>/g, "").trim();
+    if (out.includes("{{keer_insmeren}}")) {
+      out = out.replace(/\{\{keer_insmeren\}\}/g, keerInsmerenLabel);
+    }
+    if (keerInsmeren > 0) {
+      out = out.replace(
+        /(?:ongeveer|circa|ca\.?|zo'?n|zowat)?\s*\d[\d.,]*\s+keer\s+insmeren/gi,
+        `ongeveer ${keerInsmerenLabel} keer insmeren`
+      );
+    }
+    return out;
+  };
+  const patchedRationale = patchRationale(quote_state.rationale);
+
   // Insert quote
   const { data: newQuote, error: quoteErr } = await supabase
     .from("quotes")
@@ -121,13 +194,9 @@ export async function POST(request) {
       contact_email: sender?.email || null,
       contact_phone: sender?.phone || null,
       language: lead.language || "nl",
-      // Rationale wordt als PLATTE TEKST opgeslagen — de medewerker bewerkt 'm in
-      // een textarea (HipHotQuoteBuilder), en de offerte-template doet de wrap
-      // naar HTML voor de klant-zichtbare versie. Strip eventuele HTML-tags die
-      // Claude alsnog toevoegt zodat de medewerker nooit "<p>" zichtbaar krijgt.
-      remarks_html: quote_state.rationale
-        ? String(quote_state.rationale).replace(/<\/?[^>]+>/g, "").trim()
-        : null,
+      // Rationale komt als platte tekst binnen (server-side gepatcht op HTML-tags
+      // + 'keer insmeren'-getal). De offerte-template wrapt zelf in HTML.
+      remarks_html: patchedRationale || null,
       status: "concept",
     })
     .select()
@@ -140,17 +209,7 @@ export async function POST(request) {
     );
   }
 
-  // Enrich line items met article_id + wc_product_id via hiphot_articles lookup op SKU
-  const skus = lineItems.map((l) => l.sku).filter(Boolean);
-  let articlesBySku = {};
-  if (skus.length > 0) {
-    const { data: articles } = await supabase
-      .from("hiphot_articles")
-      .select("id, sku, wc_product_id, inkoop_price")
-      .in("sku", skus);
-    articlesBySku = Object.fromEntries((articles || []).map((a) => [a.sku, a]));
-  }
-
+  // Enrich line items met article_id + wc_product_id via de al opgehaalde articlesBySku
   const lineItemsToInsert = lineItems.map((item) => {
     const article = item.sku ? articlesBySku[item.sku] : null;
     return {

@@ -18,7 +18,7 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { calculateLineTotals } from "@/lib/hiphot-pricing";
+import { calculateLineTotals, getShippingCost } from "@/lib/hiphot-pricing";
 
 /**
  * Format a number as Euro string: € 12,50
@@ -158,7 +158,7 @@ function SortableRow({ item, index, onFieldChange, onRemove }) {
   );
 }
 
-export default function LineItemsTable({ items = [], onChange, onRemove }) {
+export default function LineItemsTable({ items = [], onChange, onRemove, country = "NL" }) {
   // Calculate totals for each line using the shared pricing lib
   const enrichedItems = useMemo(() => calculateLineTotals(items), [items]);
 
@@ -176,8 +176,11 @@ export default function LineItemsTable({ items = [], onChange, onRemove }) {
       netto += item.line_total || 0;
     });
 
-    return { quantity, bruto, korting, netto };
-  }, [enrichedItems]);
+    // Verzendkosten voor klant — NL/BE €3,99, overige EU €4,95, gratis vanaf €199
+    const shipping = getShippingCost(country, netto);
+    const totaalMetVerzending = netto + shipping;
+    return { quantity, bruto, korting, netto, shipping, totaalMetVerzending };
+  }, [enrichedItems, country]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -250,7 +253,7 @@ export default function LineItemsTable({ items = [], onChange, onRemove }) {
             <tr className="border-t-2 border-gray-300 font-semibold text-sm">
               <td className="py-2 px-1" />
               <td className="py-2 pl-1 pr-2 text-gray-600">
-                Totaal
+                Subtotaal
                 <div className="text-[10px] font-normal text-gray-400">
                   Bruto {euro(totals.bruto)} · Korting {euro(totals.korting)}
                 </div>
@@ -259,6 +262,34 @@ export default function LineItemsTable({ items = [], onChange, onRemove }) {
               <td className="py-2 px-1" />
               <td className="py-2 px-1" />
               <td className="py-2 px-1 text-right text-gray-800">{euro(totals.netto)}</td>
+              <td className="py-2 px-1" />
+              <td className="py-2 px-1" />
+            </tr>
+            <tr className="text-xs text-gray-500">
+              <td className="py-1 px-1" />
+              <td className="py-1 pl-1 pr-2">
+                Verzending{" "}
+                <span className="text-[10px] text-gray-400">
+                  ({country === "NL" || country === "BE" ? "NL/BE" : "EU"}
+                  {totals.shipping === 0 ? " · vanaf €199 gratis" : ""})
+                </span>
+              </td>
+              <td className="py-1 px-1" />
+              <td className="py-1 px-1" />
+              <td className="py-1 px-1" />
+              <td className="py-1 px-1 text-right">
+                {totals.shipping === 0 ? <em className="text-gray-400">Gratis</em> : euro(totals.shipping)}
+              </td>
+              <td className="py-1 px-1" />
+              <td className="py-1 px-1" />
+            </tr>
+            <tr className="border-t border-gray-200 font-semibold text-sm">
+              <td className="py-2 px-1" />
+              <td className="py-2 pl-1 pr-2 text-gray-800">Totaal excl. BTW</td>
+              <td className="py-2 px-1" />
+              <td className="py-2 px-1" />
+              <td className="py-2 px-1" />
+              <td className="py-2 px-1 text-right text-gray-900">{euro(totals.totaalMetVerzending)}</td>
               <td className="py-2 px-1" />
               <td className="py-2 px-1" />
             </tr>

@@ -526,6 +526,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
                     items={enrichedItems}
                     onChange={setItems}
                     onRemove={handleRemoveItem}
+                    country={shippingCountry}
                   />
                 )}
               </div>

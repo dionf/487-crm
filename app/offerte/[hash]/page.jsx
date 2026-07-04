@@ -94,7 +94,9 @@ export default async function PublicQuotePage({ params }) {
         .single();
 
       const useFulfillment = quote.margin_data?.useFulfillment ?? true;
-      const totals = calculateOrderTotals(enriched, settings || {}, useFulfillment);
+      const shippingCountry =
+        quote.leads?.delivery_country || quote.leads?.billing_country || "NL";
+      const totals = calculateOrderTotals(enriched, settings || {}, useFulfillment, shippingCountry);
       const lang = quote.language || "nl";
       const introHtml = settings?.intro_html?.[lang] || settings?.intro_html?.nl || "";
       const termsHtml = settings?.terms_html?.[lang] || settings?.terms_html?.nl || "";

@@ -163,9 +163,10 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Computed totals
+  // Computed totals — landcode bepaalt verzendtarief (NL/BE €3,99, overige EU €4,95)
+  const shippingCountry = lead?.delivery_country || lead?.billing_country || "NL";
   const enrichedItems = calculateLineTotals(items);
-  const orderTotals = calculateOrderTotals(items, settings || {}, useFulfillment);
+  const orderTotals = calculateOrderTotals(items, settings || {}, useFulfillment, shippingCountry);
 
   async function handleSave(publish = false) {
     if (items.length === 0) {
@@ -542,7 +543,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
                     <p className="font-semibold text-sm mb-1">{branchText.title}</p>
                   )}
                   <div
-                    className="text-sm text-gray-600 leading-relaxed"
+                    className="prose prose-sm max-w-none text-sm text-gray-600 leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: branchText.body || "" }}
                   />
                 </div>

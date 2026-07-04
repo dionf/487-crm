@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
+import { getShippingCost } from "@/lib/hiphot-pricing";
 
 export const dynamic = "force-dynamic";
 // Lesson-extraction doet een Claude call — bump timeout zodat die kan afronden
@@ -33,7 +34,7 @@ export async function POST(request) {
   // Verify lead bestaat en hoort bij tenant
   const { data: lead } = await supabase
     .from("leads")
-    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, phone, language")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, phone, language, delivery_country, billing_country")
     .eq("id", lead_id)
     .single();
 
@@ -53,7 +54,6 @@ export async function POST(request) {
   }));
 
   const discountPct = Number(quote_state.discount_pct) || 0;
-  const shippingCost = Number(quote_state.shipping_cost) || 0;
 
   let subtotaalBrutoVerkoop = 0;
   for (const item of lineItems) {
@@ -64,6 +64,13 @@ export async function POST(request) {
   // Globale korting
   const globalDiscountAmount = Number((subtotaalBrutoVerkoop * (discountPct / 100)).toFixed(2));
   const nettoVerkoop = Number((subtotaalBrutoVerkoop - globalDiscountAmount).toFixed(2));
+
+  // Verzendkosten deterministisch bepalen o.b.v. leverland — Claude wat 'ie ook
+  // meestuurt (shipping_cost in quote_state) wordt genegeerd. NL/BE €3,99,
+  // overige EU €4,95, vanaf €199 subtotaal gratis.
+  const shippingCountry = lead.delivery_country || lead.billing_country || "NL";
+  const shippingCost = getShippingCost(shippingCountry, subtotaalBrutoVerkoop);
+
   const amountExclVat = Number((nettoVerkoop + shippingCost).toFixed(2));
 
   // Als er een korting is, pas die pro rata toe op de line_total van elke regel

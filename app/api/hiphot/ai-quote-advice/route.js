@@ -45,7 +45,7 @@ export async function POST(request) {
   // Fetch lead + gebruikersselectie
   const { data: lead } = await supabase
     .from("leads")
-    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, email, phone")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
     .eq("id", resolvedLeadId)
     .single();
 
@@ -84,7 +84,7 @@ export async function POST(request) {
       contact_last_name: lead.contact_last_name,
       industry: lead.industry,
       city: lead.city || lead.billing_city,
-      country: lead.billing_country || "NL",
+      country: lead.delivery_country || lead.billing_country || "NL",
       phone: lead.phone,
     },
     notes: (notesRes.data || []).map((n) => ({

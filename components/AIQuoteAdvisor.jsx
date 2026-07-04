@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Sparkles, Send, Loader2, CheckCircle2, AlertTriangle, Bot, User, Trash2, Plus, ChevronDown, ChevronRight, FileText, MessageSquare, Mail, Info, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { getShippingCost } from "@/lib/hiphot-pricing";
 
 /**
  * AI offerte-advies modal.
@@ -254,7 +255,8 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
 
   if (!open) return null;
 
-  const { subtotaalBruto, discountAmount, nettoVerkoop, totaalExcl, btw, totaalIncl } = calculateTotals(quoteState);
+  const shippingCountry = context?.lead?.country || "NL";
+  const { subtotaalBruto, discountAmount, nettoVerkoop, shipping, totaalExcl, btw, totaalIncl } = calculateTotals(quoteState, shippingCountry);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !committing && !loading && onClose()}>
@@ -493,10 +495,16 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                               <td className="px-3 py-2 text-right text-gray-800 font-medium">− €{discountAmount.toFixed(2)}</td>
                             </tr>
                           )}
-                          {quoteState.shipping_cost > 0 && (
+                          {shipping > 0 && (
                             <tr className="bg-gray-50 border-t border-gray-200">
                               <td className="px-3 py-2 text-gray-600" colSpan={4}>Verzending</td>
-                              <td className="px-3 py-2 text-right text-gray-800 font-medium">€{Number(quoteState.shipping_cost).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-gray-800 font-medium">€{shipping.toFixed(2)}</td>
+                            </tr>
+                          )}
+                          {shipping === 0 && subtotaalBruto > 0 && (
+                            <tr className="bg-gray-50 border-t border-gray-200">
+                              <td className="px-3 py-2 text-gray-500 text-xs italic" colSpan={4}>Verzending</td>
+                              <td className="px-3 py-2 text-right text-gray-500 text-xs italic">Gratis</td>
                             </tr>
                           )}
                           <tr className="bg-gray-50 border-t border-gray-200">
@@ -683,9 +691,9 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
   );
 }
 
-function calculateTotals(quote) {
+function calculateTotals(quote, country = "NL") {
   if (!quote || !Array.isArray(quote.line_items)) {
-    return { subtotaalBruto: 0, discountAmount: 0, nettoVerkoop: 0, totaalExcl: 0, btw: 0, totaalIncl: 0 };
+    return { subtotaalBruto: 0, discountAmount: 0, nettoVerkoop: 0, shipping: 0, totaalExcl: 0, btw: 0, totaalIncl: 0 };
   }
   const subtotaalBruto = quote.line_items.reduce(
     (sum, i) => sum + Number(i.unit_price || 0) * Number(i.quantity || 0),
@@ -694,9 +702,11 @@ function calculateTotals(quote) {
   const discountPct = Number(quote.discount_pct) || 0;
   const discountAmount = Number((subtotaalBruto * (discountPct / 100)).toFixed(2));
   const nettoVerkoop = Number((subtotaalBruto - discountAmount).toFixed(2));
-  const shipping = Number(quote.shipping_cost) || 0;
+  // Verzendkosten deterministisch — zelfde regel als de commit-route server-side.
+  // Claude's quote.shipping_cost wordt genegeerd (die zet 't altijd op 0).
+  const shipping = getShippingCost(country, subtotaalBruto);
   const totaalExcl = Number((nettoVerkoop + shipping).toFixed(2));
   const btw = Number((totaalExcl * 0.21).toFixed(2));
   const totaalIncl = Number((totaalExcl + btw).toFixed(2));
-  return { subtotaalBruto, discountAmount, nettoVerkoop, totaalExcl, btw, totaalIncl };
+  return { subtotaalBruto, discountAmount, nettoVerkoop, shipping, totaalExcl, btw, totaalIncl };
 }

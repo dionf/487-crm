@@ -25,7 +25,7 @@ export async function GET(request) {
   // Verify lead bestaat en hoort bij tenant
   const { data: lead, error: leadErr } = await supabase
     .from("leads")
-    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, email, phone")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
     .eq("id", leadId)
     .single();
 
@@ -89,7 +89,7 @@ export async function GET(request) {
       contact_last_name: lead.contact_last_name,
       industry: lead.industry,
       city: lead.city || lead.billing_city,
-      country: lead.billing_country || "NL",
+      country: lead.delivery_country || lead.billing_country || "NL",
       email: lead.email,
       phone: lead.phone,
     },

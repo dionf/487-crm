@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 const ALLOWED_ORIGINS = [
   "https://hiphot.nl",
   "https://www.hiphot.nl",
+  "https://hiphot.eu",
+  "https://www.hiphot.eu",
   "http://localhost:3000",
   "http://localhost:3001",
 ];

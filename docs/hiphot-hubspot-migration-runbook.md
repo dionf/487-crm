@@ -98,9 +98,9 @@ HUBSPOT_ACCESS_TOKEN=... npm run export:hubspot:hiphot -- \
   --out=/tmp/hiphot-hubspot-api-export
 ```
 
-De exporter schrijft `hubspot-companies.xlsx`, `hubspot-contacts.xlsx`, `hubspot-deals.xlsx`, `hubspot-notes.xlsx`, losse lijstbestanden en een `manifest.json` met het exacte dry-run importcommando.
+De exporter schrijft `hubspot-companies.xlsx`, `hubspot-contacts.xlsx`, `hubspot-deals.xlsx`, `hubspot-notes.xlsx`, losse lijstbestanden voor productsegmenten en een `manifest.json` met het exacte dry-run importcommando. Het segment Algemene nieuwsbrief wordt afgeleid uit de officiële HubSpot subscription status.
 
-Voor een volledige marketingexport moet de HubSpot app naast CRM-readrechten ook `crm.lists.read` en `communication_preferences.statuses.batch.read` hebben.
+Voor een volledige marketingexport moet de HubSpot app naast CRM-readrechten ook `crm.lists.read` en `communication_preferences.read` hebben. Als `communication_preferences.statuses.batch.read` beschikbaar is gebruikt de exporter de nieuwere batchroute; anders valt hij terug op de v3-statusroute per e-mailadres.
 
 ## Fase 1: export-audit
 

@@ -94,14 +94,16 @@ HUBSPOT_ACCESS_TOKEN=... npm run export:hubspot:hiphot -- \
 
 Daarna staat in `/tmp/hiphot-hubspot-api-export/manifest.json` het exacte dry-run importcommando.
 
+De API-exporter haalt Factor 30 en Factor 50 uit de HubSpot lijsten `SPF30 kopers NL` en `SPF50 kopers NL`. Het segment Algemene nieuwsbrief wordt afgeleid uit de officiële subscription status `Marketing Information: SUBSCRIBED`, zodat er geen onduidelijke algemene lijstnaam hoeft te worden gegokt.
+
 Benodigde HubSpot scopes voor een volledige API-export:
 
 - CRM objecten: bedrijven, contacten, deals en notities lezen.
 - Associations lezen, zodat contacten/deals/notities aan bedrijven gekoppeld worden.
 - `crm.lists.read` voor Factor 30, Factor 50 en Algemene nieuwsbrief.
-- `communication_preferences.statuses.batch.read` voor de officiële e-mail subscription status.
+- `communication_preferences.read` voor de officiële e-mail subscription status. Als `communication_preferences.statuses.batch.read` beschikbaar is gebruikt de exporter de nieuwere batchroute; anders valt hij terug op de v3-statusroute per e-mailadres.
 
-Zonder de laatste twee scopes maakt de exporter wel bedrijven/contacten/deals/notities, maar geeft hij waarschuwingen voor marketinglijsten en nieuwsbriefstatussen.
+Zonder lijst- of communicatievoorkeur-scope maakt de exporter wel bedrijven/contacten/deals/notities, maar geeft hij waarschuwingen voor marketinglijsten en nieuwsbriefstatussen.
 
 ## Dry-run
 

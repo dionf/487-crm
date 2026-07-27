@@ -48,6 +48,7 @@ const contactsPath = argValue("--contacts");
 const listsPath = argValue("--lists") || argValue("--lists-dir");
 const listArgs = args.filter((arg) => arg.startsWith("--list=")).map((arg) => arg.slice("--list=".length));
 const reportPath = argValue("--report") || DEFAULT_REPORT;
+const markdownReportPath = argValue("--report-md");
 const limit = Number(argValue("--limit") || 0);
 
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
@@ -317,6 +318,152 @@ function firstNonEmpty(...values) {
 
 function compactObject(object) {
   return Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
+}
+
+function segmentLabel(segmentId) {
+  return HIPHOT_MARKETING_SEGMENTS.find((segment) => segment.id === segmentId)?.label || segmentId;
+}
+
+function formatCount(value) {
+  return Number(value || 0).toLocaleString("nl-NL");
+}
+
+function markdownTable(headers, rows) {
+  if (!rows.length) return "_Geen gegevens._";
+  return [
+    `| ${headers.join(" | ")} |`,
+    `| ${headers.map(() => "---").join(" | ")} |`,
+    ...rows.map((row) => `| ${row.map((cell) => String(cell ?? "").replace(/\|/g, "\\|")).join(" | ")} |`),
+  ].join("\n");
+}
+
+function writeReports(report) {
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  if (markdownReportPath) {
+    fs.mkdirSync(path.dirname(markdownReportPath), { recursive: true });
+    fs.writeFileSync(markdownReportPath, renderMarkdownReport(report));
+  }
+}
+
+function renderMarkdownReport(report) {
+  const lines = [
+    `# HipHot HubSpot migratierapport`,
+    "",
+    `Datum: ${new Date().toISOString().slice(0, 10)}`,
+    `Modus: ${report.mode}`,
+    `Tenant: ${report.tenant}`,
+    "",
+  ];
+
+  if (report.mode === "audit") {
+    lines.push(
+      "## Export-audit",
+      "",
+      `Bedrijvenrijen: ${formatCount(report.input.companyRows)}`,
+      `Contactrijen: ${formatCount(report.input.contactRows)}`,
+      `Losse lijstbestanden: ${formatCount(report.input.listFiles)}`,
+      `Losse lijstrijen: ${formatCount(report.input.listRows)}`,
+      "",
+      "## Marketingkolommen",
+      "",
+      markdownTable(
+        ["Kolom", "Gevulde rijen", "Voorbeelden"],
+        report.contacts.marketing.marketingColumns.map((column) => [
+          column.name,
+          formatCount(column.nonEmpty),
+          column.samples.join(", "),
+        ])
+      ),
+      "",
+      "## Herkende segmenten in contactexport",
+      "",
+      markdownTable(
+        ["Segment", "Aantal hits"],
+        report.contacts.marketing.recognizedSegments.map((item) => [
+          segmentLabel(item.segmentId),
+          formatCount(item.count),
+        ])
+      ),
+      "",
+      "## Losse lijstexports",
+      "",
+      markdownTable(
+        ["Bestand", "Segment", "Rijen", "Actie"],
+        report.lists.map((item) => [
+          item.fileName,
+          item.segmentLabel || "Onbekend",
+          formatCount(item.rows),
+          item.needsManualMapping ? "Mapping controleren" : "OK",
+        ])
+      ),
+      "",
+      "## Mogelijk nog te mappen waarden",
+      "",
+      markdownTable(
+        ["Waarde", "Aantal"],
+        report.contacts.marketing.possibleUnmappedSegmentValues.slice(0, 30).map((item) => [
+          item.value,
+          formatCount(item.count),
+        ])
+      )
+    );
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push(
+    "## Samenvatting",
+    "",
+    `Bestaande HipHot bedrijven in CRM: ${formatCount(report.existing.leads)}`,
+    `Bestaande HipHot contactpersonen in CRM: ${formatCount(report.existing.contacts)}`,
+    `Nieuwe bedrijven gepland: ${formatCount(report.planned.insertLeads)}`,
+    `Bestaande bedrijven bijwerken: ${formatCount(report.planned.updateLeads)}`,
+    `Contactpersonen uit HubSpot: ${formatCount(report.planned.contactsSeen)}`,
+    `Contactpersonen uit losse lijsten: ${formatCount(report.planned.listContactsSeen)}`,
+    `Bedrijven met marketing toegestaan: ${formatCount(report.planned.marketingAllowedCompanies)}`,
+    `Bedrijven in Factor 30: ${formatCount(report.planned.factor30Companies)}`,
+    `Bedrijven in Factor 50: ${formatCount(report.planned.factor50Companies)}`,
+    "",
+    "## Voorbeelden",
+    "",
+    markdownTable(
+      ["Actie", "Bedrijf", "Marketing", "Segmenten", "Contacten"],
+      report.samples.map((sample) => [
+        sample.action === "insert_lead" ? "Nieuw" : "Bijwerken",
+        sample.company,
+        sample.marketingConsent ? "Ja" : "Nee",
+        (sample.marketingSegments || []).map(segmentLabel).join(", "),
+        sample.contacts.map((contact) => contact.email || contact.name).join(", "),
+      ])
+    ),
+    "",
+    "## Waarschuwingen",
+    "",
+    `Zonder bedrijfsnaam: ${formatCount(report.warnings.noCompanyName)}`,
+    `Contacten met onbekende marketingstatus: ${formatCount(report.warnings.unknownMarketingStatusContacts)}`,
+    `Contacten zonder herkend segment: ${formatCount(report.warnings.noRecognizedSegmentContacts)}`,
+    `Lijstbestanden zonder segmentmapping: ${(report.warnings.listFilesWithoutSegmentMapping || []).join(", ") || "geen"}`,
+    ""
+  );
+
+  if (report.commit) {
+    lines.push(
+      "## Importresultaat",
+      "",
+      `Gelukt: ${formatCount(report.commit.committed)}`,
+      `Mislukt: ${formatCount(report.commit.failed)}`,
+      ""
+    );
+  } else {
+    lines.push(
+      "## Advies",
+      "",
+      "Dit was een dry-run. Controleer de aantallen en waarschuwingen voordat de import met `--commit` wordt uitgevoerd.",
+      ""
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
 }
 
 function cleanRawRow(row) {
@@ -887,6 +1034,7 @@ async function main() {
   console.log(`Lijstmap: ${listsPath || "(niet opgegeven)"}`);
   if (listArgs.length) console.log(`Losse lijstbestanden: ${listArgs.length}`);
   console.log(`Rapport: ${reportPath}\n`);
+  if (markdownReportPath) console.log(`Leesbaar rapport: ${markdownReportPath}`);
 
   if (!contactsPath && !companiesPath && !listsPath && listArgs.length === 0) {
     throw new Error("Geef minimaal --contacts=..., --companies=..., --lists=... of --list=... mee.");
@@ -898,8 +1046,7 @@ async function main() {
 
   if (AUDIT) {
     const report = buildAuditReport({ companyRows, contactRows, listExports });
-    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    writeReports(report);
     console.log(`Bedrijfskolommen: ${report.companies.columns.length}`);
     console.log(`Contactkolommen: ${report.contacts.columns.length}`);
     console.log(`Marketingkolommen gevonden: ${report.contacts.marketing.marketingColumns.length}`);
@@ -996,8 +1143,7 @@ async function main() {
     report.commit = { committed, failed };
   }
 
-  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
-  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  writeReports(report);
 
   console.log(`Bedrijven/groepen: ${report.planned.groups}`);
   console.log(`Nieuwe leads: ${report.planned.insertLeads}`);
@@ -1012,6 +1158,7 @@ async function main() {
   } else {
     console.log("Geen wijzigingen gedaan. Gebruik --commit na controle van het rapport.");
   }
+  if (markdownReportPath) console.log(`Leesbaar rapport geschreven: ${markdownReportPath}`);
 }
 
 main().catch((error) => {

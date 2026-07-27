@@ -83,6 +83,26 @@ Of geef per bestand expliciet aan welk CRM-segment het is:
 
 De lijstexports mogen minimaal een e-mailadres, HubSpot Contact ID of Associated Company ID bevatten. Als dezelfde contactpersoon ook in de gewone contact-export zit, worden de gegevens samengevoegd.
 
+## API-export uit HubSpot
+
+Als er een HubSpot Private App token beschikbaar is, kunnen de bestanden ook read-only via de API worden gemaakt:
+
+```bash
+HUBSPOT_ACCESS_TOKEN=... npm run export:hubspot:hiphot -- \
+  --out=/tmp/hiphot-hubspot-api-export
+```
+
+Daarna staat in `/tmp/hiphot-hubspot-api-export/manifest.json` het exacte dry-run importcommando.
+
+Benodigde HubSpot scopes voor een volledige API-export:
+
+- CRM objecten: bedrijven, contacten, deals en notities lezen.
+- Associations lezen, zodat contacten/deals/notities aan bedrijven gekoppeld worden.
+- `crm.lists.read` voor Factor 30, Factor 50 en Algemene nieuwsbrief.
+- `communication_preferences.statuses.batch.read` voor de officiële e-mail subscription status.
+
+Zonder de laatste twee scopes maakt de exporter wel bedrijven/contacten/deals/notities, maar geeft hij waarschuwingen voor marketinglijsten en nieuwsbriefstatussen.
+
 ## Dry-run
 
 Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en heeft geen CRM-toegang nodig:

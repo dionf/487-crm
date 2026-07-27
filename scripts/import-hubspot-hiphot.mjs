@@ -2,7 +2,7 @@
 /**
  * HubSpot -> HipHot CRM import.
  *
- * Default is a dry-run. Use --commit only after reviewing the report.
+ * Default is a dry-run. Use --commit only with --approved-report after review.
  *
  * Examples:
  *   node scripts/import-hubspot-hiphot.mjs \
@@ -10,7 +10,10 @@
  *     --contacts=/path/hubspot-contacts.xlsx \
  *     --report=/tmp/hiphot-hubspot-import-report.json
  *
- *   node scripts/import-hubspot-hiphot.mjs --contacts=/path/contacts.csv --commit
+ *   node scripts/import-hubspot-hiphot.mjs \
+ *     --contacts=/path/contacts.csv \
+ *     --approved-report=/tmp/approved-dry-run.json \
+ *     --commit
  */
 
 import fs from "node:fs";
@@ -52,6 +55,7 @@ const listsPath = argValue("--lists") || argValue("--lists-dir");
 const listArgs = args.filter((arg) => arg.startsWith("--list=")).map((arg) => arg.slice("--list=".length));
 const reportPath = argValue("--report") || DEFAULT_REPORT;
 const markdownReportPath = argValue("--report-md");
+const approvedReportPath = argValue("--approved-report") || argValue("--approved-dry-run");
 const limit = Number(argValue("--limit") || 0);
 
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
@@ -365,6 +369,34 @@ function writeReports(report) {
   if (markdownReportPath) {
     fs.mkdirSync(path.dirname(markdownReportPath), { recursive: true });
     fs.writeFileSync(markdownReportPath, renderMarkdownReport(report));
+  }
+}
+
+function comparableImportSignature(report) {
+  return {
+    tenant: report.tenant,
+    input: report.input,
+    planned: report.planned,
+    warnings: report.warnings,
+  };
+}
+
+function assertApprovedDryRun(currentReport) {
+  if (DRY || AUDIT) return;
+  if (!approvedReportPath) {
+    throw new Error("Live import vereist --approved-report=/pad/naar/goedgekeurde-dry-run.json.");
+  }
+  if (!fs.existsSync(approvedReportPath)) {
+    throw new Error(`Goedgekeurde dry-run niet gevonden: ${approvedReportPath}`);
+  }
+  const approved = JSON.parse(fs.readFileSync(approvedReportPath, "utf8"));
+  if (approved.mode !== "dry-run" || approved.tenant !== TENANT) {
+    throw new Error("Approved report moet een dry-run rapport voor tenant hiphot zijn.");
+  }
+  const approvedSignature = JSON.stringify(comparableImportSignature(approved));
+  const currentSignature = JSON.stringify(comparableImportSignature(currentReport));
+  if (approvedSignature !== currentSignature) {
+    throw new Error("Huidige importplanning wijkt af van het approved dry-run rapport. Draai en beoordeel eerst opnieuw een dry-run.");
   }
 }
 
@@ -1250,6 +1282,7 @@ async function main() {
   if (listArgs.length) console.log(`Losse lijstbestanden: ${listArgs.length}`);
   console.log(`Rapport: ${reportPath}\n`);
   if (markdownReportPath) console.log(`Leesbaar rapport: ${markdownReportPath}`);
+  if (approvedReportPath) console.log(`Goedgekeurde dry-run: ${approvedReportPath}`);
 
   if (!contactsPath && !companiesPath && !dealsPath && !notesPath && !listsPath && listArgs.length === 0) {
     throw new Error("Geef minimaal --contacts=..., --companies=..., --deals=..., --notes=..., --lists=... of --list=... mee.");
@@ -1364,6 +1397,7 @@ async function main() {
   };
 
   if (!DRY) {
+    assertApprovedDryRun(report);
     let committed = 0;
     let failed = 0;
     let createdAssociatedNotes = 0;

@@ -163,6 +163,7 @@ npm run import:hubspot:hiphot -- \
   --deals=/pad/naar/hubspot-deals.xlsx \
   --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
+  --approved-report=/tmp/hiphot-hubspot-import-dry-run.json \
   --report=/tmp/hiphot-hubspot-import-result.json \
   --report-md=/tmp/hiphot-hubspot-import-result.md \
   --commit
@@ -179,6 +180,7 @@ Importgedrag:
 - HubSpot deals en notities worden als interne CRM-notities onder het bedrijf gezet.
 - HubSpot deal/notitie-notities krijgen een import-key, zodat opnieuw draaien geen dubbele historie-notities hoort te maken.
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
+- Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning afwijkt, stopt de import.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

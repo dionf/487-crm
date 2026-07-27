@@ -45,6 +45,8 @@ const DRY = args.includes("--dry-run") || !args.includes("--commit");
 const OVERWRITE = args.includes("--overwrite");
 const companiesPath = argValue("--companies");
 const contactsPath = argValue("--contacts");
+const listsPath = argValue("--lists") || argValue("--lists-dir");
+const listArgs = args.filter((arg) => arg.startsWith("--list=")).map((arg) => arg.slice("--list=".length));
 const reportPath = argValue("--report") || DEFAULT_REPORT;
 const limit = Number(argValue("--limit") || 0);
 
@@ -85,6 +87,51 @@ function readRows(filePath) {
   const workbook = xlsx.readFile(filePath, { cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   return xlsx.utils.sheet_to_json(sheet, { defval: "", raw: false });
+}
+
+function readableDataFile(filePath) {
+  return /\.(csv|xlsx|xls)$/i.test(filePath) && !path.basename(filePath).startsWith(".");
+}
+
+function segmentIdFromText(value) {
+  const matches = segmentMatchesFor(value);
+  return matches.find((id) => MARKETING_SEGMENT_IDS.has(id)) || null;
+}
+
+function readListExports() {
+  const specs = [];
+  if (listsPath) {
+    if (!fs.existsSync(listsPath)) {
+      throw new Error(`Lijstmap niet gevonden: ${listsPath}`);
+    }
+    for (const fileName of fs.readdirSync(listsPath)) {
+      const filePath = path.join(listsPath, fileName);
+      if (fs.statSync(filePath).isFile() && readableDataFile(filePath)) {
+        specs.push({ filePath, segmentId: segmentIdFromText(fileName), source: "directory" });
+      }
+    }
+  }
+  for (const spec of listArgs) {
+    const separator = spec.indexOf(":");
+    const firstPart = separator > 0 ? spec.slice(0, separator) : "";
+    const filePath = separator > 0 && MARKETING_SEGMENT_IDS.has(firstPart)
+      ? spec.slice(separator + 1)
+      : spec;
+    const segmentId = separator > 0 && MARKETING_SEGMENT_IDS.has(firstPart)
+      ? firstPart
+      : segmentIdFromText(path.basename(filePath));
+    specs.push({ filePath, segmentId, source: "argument" });
+  }
+
+  return specs.map((spec) => {
+    const rows = readRows(spec.filePath);
+    return {
+      ...spec,
+      rows,
+      fileName: path.basename(spec.filePath),
+      segmentLabel: HIPHOT_MARKETING_SEGMENTS.find((segment) => segment.id === spec.segmentId)?.label || null,
+    };
+  });
 }
 
 function normalizeKey(key) {
@@ -228,15 +275,19 @@ function auditMarketingValues(rows) {
   };
 }
 
-function buildAuditReport({ companyRows, contactRows }) {
+function buildAuditReport({ companyRows, contactRows, listExports }) {
   return {
     mode: "audit",
     tenant: TENANT,
     input: {
       companiesPath,
       contactsPath,
+      listsPath,
+      listArgs,
       companyRows: companyRows.length,
       contactRows: contactRows.length,
+      listFiles: listExports.length,
+      listRows: listExports.reduce((sum, listExport) => sum + listExport.rows.length, 0),
     },
     companies: {
       columns: columnSummary(companyRows),
@@ -245,6 +296,17 @@ function buildAuditReport({ companyRows, contactRows }) {
       columns: columnSummary(contactRows),
       marketing: auditMarketingValues(contactRows),
     },
+    lists: listExports.map((listExport) => ({
+      filePath: listExport.filePath,
+      fileName: listExport.fileName,
+      rows: listExport.rows.length,
+      segmentId: listExport.segmentId,
+      segmentLabel: listExport.segmentLabel,
+      source: listExport.source,
+      columns: columnSummary(listExport.rows),
+      marketing: auditMarketingValues(listExport.rows),
+      needsManualMapping: !listExport.segmentId,
+    })),
     expectedSegments: HIPHOT_MARKETING_SEGMENTS,
   };
 }
@@ -358,6 +420,117 @@ function parseContact(row) {
     marketing: parseMarketing(row),
     raw: row,
   };
+}
+
+function parseListMember(listExport, row) {
+  const firstName = text(get(row, ["First name", "Voornaam", "First Name"]));
+  const lastName = text(get(row, ["Last name", "Achternaam", "Last Name"]));
+  const email = normalizeEmail(get(row, ["Email", "E-mail", "E-mailadres"]));
+  const fullName = text(firstNonEmpty(
+    get(row, ["Name", "Full name", "Contact name", "Naam"]),
+    `${firstName} ${lastName}`.trim()
+  ));
+  const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
+  const hubspotContactId = text(get(row, [
+    "Record ID",
+    "Contact ID",
+    "HubSpot Contact ID",
+    "hs_object_id",
+    "Contact record ID",
+  ]));
+  const associatedCompanyId = text(get(row, [
+    "Associated Company ID",
+    "Associated company IDs",
+    "Company ID",
+    "Primary associated company ID",
+    "Associated company record ID",
+  ])).split(/[;,]/)[0]?.trim() || "";
+
+  return {
+    hubspotContactId,
+    associatedCompanyId,
+    companyName,
+    domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
+    email,
+    phone: normalizePhone(get(row, ["Phone number", "Phone", "Mobile phone number", "Telefoon", "Mobiel"])),
+    role: text(get(row, ["Job title", "Functie", "Role", "Rol"])) || null,
+    firstName,
+    lastName,
+    fullName,
+    marketing: {
+      status: "subscribed",
+      consent: true,
+      hardBounce: false,
+      unsubscribedAt: null,
+      consentDate: null,
+      source: `HubSpot list export: ${listExport.fileName}`,
+      rawStatus: listExport.segmentLabel || listExport.fileName,
+      segments: [listExport.segmentId].filter(Boolean),
+    },
+    raw: row,
+  };
+}
+
+function mergeMarketingRecords(a, b) {
+  const priority = ["hard_bounce", "unsubscribed", "subscribed", "non_marketing", "unknown"];
+  const statuses = [a.status, b.status].filter(Boolean);
+  const status = priority.find((candidate) => statuses.includes(candidate)) || "unknown";
+  const subscribedSource = [a, b].find((item) => item.status === "subscribed");
+  const unsubscribedSource = [a, b].find((item) => item.status === "unsubscribed");
+  return {
+    status,
+    consent: status === "subscribed",
+    hardBounce: status === "hard_bounce",
+    unsubscribedAt: unsubscribedSource?.unsubscribedAt || a.unsubscribedAt || b.unsubscribedAt || null,
+    consentDate: subscribedSource?.consentDate || a.consentDate || b.consentDate || null,
+    source: subscribedSource?.source || a.source || b.source || "HubSpot import",
+    rawStatus: [a.rawStatus, b.rawStatus].filter(Boolean).join(" | ") || null,
+    segments: [...new Set([...(a.segments || []), ...(b.segments || [])])],
+  };
+}
+
+function mergeContactRecords(contacts) {
+  const byKey = new Map();
+  const keyFor = (contact) => {
+    if (contact.hubspotContactId) return `hubspot:${contact.hubspotContactId}`;
+    if (contact.email) return `email:${contact.email}`;
+    if (contact.associatedCompanyId && contact.fullName) return `company:${contact.associatedCompanyId}|name:${lower(contact.fullName)}`;
+    if (contact.companyName && contact.fullName) return `company-name:${lower(contact.companyName)}|name:${lower(contact.fullName)}`;
+    return "";
+  };
+
+  for (const contact of contacts) {
+    const key = keyFor(contact);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, contact);
+      continue;
+    }
+    byKey.set(key, {
+      ...existing,
+      hubspotContactId: existing.hubspotContactId || contact.hubspotContactId,
+      associatedCompanyId: existing.associatedCompanyId || contact.associatedCompanyId,
+      companyName: existing.companyName || contact.companyName,
+      domain: existing.domain || contact.domain,
+      email: existing.email || contact.email,
+      phone: existing.phone || contact.phone,
+      role: existing.role || contact.role,
+      firstName: existing.firstName || contact.firstName,
+      lastName: existing.lastName || contact.lastName,
+      fullName: existing.fullName || contact.fullName,
+      marketing: mergeMarketingRecords(existing.marketing, contact.marketing),
+      raw: {
+        ...cleanRawRow(existing.raw),
+        __merged_list_rows: [
+          ...(existing.raw?.__merged_list_rows || []),
+          cleanRawRow(contact.raw),
+        ],
+      },
+    });
+  }
+
+  return [...byKey.values()];
 }
 
 function parseMarketing(row) {
@@ -711,23 +884,28 @@ async function main() {
   console.log(`Tenant: ${TENANT}`);
   console.log(`Bedrijvenbestand: ${companiesPath || "(niet opgegeven)"}`);
   console.log(`Contactbestand: ${contactsPath || "(niet opgegeven)"}`);
+  console.log(`Lijstmap: ${listsPath || "(niet opgegeven)"}`);
+  if (listArgs.length) console.log(`Losse lijstbestanden: ${listArgs.length}`);
   console.log(`Rapport: ${reportPath}\n`);
 
-  if (!contactsPath && !companiesPath) {
-    throw new Error("Geef minimaal --contacts=... of --companies=... mee.");
+  if (!contactsPath && !companiesPath && !listsPath && listArgs.length === 0) {
+    throw new Error("Geef minimaal --contacts=..., --companies=..., --lists=... of --list=... mee.");
   }
 
   const companyRows = readRows(companiesPath);
   const contactRows = readRows(contactsPath);
+  const listExports = readListExports();
 
   if (AUDIT) {
-    const report = buildAuditReport({ companyRows, contactRows });
+    const report = buildAuditReport({ companyRows, contactRows, listExports });
     fs.mkdirSync(path.dirname(reportPath), { recursive: true });
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
     console.log(`Bedrijfskolommen: ${report.companies.columns.length}`);
     console.log(`Contactkolommen: ${report.contacts.columns.length}`);
     console.log(`Marketingkolommen gevonden: ${report.contacts.marketing.marketingColumns.length}`);
+    console.log(`Lijstexports gevonden: ${report.lists.length}`);
     console.log(`Herkende segmenthits: ${report.contacts.marketing.recognizedSegments.length}`);
+    console.log(`Lijstexports zonder segmentmapping: ${report.lists.filter((item) => item.needsManualMapping).length}`);
     console.log(`Mogelijk onbekende segmentwaarden: ${report.contacts.marketing.possibleUnmappedSegmentValues.length}`);
     console.log("Geen CRM-vergelijking gedaan en geen wijzigingen geschreven.");
     return;
@@ -742,7 +920,14 @@ async function main() {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const companies = companyRows.map(parseCompany);
-  const contacts = contactRows.map(parseContact).filter((contact) => contact.email || contact.fullName || contact.companyName);
+  const listContacts = listExports
+    .filter((listExport) => listExport.segmentId)
+    .flatMap((listExport) => listExport.rows.map((row) => parseListMember(listExport, row)))
+    .filter((contact) => contact.email || contact.hubspotContactId || contact.fullName || contact.companyName);
+  const contacts = mergeContactRecords([
+    ...contactRows.map(parseContact),
+    ...listContacts,
+  ]).filter((contact) => contact.email || contact.fullName || contact.companyName);
   const groups = groupRecords(companies, contacts);
   const existing = await fetchExisting(supabase);
   const maps = buildMaps(existing);
@@ -754,8 +939,12 @@ async function main() {
     input: {
       companiesPath,
       contactsPath,
+      listsPath,
+      listArgs,
       companyRows: companyRows.length,
       contactRows: contactRows.length,
+      listFiles: listExports.length,
+      listRows: listExports.reduce((sum, listExport) => sum + listExport.rows.length, 0),
     },
     existing: {
       leads: existing.leads.length,
@@ -770,6 +959,7 @@ async function main() {
       marketingAllowedCompanies: plans.filter((plan) => plan.lead.marketing_consent).length,
       factor30Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_30")).length,
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
+      listContactsSeen: listContacts.length,
     },
     samples: plans.slice(0, 5).map((plan) => ({
       action: plan.action,
@@ -787,6 +977,7 @@ async function main() {
       noCompanyName: groups.filter((group) => !group.company.companyName).length,
       unknownMarketingStatusContacts: contacts.filter((contact) => contact.marketing.status === "unknown").length,
       noRecognizedSegmentContacts: contacts.filter((contact) => contact.marketing.segments.length === 0).length,
+      listFilesWithoutSegmentMapping: listExports.filter((listExport) => !listExport.segmentId).map((listExport) => listExport.fileName),
     },
   };
 
@@ -812,6 +1003,7 @@ async function main() {
   console.log(`Nieuwe leads: ${report.planned.insertLeads}`);
   console.log(`Bij te werken leads: ${report.planned.updateLeads}`);
   console.log(`Contactpersonen gevonden: ${report.planned.contactsSeen}`);
+  console.log(`Contactpersonen uit losse lijsten: ${report.planned.listContactsSeen}`);
   console.log(`Marketing toegestaan: ${report.planned.marketingAllowedCompanies}`);
   console.log(`Factor 30: ${report.planned.factor30Companies}`);
   console.log(`Factor 50: ${report.planned.factor50Companies}`);

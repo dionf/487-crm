@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "import:hubspot:hiphot": "node scripts/import-hubspot-hiphot.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",

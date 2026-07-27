@@ -40,6 +40,7 @@ const HIPHOT_MARKETING_STATUSES = [
 ];
 
 const args = process.argv.slice(2);
+const AUDIT = args.includes("--audit");
 const DRY = args.includes("--dry-run") || !args.includes("--commit");
 const OVERWRITE = args.includes("--overwrite");
 const companiesPath = argValue("--companies");
@@ -148,6 +149,104 @@ function splitMulti(value) {
     .split(/[;,|\n]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function countBy(values) {
+  const counts = new Map();
+  for (const value of values) {
+    const cleaned = text(value);
+    if (!cleaned) continue;
+    counts.set(cleaned, (counts.get(cleaned) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([value, count]) => ({ value, count }));
+}
+
+function columnSummary(rows) {
+  const columns = new Map();
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(row)) {
+      if (key === "__index") continue;
+      const existing = columns.get(key) || { name: key, nonEmpty: 0, samples: [] };
+      if (text(value)) {
+        existing.nonEmpty++;
+        if (existing.samples.length < 3 && !existing.samples.includes(text(value))) {
+          existing.samples.push(text(value));
+        }
+      }
+      columns.set(key, existing);
+    }
+  }
+  return [...columns.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function isMarketingColumn(name) {
+  return /list|tag|segment|subscription|marketing|newsletter|nieuwsbrief|factor|opt|bounce|unsubscribe|uitschrijf|afmeld/i.test(name);
+}
+
+function segmentMatchesFor(value) {
+  const matches = [];
+  for (const segment of SEGMENT_PATTERNS) {
+    if (segment.patterns.some((pattern) => pattern.test(value))) {
+      matches.push(segment.id);
+    }
+  }
+  return matches;
+}
+
+function auditMarketingValues(rows) {
+  const marketingColumns = columnSummary(rows).filter((column) => isMarketingColumn(column.name));
+  const values = [];
+  const recognizedSegments = new Map();
+  const unrecognizedValues = [];
+
+  for (const row of rows) {
+    for (const column of marketingColumns) {
+      const raw = row[column.name];
+      for (const item of splitMulti(raw)) {
+        values.push(`${column.name}: ${item}`);
+        const matches = segmentMatchesFor(`${column.name}: ${item}`);
+        if (matches.length) {
+          for (const id of matches) {
+            recognizedSegments.set(id, (recognizedSegments.get(id) || 0) + 1);
+          }
+        } else if (!/true|false|yes|no|ja|nee|0|1|subscribed|unsubscribed|marketing contact|non.?marketing|hard bounce|opted out|uitgeschreven|afgemeld/i.test(item)) {
+          unrecognizedValues.push(`${column.name}: ${item}`);
+        }
+      }
+    }
+  }
+
+  return {
+    marketingColumns,
+    topValues: countBy(values).slice(0, 100),
+    recognizedSegments: [...recognizedSegments.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([segmentId, count]) => ({ segmentId, count })),
+    possibleUnmappedSegmentValues: countBy(unrecognizedValues).slice(0, 100),
+  };
+}
+
+function buildAuditReport({ companyRows, contactRows }) {
+  return {
+    mode: "audit",
+    tenant: TENANT,
+    input: {
+      companiesPath,
+      contactsPath,
+      companyRows: companyRows.length,
+      contactRows: contactRows.length,
+    },
+    companies: {
+      columns: columnSummary(companyRows),
+    },
+    contacts: {
+      columns: columnSummary(contactRows),
+      marketing: auditMarketingValues(contactRows),
+    },
+    expectedSegments: HIPHOT_MARKETING_SEGMENTS,
+  };
 }
 
 function firstNonEmpty(...values) {
@@ -608,7 +707,7 @@ async function commitPlan(supabase, plan, maps) {
 }
 
 async function main() {
-  console.log(`\nHipHot HubSpot import - ${DRY ? "DRY RUN" : "LIVE COMMIT"}`);
+  console.log(`\nHipHot HubSpot import - ${AUDIT ? "EXPORT AUDIT" : DRY ? "DRY RUN" : "LIVE COMMIT"}`);
   console.log(`Tenant: ${TENANT}`);
   console.log(`Bedrijvenbestand: ${companiesPath || "(niet opgegeven)"}`);
   console.log(`Contactbestand: ${contactsPath || "(niet opgegeven)"}`);
@@ -616,6 +715,22 @@ async function main() {
 
   if (!contactsPath && !companiesPath) {
     throw new Error("Geef minimaal --contacts=... of --companies=... mee.");
+  }
+
+  const companyRows = readRows(companiesPath);
+  const contactRows = readRows(contactsPath);
+
+  if (AUDIT) {
+    const report = buildAuditReport({ companyRows, contactRows });
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(`Bedrijfskolommen: ${report.companies.columns.length}`);
+    console.log(`Contactkolommen: ${report.contacts.columns.length}`);
+    console.log(`Marketingkolommen gevonden: ${report.contacts.marketing.marketingColumns.length}`);
+    console.log(`Herkende segmenthits: ${report.contacts.marketing.recognizedSegments.length}`);
+    console.log(`Mogelijk onbekende segmentwaarden: ${report.contacts.marketing.possibleUnmappedSegmentValues.length}`);
+    console.log("Geen CRM-vergelijking gedaan en geen wijzigingen geschreven.");
+    return;
   }
 
   loadEnv();
@@ -626,8 +741,6 @@ async function main() {
   }
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const companyRows = readRows(companiesPath);
-  const contactRows = readRows(contactsPath);
   const companies = companyRows.map(parseCompany);
   const contacts = contactRows.map(parseContact).filter((contact) => contact.email || contact.fullName || contact.companyName);
   const groups = groupRecords(companies, contacts);

@@ -43,6 +43,25 @@ Als HubSpot lijstlidmaatschappen niet in de contact-export zitten, exporteer de 
 
 ## Dry-run
 
+Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en heeft geen CRM-toegang nodig:
+
+```bash
+node scripts/import-hubspot-hiphot.mjs \
+  --companies=/pad/naar/hubspot-companies.xlsx \
+  --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --report=/tmp/hiphot-hubspot-export-audit.json \
+  --audit
+```
+
+Controleer in dit auditrapport vooral:
+
+- welke marketingkolommen HubSpot heeft meegegeven
+- of Factor 30 en Factor 50 herkend worden
+- welke segmentwaarden mogelijk nog geen mapping hebben
+- of de benodigde bedrijf/contact-kolommen aanwezig zijn
+
+Als de segmentnamen kloppen, draai daarna de CRM dry-run:
+
 ```bash
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \

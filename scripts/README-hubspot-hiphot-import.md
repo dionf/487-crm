@@ -2,6 +2,8 @@
 
 Deze import is alleen bedoeld voor de HipHot tenant (`hiphot`). Het script heeft geen tenant-argument en kan daardoor niet per ongeluk naar `48-7` schrijven.
 
+Zie ook het volledige migratie-draaiboek in `docs/hiphot-hubspot-migration-runbook.md`.
+
 ## Benodigde HubSpot exports
 
 Exporteer uit HubSpot minimaal:

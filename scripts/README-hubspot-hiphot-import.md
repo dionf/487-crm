@@ -70,6 +70,7 @@ node scripts/import-hubspot-hiphot.mjs \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-export-audit.json \
+  --report-md=/tmp/hiphot-hubspot-export-audit.md \
   --audit
 ```
 
@@ -87,10 +88,11 @@ node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
-  --report=/tmp/hiphot-hubspot-import-report.json
+  --report=/tmp/hiphot-hubspot-import-report.json \
+  --report-md=/tmp/hiphot-hubspot-import-report.md
 ```
 
-Dit schrijft niets naar CRM. Controleer daarna:
+Dit schrijft niets naar CRM. Controleer daarna vooral het `.md` rapport:
 
 - aantal nieuwe bedrijven
 - aantal bestaande bedrijven dat bijgewerkt wordt
@@ -109,6 +111,7 @@ node scripts/import-hubspot-hiphot.mjs \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-import-report.json \
+  --report-md=/tmp/hiphot-hubspot-import-report.md \
   --commit
 ```
 

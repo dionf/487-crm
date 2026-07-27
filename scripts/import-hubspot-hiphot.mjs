@@ -395,38 +395,51 @@ function stripVolatileImportFields(value) {
         .map(([key, item]) => [key, stripVolatileImportFields(item)])
     );
   }
+  if (typeof value === "string") {
+    return value.replace(/Geïmporteerd uit HubSpot op \d{4}-\d{2}-\d{2}\./g, "Geïmporteerd uit HubSpot op <import-date>.");
+  }
   return value;
 }
 
-function importApprovalPlan(plans) {
-  return plans.map((plan) => stableJson(stripVolatileImportFields({
-    action: plan.action,
-    existingLeadId: plan.existingLead?.id || null,
-    lead: plan.lead,
-    contacts: plan.contacts.map((contact) => ({
-      hubspot_contact_id: contact.hubspot_contact_id,
-      email: contact.email,
-      name: contact.name,
-      phone: contact.phone,
-      role: contact.role,
-      is_primary: contact.is_primary,
-      tenant: contact.tenant,
-      marketing_consent: contact.marketing_consent,
-    })),
-    associatedNotes: plan.associatedNotes.map((note) => ({
-      type: note.type,
-      importKey: note.importKey,
-      content: note.content,
-      date: note.date,
-    })),
-    noteContent: plan.noteContent,
-    activityMetadata: {
+function importApprovalPlan(plans, maps) {
+  const approvalMaps = cloneContactMaps(maps);
+  return plans.map((plan) => {
+    const leadKey = approvalLeadKey(plan);
+    const contactOperations = plan.contacts.map((contact) => {
+      const operation = resolveContactOperation(contact, leadKey, approvalMaps);
+      applyResolvedContactOperation(operation, contact, leadKey, approvalMaps, { virtual: true });
+      return operation;
+    });
+    return stableJson(stripVolatileImportFields({
       action: plan.action,
-      associated_notes: plan.associatedNotes.length,
-      source: SOURCE,
-      raw: plan.raw,
-    },
-  })));
+      existingLeadId: plan.existingLead?.id || null,
+      lead: plan.lead,
+      contactOperations,
+      contacts: plan.contacts.map((contact) => ({
+        hubspot_contact_id: contact.hubspot_contact_id,
+        email: contact.email,
+        name: contact.name,
+        phone: contact.phone,
+        role: contact.role,
+        is_primary: contact.is_primary,
+        tenant: contact.tenant,
+        marketing_consent: contact.marketing_consent,
+      })),
+      associatedNotes: plan.associatedNotes.map((note) => ({
+        type: note.type,
+        importKey: note.importKey,
+        content: note.content,
+        date: note.date,
+      })),
+      noteContent: plan.noteContent,
+      activityMetadata: {
+        action: plan.action,
+        associated_notes: plan.associatedNotes.length,
+        source: SOURCE,
+        raw: plan.raw,
+      },
+    }));
+  });
 }
 
 function fingerprint(value) {
@@ -1249,6 +1262,85 @@ function buildMaps(existing) {
   };
 }
 
+function cloneContactMaps(maps) {
+  return {
+    contactsByEmailLead: new Map(maps.contactsByEmailLead),
+    contactsByHubspotId: new Map(maps.contactsByHubspotId),
+  };
+}
+
+function approvalLeadKey(plan) {
+  if (plan.existingLead?.id) return plan.existingLead.id;
+  return [
+    "new",
+    plan.lead.hubspot_company_id || "",
+    lower(plan.lead.company_name),
+    lower(plan.lead.city),
+    lower(plan.lead.email),
+  ].join("|");
+}
+
+function publicContactReference(contact) {
+  if (!contact) return null;
+  return {
+    id: contact.id || null,
+    lead_id: contact.lead_id || null,
+    email: contact.email || null,
+    hubspot_contact_id: contact.hubspot_contact_id || null,
+  };
+}
+
+function resolveContactOperation(contact, leadId, maps) {
+  const emailKey = contact.email ? `${leadId}|${lower(contact.email)}` : "";
+  if (contact.hubspot_contact_id && maps.contactsByHubspotId.has(contact.hubspot_contact_id)) {
+    return {
+      action: "skip_existing_hubspot_contact",
+      targetContact: publicContactReference(maps.contactsByHubspotId.get(contact.hubspot_contact_id)),
+      incomingHubspotContactId: contact.hubspot_contact_id,
+      incomingEmail: contact.email || null,
+    };
+  }
+  if (emailKey && maps.contactsByEmailLead.has(emailKey)) {
+    const existingContact = maps.contactsByEmailLead.get(emailKey);
+    return {
+      action: contact.hubspot_contact_id && !existingContact.hubspot_contact_id
+        ? "update_existing_email_contact_metadata"
+        : "skip_existing_email_contact",
+      targetContact: publicContactReference(existingContact),
+      incomingHubspotContactId: contact.hubspot_contact_id || null,
+      incomingEmail: contact.email || null,
+    };
+  }
+  return {
+    action: "insert_contact",
+    targetContact: null,
+    incomingHubspotContactId: contact.hubspot_contact_id || null,
+    incomingEmail: contact.email || null,
+    resetsPrimaryContact: Boolean(contact.is_primary),
+  };
+}
+
+function applyResolvedContactOperation(operation, contact, leadId, maps, options = {}) {
+  if (operation.action === "update_existing_email_contact_metadata" && contact.hubspot_contact_id) {
+    const updatedContact = {
+      ...operation.targetContact,
+      hubspot_contact_id: contact.hubspot_contact_id,
+    };
+    if (contact.email) maps.contactsByEmailLead.set(`${leadId}|${lower(contact.email)}`, updatedContact);
+    maps.contactsByHubspotId.set(contact.hubspot_contact_id, updatedContact);
+  }
+  if (operation.action === "insert_contact") {
+    const insertedContact = {
+      id: options.insertedContactId || `virtual:${leadId}:${lower(contact.email || contact.name || contact.hubspot_contact_id)}`,
+      lead_id: leadId,
+      email: contact.email,
+      hubspot_contact_id: contact.hubspot_contact_id,
+    };
+    if (contact.email) maps.contactsByEmailLead.set(`${leadId}|${lower(contact.email)}`, insertedContact);
+    if (contact.hubspot_contact_id) maps.contactsByHubspotId.set(contact.hubspot_contact_id, insertedContact);
+  }
+}
+
 async function commitPlan(supabase, plan, maps) {
   let leadId = plan.existingLead?.id;
   if (plan.action === "insert_lead") {
@@ -1266,25 +1358,23 @@ async function commitPlan(supabase, plan, maps) {
 
   const createdContacts = [];
   for (const contact of plan.contacts) {
-    const emailKey = contact.email ? `${leadId}|${lower(contact.email)}` : "";
-    if (contact.hubspot_contact_id && maps.contactsByHubspotId.has(contact.hubspot_contact_id)) continue;
-    if (emailKey && maps.contactsByEmailLead.has(emailKey)) {
-      const existingContact = maps.contactsByEmailLead.get(emailKey);
-      if (contact.hubspot_contact_id && !existingContact.hubspot_contact_id) {
-        const { data, error } = await supabase
-          .from("contacts")
-          .update({
-            hubspot_contact_id: contact.hubspot_contact_id,
-            hubspot_imported_at: contact.hubspot_imported_at,
-          })
-          .eq("id", existingContact.id)
-          .eq("tenant", TENANT)
-          .select("id, lead_id, email, hubspot_contact_id")
-          .single();
-        if (error) throw new Error(`Contact ${contact.name} metadata bijwerken: ${error.message}`);
-        maps.contactsByEmailLead.set(emailKey, data);
-        maps.contactsByHubspotId.set(contact.hubspot_contact_id, data);
-      }
+    const operation = resolveContactOperation(contact, leadId, maps);
+    if (operation.action === "skip_existing_hubspot_contact" || operation.action === "skip_existing_email_contact") {
+      continue;
+    }
+    if (operation.action === "update_existing_email_contact_metadata") {
+      const { data, error } = await supabase
+        .from("contacts")
+        .update({
+          hubspot_contact_id: contact.hubspot_contact_id,
+          hubspot_imported_at: contact.hubspot_imported_at,
+        })
+        .eq("id", operation.targetContact.id)
+        .eq("tenant", TENANT)
+        .select("id, lead_id, email, hubspot_contact_id")
+        .single();
+      if (error) throw new Error(`Contact ${contact.name} metadata bijwerken: ${error.message}`);
+      applyResolvedContactOperation(operation, contact, leadId, maps, { insertedContactId: data.id });
       continue;
     }
     if (contact.is_primary) {
@@ -1303,14 +1393,7 @@ async function commitPlan(supabase, plan, maps) {
       .single();
     if (error) throw new Error(`Contact ${contact.name}: ${error.message}`);
     createdContacts.push(data.id);
-    const insertedContact = {
-      id: data.id,
-      lead_id: leadId,
-      email: contact.email,
-      hubspot_contact_id: contact.hubspot_contact_id,
-    };
-    if (emailKey) maps.contactsByEmailLead.set(emailKey, insertedContact);
-    if (contact.hubspot_contact_id) maps.contactsByHubspotId.set(contact.hubspot_contact_id, insertedContact);
+    applyResolvedContactOperation(operation, contact, leadId, maps, { insertedContactId: data.id });
   }
 
   const { data: existingNotes, error: existingNotesError } = await supabase
@@ -1447,7 +1530,7 @@ async function main() {
   const maps = buildMaps(existing);
 
   const plans = groups.map((group) => buildPlan(group, findExistingLead(group, maps)));
-  const approvalPlan = importApprovalPlan(plans);
+  const approvalPlan = importApprovalPlan(plans, maps);
   const report = {
     mode: DRY ? "dry-run" : "commit",
     tenant: TENANT,

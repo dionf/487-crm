@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "export:hubspot:hiphot": "node scripts/export-hubspot-hiphot-api.mjs",
     "import:hubspot:hiphot": "node scripts/import-hubspot-hiphot.mjs",
     "verify:hubspot:hiphot": "node scripts/verify-hubspot-hiphot-import.mjs"
   },

@@ -89,6 +89,19 @@ Gebruik `docs/hiphot-hubspot-export-checklist.md` als praktische export-checklis
    - Create date / activity date
    - Note owner / created by
 
+### Alternatief: API-export
+
+Met een HubSpot Private App token kunnen dezelfde bestanden read-only via de API worden gemaakt:
+
+```bash
+HUBSPOT_ACCESS_TOKEN=... npm run export:hubspot:hiphot -- \
+  --out=/tmp/hiphot-hubspot-api-export
+```
+
+De exporter schrijft `hubspot-companies.xlsx`, `hubspot-contacts.xlsx`, `hubspot-deals.xlsx`, `hubspot-notes.xlsx`, losse lijstbestanden en een `manifest.json` met het exacte dry-run importcommando.
+
+Voor een volledige marketingexport moet de HubSpot app naast CRM-readrechten ook `crm.lists.read` en `communication_preferences.statuses.batch.read` hebben.
+
 ## Fase 1: export-audit
 
 Doel: controleren of de HubSpot-bestanden de juiste kolommen en segmentnamen bevatten. Deze stap schrijft niets naar CRM en heeft geen CRM-database nodig.

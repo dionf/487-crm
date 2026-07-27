@@ -30,6 +30,8 @@ In CRM is al voorbereid:
 
 Exporteer uit HubSpot deze bestanden, bij voorkeur als `.xlsx` of `.csv`.
 
+Gebruik `docs/hiphot-hubspot-export-checklist.md` als praktische export-checklist met bestandsnamen, doelmap en minimale kolommen.
+
 ### Verplicht
 
 1. Companies / Bedrijven

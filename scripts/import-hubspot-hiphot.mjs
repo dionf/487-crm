@@ -18,6 +18,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import xlsx from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 
@@ -372,12 +373,78 @@ function writeReports(report) {
   }
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, stableJson(item)])
+    );
+  }
+  return value;
+}
+
+function stripVolatileImportFields(value) {
+  if (Array.isArray(value)) return value.map(stripVolatileImportFields);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !["hubspot_imported_at"].includes(key))
+        .map(([key, item]) => [key, stripVolatileImportFields(item)])
+    );
+  }
+  return value;
+}
+
+function importApprovalPlan(plans) {
+  return plans.map((plan) => stableJson(stripVolatileImportFields({
+    action: plan.action,
+    existingLeadId: plan.existingLead?.id || null,
+    lead: plan.lead,
+    contacts: plan.contacts.map((contact) => ({
+      hubspot_contact_id: contact.hubspot_contact_id,
+      email: contact.email,
+      name: contact.name,
+      phone: contact.phone,
+      role: contact.role,
+      is_primary: contact.is_primary,
+      tenant: contact.tenant,
+      marketing_consent: contact.marketing_consent,
+    })),
+    associatedNotes: plan.associatedNotes.map((note) => ({
+      type: note.type,
+      importKey: note.importKey,
+      content: note.content,
+      date: note.date,
+    })),
+    noteContent: plan.noteContent,
+    activityMetadata: {
+      action: plan.action,
+      associated_notes: plan.associatedNotes.length,
+      source: SOURCE,
+      raw: plan.raw,
+    },
+  })));
+}
+
+function fingerprint(value) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(stableJson(value)))
+    .digest("hex");
+}
+
 function comparableImportSignature(report) {
   return {
     tenant: report.tenant,
     input: report.input,
+    options: report.options,
     planned: report.planned,
     warnings: report.warnings,
+    approval: report.approval,
+    approvalPlan: report.approvalPlan,
   };
 }
 
@@ -481,6 +548,8 @@ function renderMarkdownReport(report) {
     "",
     `Bestaande HipHot bedrijven in CRM: ${formatCount(report.existing.leads)}`,
     `Bestaande HipHot contactpersonen in CRM: ${formatCount(report.existing.contacts)}`,
+    `Bestaande CRM-velden overschrijven: ${report.options.overwrite ? "Ja" : "Nee"}`,
+    `Importvingerafdruk: ${report.approval.mutationFingerprint}`,
     `Nieuwe bedrijven gepland: ${formatCount(report.planned.insertLeads)}`,
     `Bestaande bedrijven bijwerken: ${formatCount(report.planned.updateLeads)}`,
     `Contactpersonen uit HubSpot: ${formatCount(report.planned.contactsSeen)}`,
@@ -883,11 +952,10 @@ function parseMarketing(row) {
     get(row, ["List memberships", "Lists", "Tags", "Segmenten", "Tags/segmenten"]),
   ];
   const haystack = haystackValues.map(text).join(" | ");
-  const lowerHaystack = haystack.toLowerCase();
   const hardBounce = /hard bounce|bounced|bounce/i.test(haystack);
   const unsubscribed = /unsubscribed|opted out|uitgeschreven|afgemeld/i.test(haystack);
-  const subscribed = /subscribed|marketing contact|ingeschreven|nieuwsbrief/i.test(haystack) && !unsubscribed && !hardBounce;
   const nonMarketing = /non.?marketing|geen marketing|not a marketing contact/i.test(haystack);
+  const subscribed = /subscribed|marketing contact|ingeschreven|nieuwsbrief/i.test(haystack) && !unsubscribed && !hardBounce && !nonMarketing;
 
   const segments = new Set();
   for (const [key, value] of Object.entries(row)) {
@@ -904,10 +972,10 @@ function parseMarketing(row) {
       ? "hard_bounce"
       : unsubscribed
         ? "unsubscribed"
-        : subscribed
-          ? "subscribed"
-          : nonMarketing
-            ? "non_marketing"
+        : nonMarketing
+          ? "non_marketing"
+          : subscribed
+            ? "subscribed"
             : "unknown",
     consent: subscribed,
     hardBounce,
@@ -1109,19 +1177,32 @@ function buildNote(group) {
 }
 
 async function fetchExisting(supabase) {
-  const [{ data: leads, error: leadError }, { data: contacts, error: contactError }] = await Promise.all([
-    supabase
+  const [leads, contacts] = await Promise.all([
+    fetchAllExistingRows(() => supabase
       .from("leads")
       .select("id, company_name, city, email, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language")
-      .eq("tenant", TENANT),
-    supabase
+      .eq("tenant", TENANT)
+      .order("id", { ascending: true }), "bestaande HipHot leads"),
+    fetchAllExistingRows(() => supabase
       .from("contacts")
       .select("id, lead_id, email, hubspot_contact_id")
-      .eq("tenant", TENANT),
+      .eq("tenant", TENANT)
+      .order("id", { ascending: true }), "bestaande HipHot contacten"),
   ]);
-  if (leadError) throw new Error(`Kon bestaande HipHot leads niet ophalen: ${leadError.message}`);
-  if (contactError) throw new Error(`Kon bestaande HipHot contacten niet ophalen: ${contactError.message}`);
-  return { leads: leads || [], contacts: contacts || [] };
+  return { leads, contacts };
+}
+
+async function fetchAllExistingRows(queryFactory, label) {
+  const pageSize = 1000;
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await queryFactory()
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Kon ${label} niet ophalen: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
 }
 
 function findExistingLead(group, maps) {
@@ -1145,8 +1226,8 @@ function buildMaps(existing) {
   const byHubspotCompanyId = new Map();
   const byCompanyCity = new Map();
   const byLeadEmail = new Map();
-  const contactsByEmailLead = new Set();
-  const contactsByHubspotId = new Set();
+  const contactsByEmailLead = new Map();
+  const contactsByHubspotId = new Map();
 
   for (const lead of existing.leads) {
     if (lead.hubspot_company_id) byHubspotCompanyId.set(lead.hubspot_company_id, lead);
@@ -1154,8 +1235,8 @@ function buildMaps(existing) {
     if (lead.email) byLeadEmail.set(lower(lead.email), lead);
   }
   for (const contact of existing.contacts) {
-    if (contact.email) contactsByEmailLead.add(`${contact.lead_id}|${lower(contact.email)}`);
-    if (contact.hubspot_contact_id) contactsByHubspotId.add(contact.hubspot_contact_id);
+    if (contact.email) contactsByEmailLead.set(`${contact.lead_id}|${lower(contact.email)}`, contact);
+    if (contact.hubspot_contact_id) contactsByHubspotId.set(contact.hubspot_contact_id, contact);
   }
 
   return {
@@ -1186,13 +1267,32 @@ async function commitPlan(supabase, plan, maps) {
   for (const contact of plan.contacts) {
     const emailKey = contact.email ? `${leadId}|${lower(contact.email)}` : "";
     if (contact.hubspot_contact_id && maps.contactsByHubspotId.has(contact.hubspot_contact_id)) continue;
-    if (emailKey && maps.contactsByEmailLead.has(emailKey)) continue;
+    if (emailKey && maps.contactsByEmailLead.has(emailKey)) {
+      const existingContact = maps.contactsByEmailLead.get(emailKey);
+      if (contact.hubspot_contact_id && !existingContact.hubspot_contact_id) {
+        const { data, error } = await supabase
+          .from("contacts")
+          .update({
+            hubspot_contact_id: contact.hubspot_contact_id,
+            hubspot_imported_at: contact.hubspot_imported_at,
+          })
+          .eq("id", existingContact.id)
+          .eq("tenant", TENANT)
+          .select("id, lead_id, email, hubspot_contact_id")
+          .single();
+        if (error) throw new Error(`Contact ${contact.name} metadata bijwerken: ${error.message}`);
+        maps.contactsByEmailLead.set(emailKey, data);
+        maps.contactsByHubspotId.set(contact.hubspot_contact_id, data);
+      }
+      continue;
+    }
     if (contact.is_primary) {
-      await supabase
+      const { error } = await supabase
         .from("contacts")
         .update({ is_primary: false })
         .eq("lead_id", leadId)
         .eq("tenant", TENANT);
+      if (error) throw new Error(`Primair contact herstellen voor ${contact.name}: ${error.message}`);
     }
 
     const { data, error } = await supabase
@@ -1202,8 +1302,14 @@ async function commitPlan(supabase, plan, maps) {
       .single();
     if (error) throw new Error(`Contact ${contact.name}: ${error.message}`);
     createdContacts.push(data.id);
-    if (emailKey) maps.contactsByEmailLead.add(emailKey);
-    if (contact.hubspot_contact_id) maps.contactsByHubspotId.add(contact.hubspot_contact_id);
+    const insertedContact = {
+      id: data.id,
+      lead_id: leadId,
+      email: contact.email,
+      hubspot_contact_id: contact.hubspot_contact_id,
+    };
+    if (emailKey) maps.contactsByEmailLead.set(emailKey, insertedContact);
+    if (contact.hubspot_contact_id) maps.contactsByHubspotId.set(contact.hubspot_contact_id, insertedContact);
   }
 
   const { data: existingNotes, error: existingNotesError } = await supabase
@@ -1225,13 +1331,14 @@ async function commitPlan(supabase, plan, maps) {
     ? `hubspot-summary:${plan.lead.hubspot_company_id}`
     : `hubspot-summary:${leadId}`;
   if (!existingImportKeys.has(summaryKey)) {
-    await supabase.from("notes").insert({
+    const { error } = await supabase.from("notes").insert({
       lead_id: leadId,
       content: `${HUBSPOT_IMPORT_MARKER} ${summaryKey}\n${plan.noteContent}`,
       note_type: "intern",
       created_by: IMPORT_USER,
       tenant: TENANT,
     });
+    if (error) throw new Error(`HubSpot samenvattingsnotitie: ${error.message}`);
     existingImportKeys.add(summaryKey);
   }
   let createdAssociatedNotes = 0;
@@ -1241,17 +1348,18 @@ async function commitPlan(supabase, plan, maps) {
       skippedAssociatedNotes++;
       continue;
     }
-    await supabase.from("notes").insert({
+    const { error } = await supabase.from("notes").insert({
       lead_id: leadId,
       content: note.content,
       note_type: "intern",
       created_by: IMPORT_USER,
       tenant: TENANT,
     });
+    if (error) throw new Error(`HubSpot ${note.type}-notitie: ${error.message}`);
     createdAssociatedNotes++;
     if (note.importKey) existingImportKeys.add(note.importKey);
   }
-  await supabase.from("activities").insert({
+  const { error: activityError } = await supabase.from("activities").insert({
     lead_id: leadId,
     activity_type: "hubspot_import",
     description: "HubSpot gegevens geïmporteerd",
@@ -1267,6 +1375,7 @@ async function commitPlan(supabase, plan, maps) {
       raw: plan.raw,
     },
   });
+  if (activityError) throw new Error(`HubSpot importactiviteit: ${activityError.message}`);
 
   return { leadId, createdContacts: createdContacts.length, createdAssociatedNotes, skippedAssociatedNotes };
 }
@@ -1337,9 +1446,14 @@ async function main() {
   const maps = buildMaps(existing);
 
   const plans = groups.map((group) => buildPlan(group, findExistingLead(group, maps)));
+  const approvalPlan = importApprovalPlan(plans);
   const report = {
     mode: DRY ? "dry-run" : "commit",
     tenant: TENANT,
+    options: {
+      overwrite: OVERWRITE,
+      limit,
+    },
     input: {
       companiesPath,
       contactsPath,
@@ -1394,6 +1508,12 @@ async function main() {
       unmatchedNotes: unmatchedNotes.length,
       listFilesWithoutSegmentMapping: listExports.filter((listExport) => !listExport.segmentId).map((listExport) => listExport.fileName),
     },
+    approval: {
+      overwrite: OVERWRITE,
+      limit,
+      mutationFingerprint: fingerprint(approvalPlan),
+    },
+    approvalPlan,
   };
 
   if (!DRY) {

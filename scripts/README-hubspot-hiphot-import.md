@@ -41,6 +41,25 @@ Exporteer uit HubSpot minimaal:
 
 Als HubSpot lijstlidmaatschappen niet in de contact-export zitten, exporteer de relevante lijsten apart en voeg ze als kolommen toe aan het contactbestand voordat de import draait.
 
+Je kunt losse lijstexports ook apart meegeven. Zet de bestanden bijvoorbeeld in één map met herkenbare namen:
+
+```text
+hubspot-lijsten/
+  Factor 30.csv
+  Factor 50.csv
+  Algemene nieuwsbrief.csv
+```
+
+Of geef per bestand expliciet aan welk CRM-segment het is:
+
+```bash
+--list=factor_30:/pad/naar/factor-30.csv
+--list=factor_50:/pad/naar/factor-50.csv
+--list=algemene_nieuwsbrief:/pad/naar/algemene-nieuwsbrief.csv
+```
+
+De lijstexports mogen minimaal een e-mailadres, HubSpot Contact ID of Associated Company ID bevatten. Als dezelfde contactpersoon ook in de gewone contact-export zit, worden de gegevens samengevoegd.
+
 ## Dry-run
 
 Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en heeft geen CRM-toegang nodig:
@@ -49,6 +68,7 @@ Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en h
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-export-audit.json \
   --audit
 ```
@@ -66,6 +86,7 @@ Als de segmentnamen kloppen, draai daarna de CRM dry-run:
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-import-report.json
 ```
 
@@ -86,6 +107,7 @@ Alleen uitvoeren na controle van de dry-run:
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-import-report.json \
   --commit
 ```

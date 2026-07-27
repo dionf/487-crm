@@ -114,8 +114,8 @@ node scripts/import-hubspot-hiphot.mjs \
   --deals=/pad/naar/hubspot-deals.xlsx \
   --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
-  --report=/tmp/hiphot-hubspot-import-report.json \
-  --report-md=/tmp/hiphot-hubspot-import-report.md
+  --report=/tmp/hiphot-hubspot-import-dry-run.json \
+  --report-md=/tmp/hiphot-hubspot-import-dry-run.md
 ```
 
 Dit schrijft niets naar CRM. Controleer daarna vooral het `.md` rapport:
@@ -140,10 +140,13 @@ node scripts/import-hubspot-hiphot.mjs \
   --deals=/pad/naar/hubspot-deals.xlsx \
   --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
-  --report=/tmp/hiphot-hubspot-import-report.json \
-  --report-md=/tmp/hiphot-hubspot-import-report.md \
+  --approved-report=/tmp/hiphot-hubspot-import-dry-run.json \
+  --report=/tmp/hiphot-hubspot-import-result.json \
+  --report-md=/tmp/hiphot-hubspot-import-result.md \
   --commit
 ```
+
+Live import vereist `--approved-report` met een eerder gecontroleerd dry-run rapport. Als de huidige importplanning daarvan afwijkt, stopt het script zonder te schrijven.
 
 Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marketingvelden, HubSpot ID's en importmetadata worden wel bijgewerkt. Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

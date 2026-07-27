@@ -182,7 +182,7 @@ Importgedrag:
 - HubSpot deals en notities worden als interne CRM-notities onder het bedrijf gezet.
 - HubSpot deal/notitie-notities krijgen een import-key, zodat opnieuw draaien geen dubbele historie-notities hoort te maken.
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
-- Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning afwijkt, stopt de import.
+- Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning, overwrite-modus of geplande schrijfdata afwijkt, stopt de import.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

@@ -147,7 +147,7 @@ node scripts/import-hubspot-hiphot.mjs \
   --commit
 ```
 
-Live import vereist `--approved-report` met een eerder gecontroleerd dry-run rapport. Als de huidige importplanning daarvan afwijkt, stopt het script zonder te schrijven.
+Live import vereist `--approved-report` met een eerder gecontroleerd dry-run rapport. Als de huidige importplanning daarvan afwijkt, stopt het script zonder te schrijven. Die controle kijkt ook naar gedrag dat bestaande CRM-data kan wijzigen, zoals `--overwrite`, en naar een vaste vingerafdruk plus payloadoverzicht van alle geplande lead-, contact-, notitie- en activiteitwijzigingen.
 
 Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marketingvelden, HubSpot ID's en importmetadata worden wel bijgewerkt. Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

@@ -7,6 +7,7 @@ import StatusBadge from "@/components/StatusBadge";
 import LeadForm from "@/components/LeadForm";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
+import { HIPHOT_MARKETING_SEGMENTS, marketingSegmentLabels } from "@/lib/hiphot-marketing";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch, getTenantFromSession, isAdminFromSession, getUserIdFromSession } from "@/lib/api";
 import {
@@ -22,6 +23,7 @@ import {
   Trash2,
   Mail,
   Loader2,
+  Megaphone,
 } from "lucide-react";
 
 const CALL_OUTCOME_LABELS = {
@@ -46,6 +48,8 @@ export default function LeadsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
+  const [marketingFilter, setMarketingFilter] = useState("");
+  const [marketingSegmentFilter, setMarketingSegmentFilter] = useState("");
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [assigning, setAssigning] = useState(false);
@@ -59,6 +63,8 @@ export default function LeadsPage() {
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
     if (serviceFilter) params.set("service_type", serviceFilter);
+    if (isHipHot && marketingFilter) params.set("marketing", marketingFilter);
+    if (isHipHot && marketingSegmentFilter) params.set("marketing_segment", marketingSegmentFilter);
     // Agents only see their own leads, admins can filter
     if (agentFilter) {
       params.set("assigned_to", agentFilter);
@@ -76,7 +82,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, serviceFilter, agentFilter, isHipHot, effectiveAdmin, user]);
+  }, [search, statusFilter, serviceFilter, agentFilter, marketingFilter, marketingSegmentFilter, isHipHot, effectiveAdmin, user]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -327,6 +333,30 @@ export default function LeadsPage() {
             ))}
           </select>
         )}
+
+        {isHipHot && (
+          <>
+            <select
+              value={marketingFilter}
+              onChange={(e) => setMarketingFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
+            >
+              <option value="">Alle marketingstatussen</option>
+              <option value="true">Nieuwsbrief toegestaan</option>
+            </select>
+
+            <select
+              value={marketingSegmentFilter}
+              onChange={(e) => setMarketingSegmentFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
+            >
+              <option value="">Alle segmenten</option>
+              {HIPHOT_MARKETING_SEGMENTS.map((segment) => (
+                <option key={segment.id} value={segment.id}>{segment.label}</option>
+              ))}
+            </select>
+          </>
+        )}
       </div>
 
       {/* Table */}
@@ -350,6 +380,7 @@ export default function LeadsPage() {
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Plaats</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Branche</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Telefoon</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Marketing</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Uitkomst</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Agent</th>
                   </>
@@ -366,13 +397,13 @@ export default function LeadsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12">
+                  <td colSpan={isHipHot ? 10 : 7} className="text-center py-12">
                     <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-gray-400 text-sm">
+                  <td colSpan={isHipHot ? 10 : 7} className="text-center py-12 text-gray-400 text-sm">
                     Geen leads gevonden
                   </td>
                 </tr>
@@ -411,6 +442,23 @@ export default function LeadsPage() {
                             ) : (
                               <span className="text-sm text-gray-300">—</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {lead.marketing_consent ? (
+                                <span className="flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill bg-green-50 text-green-700 border border-green-100">
+                                  <Megaphone className="w-3 h-3" />
+                                  Ja
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300">—</span>
+                              )}
+                              {marketingSegmentLabels(lead.marketing_segments).slice(0, 2).map((label) => (
+                                <span key={label} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-pill bg-amber-50 text-brand-orange border border-amber-100">
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             {outcomeInfo ? (

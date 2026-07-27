@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, FileText, MessageSquare, CircleDot, AlertCircle, PhoneForwarded, PhoneOff } from "lucide-react";
+import { GripVertical, FileText, MessageSquare, CircleDot, AlertCircle, PhoneForwarded, PhoneOff, Megaphone } from "lucide-react";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES } from "@/lib/constants";
 
@@ -80,6 +80,12 @@ export default function LeadCard({ lead, isDragging }) {
             {lead.estimated_value && (
               <span className="text-xs font-medium text-brand-dark-gray">
                 {formatCurrency(lead.estimated_value)}
+              </span>
+            )}
+            {lead.tenant === "hiphot" && lead.marketing_consent && (
+              <span className="flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700 border border-green-100">
+                <Megaphone className="w-2.5 h-2.5" />
+                Marketing
               </span>
             )}
           </div>

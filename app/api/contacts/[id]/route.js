@@ -14,7 +14,11 @@ export async function PATCH(request, { params }) {
 
   // If setting as primary, unset other primaries
   if (body.is_primary) {
-    await supabase.from("contacts").update({ is_primary: false }).eq("lead_id", existing.lead_id);
+    await supabase
+      .from("contacts")
+      .update({ is_primary: false })
+      .eq("lead_id", existing.lead_id)
+      .eq("tenant", tenant);
   }
 
   const { data, error } = await supabase
@@ -43,7 +47,8 @@ export async function PATCH(request, { params }) {
         email: data.email,
         phone: data.phone,
       })
-      .eq("id", data.lead_id);
+      .eq("id", data.lead_id)
+      .eq("tenant", tenant);
   }
 
   return Response.json({ contact: data });

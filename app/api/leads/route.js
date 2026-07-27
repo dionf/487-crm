@@ -1,4 +1,50 @@
 import { supabase } from "@/lib/supabase";
+import {
+  HIPHOT_MARKETING_SEGMENTS,
+  HIPHOT_MARKETING_STATUSES,
+} from "@/lib/hiphot-marketing";
+
+const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
+const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
+
+function cleanDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function cleanHubSpotIds(value) {
+  return Array.isArray(value)
+    ? value.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+}
+
+function cleanHipHotMarketingFields(body) {
+  let status = HIPHOT_MARKETING_STATUS_IDS.has(body.marketing_subscription_status)
+    ? body.marketing_subscription_status
+    : "unknown";
+  const wantsMarketing = body.marketing_consent === true;
+  if (wantsMarketing && status === "unknown") status = "subscribed";
+  if (!wantsMarketing && status === "subscribed") status = "non_marketing";
+  const hardBounced = body.marketing_hard_bounced === true || status === "hard_bounce";
+  const blocked = hardBounced || status === "unsubscribed" || status === "non_marketing";
+
+  return {
+    marketing_consent: blocked ? false : body.marketing_consent === true,
+    marketing_segments: Array.isArray(body.marketing_segments)
+      ? body.marketing_segments.filter((id) => HIPHOT_MARKETING_SEGMENT_IDS.has(id))
+      : [],
+    marketing_subscription_status: status,
+    marketing_consent_source: body.marketing_consent_source || null,
+    marketing_consent_date: cleanDate(body.marketing_consent_date),
+    marketing_unsubscribed_at: cleanDate(body.marketing_unsubscribed_at),
+    marketing_hard_bounced: hardBounced,
+    hubspot_company_id: body.hubspot_company_id || null,
+    hubspot_contact_ids: cleanHubSpotIds(body.hubspot_contact_ids),
+    hubspot_subscription_status: body.hubspot_subscription_status || null,
+    hubspot_imported_at: cleanDate(body.hubspot_imported_at),
+  };
+}
 
 export async function GET(request) {
   const tenant = request.headers.get("x-auth-tenant");
@@ -10,6 +56,8 @@ export async function GET(request) {
   const order = searchParams.get("order") || "desc";
   const assigned_to = searchParams.get("assigned_to");
   const call_filter = searchParams.get("call_filter");
+  const marketing = searchParams.get("marketing");
+  const marketing_segment = searchParams.get("marketing_segment");
 
   let query = supabase
     .from("leads")
@@ -20,6 +68,10 @@ export async function GET(request) {
   if (status) query = query.eq("status", status);
   if (service_type) query = query.eq("service_type", service_type);
   if (assigned_to) query = query.eq("assigned_to", assigned_to);
+  if (tenant === "hiphot" && marketing === "true") query = query.eq("marketing_consent", true);
+  if (tenant === "hiphot" && marketing_segment && HIPHOT_MARKETING_SEGMENT_IDS.has(marketing_segment)) {
+    query = query.contains("marketing_segments", [marketing_segment]);
+  }
 
   // HipHot bellijst filters
   if (call_filter === "nieuw") {
@@ -82,6 +134,7 @@ export async function POST(request) {
   }
 
   const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
+  const marketingFields = tenant === "hiphot" ? cleanHipHotMarketingFields(body) : {};
 
   // Als 'leveradres = factuuradres', kopieer billing → delivery server-side
   const useSame = delivery_same_as_billing !== false;
@@ -129,6 +182,7 @@ export async function POST(request) {
       billing_email: billing_email || null,
       customer_reference: customer_reference || null,
       ...deliveryFields,
+      ...marketingFields,
     })
     .select()
     .single();

@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, ChevronDown, ChevronRight } from "lucide-react";
+import { X, ChevronDown, ChevronRight, Megaphone } from "lucide-react";
 import { SERVICE_TYPES, SOURCES, INDUSTRIES } from "@/lib/constants";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
+import {
+  HIPHOT_MARKETING_SEGMENTS,
+  HIPHOT_MARKETING_STATUSES,
+} from "@/lib/hiphot-marketing";
 
 export default function LeadForm({ open, onClose, onSaved, lead }) {
   const { tenant } = useOrg();
@@ -24,6 +28,13 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     source: "",
     website_url: "",
     commission_partner_percentage: "",
+    marketing_consent: false,
+    marketing_segments: [],
+    marketing_subscription_status: "unknown",
+    marketing_consent_source: "",
+    marketing_consent_date: "",
+    marketing_unsubscribed_at: "",
+    marketing_hard_bounced: false,
     // Factuur- en leveradres
     billing_street: "",
     billing_house_number: "",
@@ -44,6 +55,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAddresses, setShowAddresses] = useState(false);
+  const [showMarketing, setShowMarketing] = useState(false);
 
   // Pre-fill when editing, auto-extract website from email if empty
   useEffect(() => {
@@ -71,6 +83,13 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         source: lead.source || "",
         website_url: lead.website_url || suggestedUrl || "",
         commission_partner_percentage: lead.commission_partner_percentage || "",
+        marketing_consent: lead.marketing_consent || false,
+        marketing_segments: Array.isArray(lead.marketing_segments) ? lead.marketing_segments : [],
+        marketing_subscription_status: lead.marketing_subscription_status || "unknown",
+        marketing_consent_source: lead.marketing_consent_source || "",
+        marketing_consent_date: lead.marketing_consent_date?.slice(0, 10) || "",
+        marketing_unsubscribed_at: lead.marketing_unsubscribed_at?.slice(0, 10) || "",
+        marketing_hard_bounced: lead.marketing_hard_bounced || false,
         billing_street: lead.billing_street || "",
         billing_house_number: lead.billing_house_number || "",
         billing_postal_code: lead.billing_postal_code || "",
@@ -89,9 +108,11 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
       if (lead.billing_street || lead.billing_city || lead.customer_reference) {
         setShowAddresses(true);
       }
+      setShowMarketing(false);
     } else {
       setForm(emptyForm);
       setShowAddresses(false);
+      setShowMarketing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead, open]);
@@ -145,6 +166,14 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
     return "Dion";
   }
 
+  function toggleMarketingSegment(segmentId) {
+    const current = Array.isArray(form.marketing_segments) ? form.marketing_segments : [];
+    const next = current.includes(segmentId)
+      ? current.filter((id) => id !== segmentId)
+      : [...current, segmentId];
+    setForm({ ...form, marketing_segments: next });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
@@ -159,6 +188,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
         website_url: normalizeUrl(form.website_url) || null,
         commission_partner_percentage: form.commission_partner_percentage ? parseFloat(form.commission_partner_percentage) : null,
+        marketing_hard_bounced: form.marketing_subscription_status === "hard_bounce",
       };
 
       const url = isEdit ? `/api/leads/${lead.id}` : "/api/leads";
@@ -182,6 +212,7 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
       if (!isEdit) {
         setForm(emptyForm);
         setShowAddresses(false);
+        setShowMarketing(false);
       }
 
       onSaved?.();
@@ -568,6 +599,115 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
               </div>
             )}
           </div>
+
+          {isHipHot && (
+            <div className="border-t border-gray-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowMarketing(!showMarketing)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-brand-black"
+              >
+                {showMarketing ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                <Megaphone className="w-3.5 h-3.5 text-brand-orange" />
+                Marketing bedrijf
+              </button>
+
+              {showMarketing && (
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.marketing_consent}
+                      onChange={(e) => setForm({ ...form, marketing_consent: e.target.checked })}
+                      className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                    />
+                    Nieuwsbrief toegestaan
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Status
+                      </label>
+                      <select
+                        value={form.marketing_subscription_status}
+                        onChange={(e) => setForm({ ...form, marketing_subscription_status: e.target.value })}
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+                      >
+                        {HIPHOT_MARKETING_STATUSES.map((status) => (
+                          <option key={status.id} value={status.id}>
+                            {status.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Bron toestemming
+                      </label>
+                      <input
+                        type="text"
+                        value={form.marketing_consent_source}
+                        onChange={(e) => setForm({ ...form, marketing_consent_source: e.target.value })}
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                        placeholder="HubSpot, formulier..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Toestemming datum
+                      </label>
+                      <input
+                        type="date"
+                        value={form.marketing_consent_date}
+                        onChange={(e) => setForm({ ...form, marketing_consent_date: e.target.value })}
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Uitschrijfdatum
+                      </label>
+                      <input
+                        type="date"
+                        value={form.marketing_unsubscribed_at}
+                        onChange={(e) => setForm({ ...form, marketing_unsubscribed_at: e.target.value })}
+                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Segmenten
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {HIPHOT_MARKETING_SEGMENTS.map((segment) => {
+                        const active = form.marketing_segments.includes(segment.id);
+                        return (
+                          <button
+                            key={segment.id}
+                            type="button"
+                            onClick={() => toggleMarketingSegment(segment.id)}
+                            className={`px-2.5 py-1 rounded-pill text-xs font-semibold transition-colors ${
+                              active
+                                ? "bg-brand-orange text-white"
+                                : "bg-gray-50 text-gray-600 border border-gray-200 hover:border-brand-amber"
+                            }`}
+                          >
+                            {segment.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button

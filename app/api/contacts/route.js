@@ -31,12 +31,24 @@ export async function POST(request) {
     return Response.json({ error: "lead_id en name zijn verplicht" }, { status: 400 });
   }
 
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", lead_id)
+    .eq("tenant", tenant)
+    .single();
+
+  if (!lead) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
+  }
+
   // If setting as primary, unset other primaries for this lead
   if (is_primary) {
     await supabase
       .from("contacts")
       .update({ is_primary: false })
-      .eq("lead_id", lead_id);
+      .eq("lead_id", lead_id)
+      .eq("tenant", tenant);
   }
 
   const { data, error } = await supabase
@@ -48,8 +60,8 @@ export async function POST(request) {
       phone: phone || null,
       role: role || null,
       is_primary: is_primary || false,
-      marketing_consent: marketing_consent || false,
       tenant,
+      marketing_consent: marketing_consent || false,
     })
     .select()
     .single();
@@ -70,7 +82,8 @@ export async function POST(request) {
         email: email || undefined,
         phone: phone || undefined,
       })
-      .eq("id", lead_id);
+      .eq("id", lead_id)
+      .eq("tenant", tenant);
   }
 
   return Response.json({ contact: data });

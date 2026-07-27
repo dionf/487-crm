@@ -337,15 +337,45 @@ function contactRow(record, companiesById, subscriptionStatuses) {
   };
 }
 
-function dealRow(record, companiesById) {
+function associatedContext(record, companiesById, contactsById) {
+  const directCompanyId = idFromAssociation(record, "companies");
+  const contactId = idFromAssociation(record, "contacts");
+  const contact = contactsById.get(String(contactId));
+  const contactCompanyId = contact ? idFromAssociation(contact, "companies") : "";
+  const companyId = directCompanyId || contactCompanyId;
+  return {
+    companyId,
+    company: companiesById.get(companyId)?.properties || {},
+    contactId,
+    contact: contact?.properties || {},
+    associationSource: directCompanyId ? "company" : contactCompanyId ? "contact_company" : "",
+  };
+}
+
+function recordCompanyIds(records, contactsById) {
+  const ids = new Set();
+  for (const record of records) {
+    const directCompanyId = idFromAssociation(record, "companies");
+    if (directCompanyId) ids.add(directCompanyId);
+    const contactId = idFromAssociation(record, "contacts");
+    const contact = contactsById.get(String(contactId));
+    const contactCompanyId = contact ? idFromAssociation(contact, "companies") : "";
+    if (contactCompanyId) ids.add(contactCompanyId);
+  }
+  return [...ids];
+}
+
+function dealRow(record, companiesById, contactsById) {
   const p = record.properties || {};
-  const companyId = idFromAssociation(record, "companies");
-  const company = companiesById.get(companyId)?.properties || {};
+  const context = associatedContext(record, companiesById, contactsById);
   return {
     "Record ID": record.id,
-    "Associated Company ID": companyId,
-    "Company name": company.name || "",
-    "Company domain name": company.domain || "",
+    "Associated Company ID": context.companyId,
+    "Company name": context.company.name || "",
+    "Company domain name": context.company.domain || "",
+    "Associated Contact ID": context.contactId,
+    "Associated Contact Email": context.contact.email || "",
+    "Association source": context.associationSource,
     "Deal name": p.dealname || "",
     Amount: p.amount || "",
     "Deal stage": p.dealstage || "",
@@ -356,15 +386,17 @@ function dealRow(record, companiesById) {
   };
 }
 
-function noteRow(record, companiesById) {
+function noteRow(record, companiesById, contactsById) {
   const p = record.properties || {};
-  const companyId = idFromAssociation(record, "companies");
-  const company = companiesById.get(companyId)?.properties || {};
+  const context = associatedContext(record, companiesById, contactsById);
   return {
     "Record ID": record.id,
-    "Associated Company ID": companyId,
-    "Company name": company.name || "",
-    "Company domain name": company.domain || "",
+    "Associated Company ID": context.companyId,
+    "Company name": context.company.name || "",
+    "Company domain name": context.company.domain || "",
+    "Associated Contact ID": context.contactId,
+    "Associated Contact Email": context.contact.email || "",
+    "Association source": context.associationSource,
     "Note body": cleanHtml(p.hs_note_body),
     "Create date": p.hs_timestamp || p.createdate || record.createdAt || "",
     "Note owner": p.hubspot_owner_id || "",
@@ -461,25 +493,25 @@ async function main() {
 
   if (!skipDeals) {
     const deals = await fetchAllObjects("deals", ["dealname", "amount", "dealstage", "pipeline", "closedate", "createdate", "hubspot_owner_id"], ["companies", "contacts"]);
-    const dealCompanyIds = deals.map((deal) => idFromAssociation(deal, "companies")).filter((id) => !companiesById.has(id));
+    const dealCompanyIds = recordCompanyIds(deals, contactsById).filter((id) => !companiesById.has(id));
     if (dealCompanyIds.length) {
       const extraCompanies = await batchReadObjects("companies", dealCompanyIds, companyProperties);
       companiesById = new Map([...companiesById, ...extraCompanies]);
     }
     const dealsPath = path.join(outDir, "hubspot-deals.xlsx");
-    writeWorkbook(dealsPath, deals.map((deal) => dealRow(deal, companiesById)));
+    writeWorkbook(dealsPath, deals.map((deal) => dealRow(deal, companiesById, contactsById)));
     files.deals = dealsPath;
   }
 
   if (!skipNotes) {
     const notes = await fetchAllObjects("notes", ["hs_note_body", "hs_timestamp", "createdate", "hubspot_owner_id"], ["companies", "contacts", "deals"]);
-    const noteCompanyIds = notes.map((note) => idFromAssociation(note, "companies")).filter((id) => !companiesById.has(id));
+    const noteCompanyIds = recordCompanyIds(notes, contactsById).filter((id) => !companiesById.has(id));
     if (noteCompanyIds.length) {
       const extraCompanies = await batchReadObjects("companies", noteCompanyIds, companyProperties);
       companiesById = new Map([...companiesById, ...extraCompanies]);
     }
     const notesPath = path.join(outDir, "hubspot-notes.xlsx");
-    writeWorkbook(notesPath, notes.map((note) => noteRow(note, companiesById)));
+    writeWorkbook(notesPath, notes.map((note) => noteRow(note, companiesById, contactsById)));
     files.notes = notesPath;
   }
 

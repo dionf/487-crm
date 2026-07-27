@@ -62,8 +62,8 @@ const limit = Number(argValue("--limit") || 0);
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
 const SEGMENT_PATTERNS = [
-  { id: "factor_30", patterns: [/factor\s*30/i, /spf\s*30/i] },
-  { id: "factor_50", patterns: [/factor\s*50/i, /spf\s*50/i] },
+  { id: "factor_30", patterns: [/factor[\s_-]*30/i, /spf[\s_-]*30/i] },
+  { id: "factor_50", patterns: [/factor[\s_-]*50/i, /spf[\s_-]*50/i] },
   { id: "algemene_nieuwsbrief", patterns: [/algemene nieuwsbrief/i, /newsletter/i, /nieuwsbrief/i] },
   { id: "klant", patterns: [/klant/i, /customer/i] },
   { id: "prospect", patterns: [/prospect/i, /lead/i] },
@@ -557,6 +557,7 @@ function renderMarkdownReport(report) {
     `HubSpot deals als notitie: ${formatCount(report.planned.dealsSeen)}`,
     `HubSpot notities als notitie: ${formatCount(report.planned.notesSeen)}`,
     `Bedrijven met marketing toegestaan: ${formatCount(report.planned.marketingAllowedCompanies)}`,
+    `Bedrijven in Algemene nieuwsbrief: ${formatCount(report.planned.algemeneNieuwsbriefCompanies)}`,
     `Bedrijven in Factor 30: ${formatCount(report.planned.factor30Companies)}`,
     `Bedrijven in Factor 50: ${formatCount(report.planned.factor50Companies)}`,
     "",
@@ -1482,6 +1483,7 @@ async function main() {
       notesSeen: hubspotNotes.length,
       associatedNotesPlanned: plans.reduce((sum, plan) => sum + plan.associatedNotes.length, 0),
       marketingAllowedCompanies: plans.filter((plan) => plan.lead.marketing_consent).length,
+      algemeneNieuwsbriefCompanies: plans.filter((plan) => plan.lead.marketing_segments?.includes("algemene_nieuwsbrief")).length,
       factor30Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_30")).length,
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
       listContactsSeen: listContacts.length,
@@ -1546,6 +1548,7 @@ async function main() {
   console.log(`HubSpot deals als notitie: ${report.planned.dealsSeen}`);
   console.log(`HubSpot notities als notitie: ${report.planned.notesSeen}`);
   console.log(`Marketing toegestaan: ${report.planned.marketingAllowedCompanies}`);
+  console.log(`Algemene nieuwsbrief: ${report.planned.algemeneNieuwsbriefCompanies}`);
   console.log(`Factor 30: ${report.planned.factor30Companies}`);
   console.log(`Factor 50: ${report.planned.factor50Companies}`);
   if (report.commit) {

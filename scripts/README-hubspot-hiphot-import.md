@@ -147,6 +147,19 @@ node scripts/import-hubspot-hiphot.mjs \
 
 Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marketingvelden, HubSpot ID's en importmetadata worden wel bijgewerkt. Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 
+## Verificatie na import
+
+Maak na de live import een post-import rapport:
+
+```bash
+npm run verify:hubspot:hiphot -- \
+  --expected=/tmp/hiphot-hubspot-import-report.json \
+  --report=/tmp/hiphot-hubspot-post-import-verification.json \
+  --report-md=/tmp/hiphot-hubspot-post-import-verification.md
+```
+
+Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-markeringen buiten HipHot zijn gevonden.
+
 ## Wat wordt waar opgeslagen?
 
 - Bedrijven worden CRM-leads met `tenant='hiphot'`.

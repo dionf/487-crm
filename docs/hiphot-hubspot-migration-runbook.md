@@ -185,11 +185,22 @@ Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande
 
 Voer na de import minimaal deze controles uit:
 
+Maak eerst het automatische post-import rapport:
+
+```bash
+npm run verify:hubspot:hiphot -- \
+  --expected=/tmp/hiphot-hubspot-import-result.json \
+  --report=/tmp/hiphot-hubspot-post-import-verification.json \
+  --report-md=/tmp/hiphot-hubspot-post-import-verification.md
+```
+
 1. CRM aantallen
    - totaal HipHot bedrijven
    - bedrijven met marketing toegestaan
    - bedrijven met Factor 30
    - bedrijven met Factor 50
+   - bedrijven met HubSpot company-ID
+   - contactpersonen met HubSpot contact-ID
 
 2. Steekproef in CRM
    - 10 nieuwe bedrijven
@@ -201,10 +212,12 @@ Voer na de import minimaal deze controles uit:
 3. Tenantveiligheid
    - controleer dat alle geïmporteerde records `tenant='hiphot'` hebben
    - controleer dat er geen records in tenant `48-7` zijn aangepast
+   - controleer dat het post-import rapport geen HubSpot-markeringen buiten HipHot meldt
 
 4. Rapportage
    - bewaar het JSON-rapport
    - bewaar het Markdown-rapport
+   - bewaar het post-import verificatierapport
    - noteer importdatum, commit en bronbestanden
 
 ## Fase 5: HubSpot uitfaseren

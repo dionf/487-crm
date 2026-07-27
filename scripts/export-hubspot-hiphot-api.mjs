@@ -20,9 +20,8 @@ const skipDeals = args.includes("--skip-deals");
 const skipNotes = args.includes("--skip-notes");
 const contactObjectTypeId = "0-1";
 const listMappings = [
-  { segmentId: "factor_30", fileName: "hubspot-list-factor-30.xlsx", names: ["Factor 30", "Factor30", "SPF 30"] },
-  { segmentId: "factor_50", fileName: "hubspot-list-factor-50.xlsx", names: ["Factor 50", "Factor50", "SPF 50"] },
-  { segmentId: "algemene_nieuwsbrief", fileName: "hubspot-list-algemene-nieuwsbrief.xlsx", names: ["Algemene nieuwsbrief", "Nieuwsbrief", "Newsletter"] },
+  { segmentId: "factor_30", fileName: "hubspot-list-factor-30.xlsx", names: ["Factor 30", "Factor30", "SPF 30", "SPF30 kopers NL"] },
+  { segmentId: "factor_50", fileName: "hubspot-list-factor-50.xlsx", names: ["Factor 50", "Factor50", "SPF 50", "SPF50 kopers NL"] },
 ];
 
 if (!accessToken) {
@@ -70,21 +69,50 @@ function chunk(items, size) {
   return chunks;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  async function runWorker() {
+    for (;;) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
+  return results;
+}
+
 async function hubspot(pathname, options = {}) {
   const url = new URL(pathname, "https://api.hubapi.com");
   for (const [key, value] of Object.entries(options.query || {})) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   }
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let response;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    response = await fetch(url, {
+      method: options.method || "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+    if (response.status !== 429) break;
+    const retryAfter = Number(response.headers.get("retry-after") || 0);
+    await sleep(retryAfter ? retryAfter * 1000 : 1000 * (attempt + 1));
+  }
   const body = await response.text();
-  const payload = body ? JSON.parse(body) : {};
+  let payload = {};
+  try {
+    payload = body ? JSON.parse(body) : {};
+  } catch {
+    payload = { raw: body };
+  }
   if (!response.ok) {
     const missingScopes = payload.errors?.flatMap((error) => error.context?.requiredGranularScopes || error.context?.missingScopes || []) || [];
     const error = new Error(payload.message || `HubSpot API fout ${response.status}`);
@@ -169,18 +197,59 @@ async function fetchListMembershipIds(listId) {
 
 async function fetchSubscriptionStatuses(emails) {
   const byEmail = new Map();
-  for (const emailsChunk of chunk([...new Set(emails.filter(Boolean))], 100)) {
-    const page = await hubspot("/communication-preferences/2026-03/statuses/batch/read", {
-      method: "POST",
-      query: { channel: "EMAIL" },
-      body: { inputs: emailsChunk },
-    });
-    for (const result of page.results || []) {
-      const email = text(result.subscriberIdString).toLowerCase();
-      byEmail.set(email, result.statuses || []);
+  const uniqueEmails = [...new Set(emails.filter(Boolean).map((email) => text(email).toLowerCase()))];
+  try {
+    for (const emailsChunk of chunk(uniqueEmails, 100)) {
+      const page = await hubspot("/communication-preferences/2026-03/statuses/batch/read", {
+        method: "POST",
+        query: { channel: "EMAIL" },
+        body: { inputs: emailsChunk },
+      });
+      for (const result of page.results || []) {
+        const email = text(result.subscriberIdString).toLowerCase();
+        byEmail.set(email, result.statuses || []);
+      }
     }
+    return { byEmail, source: "communication-preferences-2026-03-batch" };
+  } catch (error) {
+    if (!error.missingScopes?.includes("communication_preferences.statuses.batch.read")) throw error;
   }
-  return byEmail;
+
+  let failed = 0;
+  await mapWithConcurrency(uniqueEmails, 8, async (email) => {
+    try {
+      const page = await hubspot(`/communication-preferences/v3/status/email/${encodeURIComponent(email)}`);
+      byEmail.set(email, page.subscriptionStatuses || []);
+    } catch (error) {
+      if (error.category === "MISSING_SCOPES") throw error;
+      if (error.status !== 404) failed++;
+      byEmail.set(email, []);
+    }
+  });
+  return { byEmail, source: "communication-preferences-v3-email-status", failed };
+}
+
+function formatSubscriptionStatuses(statuses) {
+  return (statuses || [])
+    .map((status) => {
+      const name = status.subscriptionName || status.name || status.subscriptionId || status.id || "";
+      const state = status.status || status.subscriptionStatus || "";
+      return [name, state].filter(Boolean).join(": ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function truthyMarketingValue(value) {
+  return /^(true|yes|ja|1|subscribed|ingeschreven)$/i.test(text(value));
+}
+
+function hasMarketingInformationSubscription(statuses) {
+  return (statuses || []).some((status) => {
+    const name = text(status.subscriptionName || status.name || status.subscriptionId || status.id);
+    const state = text(status.status || status.subscriptionStatus);
+    return /marketing information|marketing|nieuwsbrief|newsletter/i.test(name) && /^subscribed$/i.test(state);
+  });
 }
 
 function customListMappings() {
@@ -235,6 +304,14 @@ function contactRow(record, companiesById, subscriptionStatuses) {
   const company = companiesById.get(companyId)?.properties || {};
   const email = text(p.email).toLowerCase();
   const statuses = subscriptionStatuses.get(email) || [];
+  const listMemberships = [];
+  if (
+    hasMarketingInformationSubscription(statuses)
+    || truthyMarketingValue(p.marketing_newsletter)
+    || truthyMarketingValue(p.newsletter_subscription)
+  ) {
+    listMemberships.push("Algemene nieuwsbrief");
+  }
   return {
     "Record ID": record.id,
     "Associated Company ID": companyId,
@@ -246,7 +323,8 @@ function contactRow(record, companiesById, subscriptionStatuses) {
     "Phone number": p.phone || p.mobilephone || "",
     "Job title": p.jobtitle || "",
     "Marketing contact status": p.hs_marketable_status || "",
-    "Email subscription status": statuses.map((status) => status.subscriptionName || status.subscriptionId).filter(Boolean).join("; "),
+    "Email subscription status": formatSubscriptionStatuses(statuses),
+    "List memberships": listMemberships.join("; "),
     "Opted out of email": boolText(p.hs_email_optout),
     "Email hard bounce reason": p.hs_email_hard_bounce_reason || p.hs_email_hard_bounce_reason_enum || "",
     "Subscribed to email subscription types": p.hs_email_communication_subscriptions_opted_in || "",
@@ -360,10 +438,16 @@ async function main() {
   }
 
   let subscriptionStatuses = new Map();
+  let subscriptionStatusSource = "";
   try {
-    subscriptionStatuses = await fetchSubscriptionStatuses(contacts.map((contact) => contact.properties?.email));
+    const statusResult = await fetchSubscriptionStatuses(contacts.map((contact) => contact.properties?.email));
+    subscriptionStatuses = statusResult.byEmail;
+    subscriptionStatusSource = statusResult.source;
+    if (statusResult.failed) {
+      warnings.push(`Nieuwsbriefstatussen: ${statusResult.failed} e-mailadressen konden niet via HubSpot v3 worden gecontroleerd.`);
+    }
   } catch (error) {
-    const scopeText = error.missingScopes?.join(", ") || "communication_preferences.statuses.batch.read";
+    const scopeText = error.missingScopes?.join(", ") || "communication_preferences.read";
     warnings.push(`Nieuwsbriefstatussen niet volledig opgehaald: HubSpot mist scope ${scopeText}.`);
     if (strictMarketing) throw error;
   }
@@ -432,6 +516,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     source: "hubspot-api",
     outputDirectory: outDir,
+    subscriptionStatusSource,
     counts: {
       companies: companies.length,
       contacts: contacts.length,
@@ -466,8 +551,10 @@ async function main() {
   console.log("Geen CRM-wijzigingen gedaan.");
 }
 
-main().catch((error) => {
-  console.error(`Fout: ${error.message}`);
-  if (error.missingScopes?.length) console.error(`Ontbrekende HubSpot scopes: ${error.missingScopes.join(", ")}`);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(`Fout: ${error.message}`);
+    if (error.missingScopes?.length) console.error(`Ontbrekende HubSpot scopes: ${error.missingScopes.join(", ")}`);
+    process.exit(1);
+  });

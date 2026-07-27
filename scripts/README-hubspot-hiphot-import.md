@@ -96,6 +96,8 @@ Daarna staat in `/tmp/hiphot-hubspot-api-export/manifest.json` het exacte dry-ru
 
 De API-exporter haalt Factor 30 en Factor 50 uit de HubSpot lijsten `SPF30 kopers NL` en `SPF50 kopers NL`. Het segment Algemene nieuwsbrief wordt afgeleid uit de officiële subscription status `Marketing Information: SUBSCRIBED`, zodat er geen onduidelijke algemene lijstnaam hoeft te worden gegokt.
 
+Deals en notities die in HubSpot niet direct aan een bedrijf hangen, maar wel aan een contactpersoon, krijgen via die contactpersoon alsnog `Associated Company ID`, `Company name` en `Associated Contact Email` in de export. Daardoor kan de import meer historie onder het juiste CRM-bedrijf plaatsen.
+
 Benodigde HubSpot scopes voor een volledige API-export:
 
 - CRM objecten: bedrijven, contacten, deals en notities lezen.

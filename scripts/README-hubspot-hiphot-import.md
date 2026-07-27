@@ -166,5 +166,6 @@ Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-m
 - Marketingtoestemming, segmenten en tags worden op bedrijfsniveau opgeslagen op de lead.
 - Contactpersonen blijven contactpersonen onder het bedrijf.
 - HubSpot deals en HubSpot notities worden als interne CRM-notities onder het bedrijf opgeslagen.
+- HubSpot deal/notitie-notities krijgen een import-key om dubbele historie-notities bij een tweede run te voorkomen.
 - HubSpot contact-ID's worden alleen gebruikt voor dedupe/audit, niet voor marketing op contactniveau.
 - De ruwe geïmporteerde HubSpot-rijen worden als activiteit-metadata bewaard, zodat exportdata later terug te vinden is.

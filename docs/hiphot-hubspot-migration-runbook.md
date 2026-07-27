@@ -177,6 +177,7 @@ Importgedrag:
 - Contactpersonen worden onder het bedrijf gezet.
 - Marketingtoestemming en segmenten worden op bedrijfsniveau gezet, niet op contactniveau.
 - HubSpot deals en notities worden als interne CRM-notities onder het bedrijf gezet.
+- HubSpot deal/notitie-notities krijgen een import-key, zodat opnieuw draaien geen dubbele historie-notities hoort te maken.
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.

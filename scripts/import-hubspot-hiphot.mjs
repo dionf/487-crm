@@ -22,6 +22,7 @@ const TENANT = "hiphot";
 const SOURCE = "hubspot";
 const IMPORT_USER = "HubSpot import";
 const DEFAULT_REPORT = "/tmp/hiphot-hubspot-import-report.json";
+const HUBSPOT_IMPORT_MARKER = "HubSpot import key:";
 const HIPHOT_MARKETING_SEGMENTS = [
   { id: "algemene_nieuwsbrief", label: "Algemene nieuwsbrief" },
   { id: "factor_30", label: "Factor 30" },
@@ -490,6 +491,8 @@ function renderMarkdownReport(report) {
       "",
       `Gelukt: ${formatCount(report.commit.committed)}`,
       `Mislukt: ${formatCount(report.commit.failed)}`,
+      `HubSpot notities toegevoegd: ${formatCount(report.commit.createdAssociatedNotes)}`,
+      `HubSpot notities overgeslagen als duplicaat: ${formatCount(report.commit.skippedAssociatedNotes)}`,
       ""
     );
   } else {
@@ -674,8 +677,10 @@ function parseDeal(row) {
   ])).split(/[;,]/)[0]?.trim() || "";
   const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
 
+  const importKey = dealId ? `hubspot-deal:${dealId}` : `hubspot-deal:${lower(companyName)}:${lower(dealName)}:${amount}:${closeDate}`;
   return {
     type: "deal",
+    importKey,
     dealId,
     associatedCompanyId,
     companyName,
@@ -686,6 +691,7 @@ function parseDeal(row) {
     raw: row,
     content: [
       "HubSpot deal",
+      `${HUBSPOT_IMPORT_MARKER} ${importKey}`,
       dealId ? `ID: ${dealId}` : null,
       dealName ? `Naam: ${dealName}` : null,
       stage ? `Status: ${stage}` : null,
@@ -711,8 +717,10 @@ function parseHubSpotNote(row) {
   ])).split(/[;,]/)[0]?.trim() || "";
   const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
 
+  const importKey = noteId ? `hubspot-note:${noteId}` : `hubspot-note:${lower(companyName)}:${createDate}:${body.slice(0, 80)}`;
   return {
     type: "note",
+    importKey,
     noteId,
     associatedCompanyId,
     companyName,
@@ -723,6 +731,7 @@ function parseHubSpotNote(row) {
     raw: row,
     content: [
       "HubSpot notitie",
+      `${HUBSPOT_IMPORT_MARKER} ${importKey}`,
       noteId ? `ID: ${noteId}` : null,
       createDate ? `Datum: ${createDate}` : null,
       owner ? `Eigenaar: ${owner}` : null,
@@ -981,12 +990,14 @@ function buildPlan(group, existingLead) {
     associatedNotes: [
       ...(group.deals || []).map((deal) => ({
         type: "deal",
+        importKey: deal.importKey,
         content: deal.content,
         date: deal.date,
         raw: cleanRawRow(deal.raw),
       })),
       ...(group.notes || []).map((note) => ({
         type: "note",
+        importKey: note.importKey,
         content: note.content,
         date: note.date,
         raw: cleanRawRow(note.raw),
@@ -1163,14 +1174,41 @@ async function commitPlan(supabase, plan, maps) {
     if (contact.hubspot_contact_id) maps.contactsByHubspotId.add(contact.hubspot_contact_id);
   }
 
-  await supabase.from("notes").insert({
-    lead_id: leadId,
-    content: plan.noteContent,
-    note_type: "intern",
-    created_by: IMPORT_USER,
-    tenant: TENANT,
-  });
+  const { data: existingNotes, error: existingNotesError } = await supabase
+    .from("notes")
+    .select("content")
+    .eq("lead_id", leadId)
+    .eq("tenant", TENANT)
+    .ilike("content", `%${HUBSPOT_IMPORT_MARKER}%`);
+  if (existingNotesError) {
+    throw new Error(`Kon bestaande HubSpot-notities niet controleren: ${existingNotesError.message}`);
+  }
+  const existingImportKeys = new Set(
+    (existingNotes || [])
+      .map((note) => String(note.content || "").match(new RegExp(`${HUBSPOT_IMPORT_MARKER}\\s*([^\\n]+)`))?.[1]?.trim())
+      .filter(Boolean)
+  );
+
+  const summaryKey = plan.lead.hubspot_company_id
+    ? `hubspot-summary:${plan.lead.hubspot_company_id}`
+    : `hubspot-summary:${leadId}`;
+  if (!existingImportKeys.has(summaryKey)) {
+    await supabase.from("notes").insert({
+      lead_id: leadId,
+      content: `${HUBSPOT_IMPORT_MARKER} ${summaryKey}\n${plan.noteContent}`,
+      note_type: "intern",
+      created_by: IMPORT_USER,
+      tenant: TENANT,
+    });
+    existingImportKeys.add(summaryKey);
+  }
+  let createdAssociatedNotes = 0;
+  let skippedAssociatedNotes = 0;
   for (const note of plan.associatedNotes) {
+    if (note.importKey && existingImportKeys.has(note.importKey)) {
+      skippedAssociatedNotes++;
+      continue;
+    }
     await supabase.from("notes").insert({
       lead_id: leadId,
       content: note.content,
@@ -1178,6 +1216,8 @@ async function commitPlan(supabase, plan, maps) {
       created_by: IMPORT_USER,
       tenant: TENANT,
     });
+    createdAssociatedNotes++;
+    if (note.importKey) existingImportKeys.add(note.importKey);
   }
   await supabase.from("activities").insert({
     lead_id: leadId,
@@ -1189,12 +1229,14 @@ async function commitPlan(supabase, plan, maps) {
       action: plan.action,
       created_contact_ids: createdContacts,
       associated_notes: plan.associatedNotes.length,
+      created_associated_notes: createdAssociatedNotes,
+      skipped_associated_notes: skippedAssociatedNotes,
       source: SOURCE,
       raw: plan.raw,
     },
   });
 
-  return { leadId, createdContacts: createdContacts.length };
+  return { leadId, createdContacts: createdContacts.length, createdAssociatedNotes, skippedAssociatedNotes };
 }
 
 async function main() {
@@ -1324,16 +1366,20 @@ async function main() {
   if (!DRY) {
     let committed = 0;
     let failed = 0;
+    let createdAssociatedNotes = 0;
+    let skippedAssociatedNotes = 0;
     for (const plan of plans) {
       try {
-        await commitPlan(supabase, plan, maps);
+        const result = await commitPlan(supabase, plan, maps);
+        createdAssociatedNotes += result.createdAssociatedNotes;
+        skippedAssociatedNotes += result.skippedAssociatedNotes;
         committed++;
       } catch (error) {
         failed++;
         console.error(`Mislukt: ${error.message}`);
       }
     }
-    report.commit = { committed, failed };
+    report.commit = { committed, failed, createdAssociatedNotes, skippedAssociatedNotes };
   }
 
   writeReports(report);
@@ -1350,6 +1396,8 @@ async function main() {
   console.log(`Factor 50: ${report.planned.factor50Companies}`);
   if (report.commit) {
     console.log(`Commit: ${report.commit.committed} gelukt, ${report.commit.failed} mislukt`);
+    console.log(`HubSpot notities toegevoegd: ${report.commit.createdAssociatedNotes}`);
+    console.log(`HubSpot notities overgeslagen als duplicaat: ${report.commit.skippedAssociatedNotes}`);
   } else {
     console.log("Geen wijzigingen gedaan. Gebruik --commit na controle van het rapport.");
   }

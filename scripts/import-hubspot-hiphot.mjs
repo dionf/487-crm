@@ -43,6 +43,43 @@ const HIPHOT_MARKETING_STATUSES = [
   { id: "hard_bounce", label: "Hard bounce" },
   { id: "non_marketing", label: "Geen marketingcontact" },
 ];
+const HIPHOT_LEAD_STATUSES = [
+  { id: "prospect", label: "Prospect" },
+  { id: "nieuwe_aanvraag", label: "Nieuwe Aanvraag" },
+  { id: "terugbellen", label: "Terugbellen" },
+  { id: "offerte_gestuurd", label: "Offerte Gestuurd" },
+  { id: "reminder_gestuurd", label: "Reminder Gestuurd" },
+  { id: "offerte_in_de_wacht", label: "In de Wacht" },
+  { id: "in_overweging", label: "In Overweging" },
+  { id: "offerte_gewonnen", label: "Gewonnen" },
+  { id: "offerte_verloren", label: "Verloren" },
+  { id: "geen_lead", label: "Geen lead" },
+];
+const HUBSPOT_PIPELINE_LABELS = {
+  "707050616": "Ecommerce",
+  default: "Offertes",
+};
+const HUBSPOT_DEAL_STAGE_RULES = [
+  { pipeline: "707050616", stage: "1033277855", stageLabel: "Checkout Abandoned", status: "prospect", rank: 10 },
+  { pipeline: "707050616", stage: "1033277856", stageLabel: "Payment Pending/Failed", status: "in_overweging", rank: 65 },
+  { pipeline: "707050616", stage: "1033277857", stageLabel: "On hold", status: "offerte_in_de_wacht", rank: 80 },
+  { pipeline: "707050616", stage: "1033277858", stageLabel: "Processing", status: "offerte_gewonnen", rank: 55 },
+  { pipeline: "707050616", stage: "1033277859", stageLabel: "Completed", status: "offerte_gewonnen", rank: 50 },
+  { pipeline: "707050616", stage: "1033277860", stageLabel: "Refunded/Cancelled", status: "offerte_verloren", rank: 40 },
+  { pipeline: "default", stage: "appointmentscheduled", stageLabel: "Nieuwe aanvraag", status: "nieuwe_aanvraag", rank: 60 },
+  { pipeline: "default", stage: "qualifiedtobuy", stageLabel: "Offerte verstuurd", status: "offerte_gestuurd", rank: 70 },
+  { pipeline: "default", stage: "1082344340", stageLabel: "Reminder gestuurd", status: "reminder_gestuurd", rank: 75 },
+  { pipeline: "default", stage: "presentationscheduled", stageLabel: "In de wacht", status: "offerte_in_de_wacht", rank: 80 },
+  { pipeline: "default", stage: "contractsent", stageLabel: "In overweging", status: "in_overweging", rank: 90 },
+  { pipeline: "default", stage: "closedwon", stageLabel: "Offerte gewonnen", status: "offerte_gewonnen", rank: 55 },
+  { pipeline: "default", stage: "closedlost", stageLabel: "Offerte verloren", status: "offerte_verloren", rank: 40 },
+];
+const HUBSPOT_DEAL_STAGE_RULE_BY_KEY = new Map(
+  HUBSPOT_DEAL_STAGE_RULES.map((rule) => [`${rule.pipeline}:${rule.stage}`, rule])
+);
+const HUBSPOT_DEAL_STAGE_RULE_BY_STAGE = new Map(
+  HUBSPOT_DEAL_STAGE_RULES.map((rule) => [rule.stage, rule])
+);
 
 const args = process.argv.slice(2);
 const AUDIT = args.includes("--audit");
@@ -61,6 +98,7 @@ const limit = Number(argValue("--limit") || 0);
 
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
+const HIPHOT_LEAD_STATUS_LABELS = new Map(HIPHOT_LEAD_STATUSES.map((status) => [status.id, status.label]));
 const SEGMENT_PATTERNS = [
   { id: "factor_30", patterns: [/factor[\s_-]*30/i, /spf[\s_-]*30/i] },
   { id: "factor_50", patterns: [/factor[\s_-]*50/i, /spf[\s_-]*50/i] },
@@ -183,6 +221,31 @@ function text(value) {
 
 function lower(value) {
   return text(value).toLowerCase();
+}
+
+function statusLabel(status) {
+  return HIPHOT_LEAD_STATUS_LABELS.get(status) || status || "Onbekend";
+}
+
+function dealStageRule(pipeline, stage) {
+  const pipelineKey = text(pipeline);
+  const stageKey = text(stage);
+  return HUBSPOT_DEAL_STAGE_RULE_BY_KEY.get(`${pipelineKey}:${stageKey}`)
+    || HUBSPOT_DEAL_STAGE_RULE_BY_STAGE.get(stageKey)
+    || null;
+}
+
+function pipelineLabel(pipeline) {
+  const value = text(pipeline);
+  return HUBSPOT_PIPELINE_LABELS[value] || value;
+}
+
+function stageLabel(pipeline, stage) {
+  const value = text(stage);
+  const rule = dealStageRule(pipeline, stage);
+  return rule?.stageLabel
+    ? `${rule.stageLabel}${value && value !== rule.stageLabel ? ` (${value})` : ""}`
+    : value;
 }
 
 function normalizeEmail(value) {
@@ -574,13 +637,27 @@ function renderMarkdownReport(report) {
     `Bedrijven in Factor 30: ${formatCount(report.planned.factor30Companies)}`,
     `Bedrijven in Factor 50: ${formatCount(report.planned.factor50Companies)}`,
     "",
+    "## Pipelinefase na import",
+    "",
+    markdownTable(
+      ["Pipelinefase", "Bedrijven"],
+      Object.entries(report.planned.leadStatuses || {}).map(([status, count]) => [
+        statusLabel(status),
+        formatCount(count),
+      ])
+    ),
+    "",
     "## Voorbeelden",
     "",
     markdownTable(
-      ["Actie", "Bedrijf", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
+      ["Actie", "Bedrijf", "Pipelinefase", "HubSpot bronfase", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
       report.samples.map((sample) => [
         sample.action === "insert_lead" ? "Nieuw" : "Bijwerken",
         sample.company,
+        statusLabel(sample.status),
+        sample.dealStatusSource
+          ? `${sample.dealStatusSource.pipelineLabel} / ${sample.dealStatusSource.stageLabel}`
+          : "",
         sample.marketingConsent ? "Ja" : "Nee",
         (sample.marketingSegments || []).map(segmentLabel).join(", "),
         sample.contacts.map((contact) => contact.email || contact.name).join(", "),
@@ -599,6 +676,19 @@ function renderMarkdownReport(report) {
     `Lijstbestanden zonder segmentmapping: ${(report.warnings.listFilesWithoutSegmentMapping || []).join(", ") || "geen"}`,
     ""
   );
+
+  const unmappedStages = Object.entries(report.warnings.unmappedDealStages || {});
+  if (unmappedStages.length) {
+    lines.push(
+      "## Niet herkende HubSpot dealstadia",
+      "",
+      markdownTable(
+        ["HubSpot stadium", "Deals"],
+        unmappedStages.map(([stage, count]) => [stage, formatCount(count)])
+      ),
+      ""
+    );
+  }
 
   if (report.commit) {
     lines.push(
@@ -791,12 +881,21 @@ function parseDeal(row) {
     "Associated company record ID",
   ])).split(/[;,]/)[0]?.trim() || "";
   const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
+  const mappedStage = dealStageRule(pipeline, stage);
+  const readableStage = stageLabel(pipeline, stage);
+  const readablePipeline = pipelineLabel(pipeline);
 
   const importKey = dealId ? `hubspot-deal:${dealId}` : `hubspot-deal:${lower(companyName)}:${lower(dealName)}:${amount}:${closeDate}`;
   return {
     type: "deal",
     importKey,
     dealId,
+    stage,
+    stageLabel: mappedStage?.stageLabel || readableStage,
+    pipeline,
+    pipelineLabel: readablePipeline,
+    leadStatus: mappedStage?.status || null,
+    leadStatusRank: mappedStage?.rank || 0,
     associatedCompanyId,
     companyName,
     domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
@@ -809,8 +908,9 @@ function parseDeal(row) {
       `${HUBSPOT_IMPORT_MARKER} ${importKey}`,
       dealId ? `ID: ${dealId}` : null,
       dealName ? `Naam: ${dealName}` : null,
-      stage ? `Status: ${stage}` : null,
-      pipeline ? `Pipeline: ${pipeline}` : null,
+      stage ? `Status: ${readableStage}` : null,
+      pipeline ? `Pipeline: ${readablePipeline}${readablePipeline !== pipeline ? ` (${pipeline})` : ""}` : null,
+      mappedStage?.status ? `CRM pipelinefase: ${statusLabel(mappedStage.status)}` : null,
       amount ? `Bedrag: ${amount}` : null,
       closeDate ? `Sluitdatum: ${closeDate}` : null,
       owner ? `Eigenaar: ${owner}` : null,
@@ -1030,6 +1130,77 @@ function mergeMarketing(company, contacts) {
   };
 }
 
+function dealTime(deal) {
+  const time = deal.date ? new Date(deal.date).getTime() : 0;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function resolveLeadStatusFromDeals(deals = []) {
+  const candidates = deals
+    .filter((deal) => deal.leadStatus)
+    .map((deal) => ({
+      deal,
+      status: deal.leadStatus,
+      rank: deal.leadStatusRank || 0,
+      time: dealTime(deal),
+    }))
+    .sort((a, b) => (b.rank - a.rank) || (b.time - a.time));
+
+  const selected = candidates[0];
+  if (!selected) {
+    return {
+      status: "prospect",
+      source: null,
+    };
+  }
+
+  return {
+    status: selected.status,
+    source: {
+      dealId: selected.deal.dealId || null,
+      title: selected.deal.title || null,
+      pipeline: selected.deal.pipeline || null,
+      pipelineLabel: selected.deal.pipelineLabel || selected.deal.pipeline || null,
+      stage: selected.deal.stage || null,
+      stageLabel: selected.deal.stageLabel || selected.deal.stage || null,
+      date: selected.deal.date || null,
+    },
+  };
+}
+
+function shouldUpdateExistingStatus(existingStatus, incomingStatus) {
+  if (!incomingStatus) return false;
+  if (OVERWRITE) return true;
+  if (!existingStatus) return incomingStatus !== "prospect";
+  return existingStatus === "prospect" && incomingStatus !== "prospect";
+}
+
+function statusCounts(plans) {
+  const counts = {};
+  for (const plan of plans) {
+    const status = plan.lead.status || plan.existingLead?.status || "unknown";
+    counts[status] = (counts[status] || 0) + 1;
+  }
+  const ordered = {};
+  for (const status of HIPHOT_LEAD_STATUSES) {
+    if (counts[status.id]) ordered[status.id] = counts[status.id];
+  }
+  for (const [status, count] of Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (!ordered[status]) ordered[status] = count;
+  }
+  return ordered;
+}
+
+function unmappedDealStageCounts(deals) {
+  const counts = new Map();
+  for (const deal of deals) {
+    if (!deal.stage || deal.leadStatus) continue;
+    const key = `${deal.pipelineLabel || deal.pipeline || "Onbekende pipeline"} / ${deal.stageLabel || deal.stage}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Object.fromEntries([...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+}
+
 function groupRecords(companies, contacts) {
   const groups = new Map();
 
@@ -1067,8 +1238,10 @@ function groupRecords(companies, contacts) {
 
 function buildPlan(group, existingLead) {
   const primary = group.contacts.find((contact) => contact.email) || group.contacts[0];
+  const dealStatus = resolveLeadStatusFromDeals(group.deals);
   const lead = {
     ...group.company.lead,
+    status: dealStatus.status,
     ...mergeMarketing(group.company, group.contacts),
   };
 
@@ -1086,10 +1259,15 @@ function buildPlan(group, existingLead) {
   const hasMarketingEvidence = group.contacts.some(
     (contact) => contact.marketing.status !== "unknown" || contact.marketing.segments.length > 0
   );
+  const patchedLead = existingLead ? patchForExistingLead(lead, existingLead, hasMarketingEvidence) : lead;
+  if (existingLead && shouldUpdateExistingStatus(existingLead.status, lead.status)) {
+    patchedLead.status = lead.status;
+  }
   return {
     action,
     existingLead,
-    lead: existingLead ? patchForExistingLead(lead, existingLead, hasMarketingEvidence) : lead,
+    lead: patchedLead,
+    dealStatus,
     contacts: group.contacts.map((contact, index) => ({
       hubspot_contact_id: contact.hubspotContactId || null,
       hubspot_imported_at: new Date().toISOString(),
@@ -1178,6 +1356,7 @@ function patchForExistingLead(incoming, existing, hasMarketingEvidence) {
 }
 
 function buildNote(group) {
+  const dealStatus = resolveLeadStatusFromDeals(group.deals);
   const lines = [
     `Geïmporteerd uit HubSpot op ${new Date().toISOString().slice(0, 10)}.`,
   ];
@@ -1185,6 +1364,9 @@ function buildNote(group) {
   if (group.contacts.length) lines.push(`Contactpersonen uit HubSpot: ${group.contacts.length}`);
   if (group.deals?.length) lines.push(`Deals uit HubSpot: ${group.deals.length}`);
   if (group.notes?.length) lines.push(`Notities uit HubSpot: ${group.notes.length}`);
+  if (dealStatus.source) {
+    lines.push(`CRM pipelinefase uit HubSpot: ${statusLabel(dealStatus.status)} (${dealStatus.source.pipelineLabel} / ${dealStatus.source.stageLabel}).`);
+  }
   const segmentLabels = group.contacts.flatMap((contact) => contact.marketing.segments);
   if (segmentLabels.length) lines.push(`Marketingsegmenten: ${[...new Set(segmentLabels)].join(", ")}`);
   return lines.join("\n");
@@ -1194,7 +1376,7 @@ async function fetchExisting(supabase) {
   const [leads, contacts] = await Promise.all([
     fetchAllExistingRows(() => supabase
       .from("leads")
-      .select("id, company_name, city, email, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language")
+      .select("id, company_name, city, email, status, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language")
       .eq("tenant", TENANT)
       .order("id", { ascending: true }), "bestaande HipHot leads"),
     fetchAllExistingRows(() => supabase
@@ -1570,11 +1752,14 @@ async function main() {
       factor30Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_30")).length,
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
       listContactsSeen: listContacts.length,
+      leadStatuses: statusCounts(plans),
     },
     samples: plans.slice(0, 5).map((plan) => ({
       action: plan.action,
       existingLeadId: plan.existingLead?.id || null,
       company: plan.existingLead?.company_name || plan.lead.company_name,
+      status: plan.lead.status || plan.existingLead?.status || null,
+      dealStatusSource: plan.dealStatus.source,
       marketingConsent: plan.lead.marketing_consent,
       marketingSegments: plan.lead.marketing_segments,
       contacts: plan.contacts.map((contact) => ({
@@ -1591,6 +1776,7 @@ async function main() {
       noRecognizedSegmentContacts: contacts.filter((contact) => contact.marketing.segments.length === 0).length,
       unmatchedDeals: unmatchedDeals.length,
       unmatchedNotes: unmatchedNotes.length,
+      unmappedDealStages: unmappedDealStageCounts(deals),
       listFilesWithoutSegmentMapping: listExports.filter((listExport) => !listExport.segmentId).map((listExport) => listExport.fileName),
     },
     approval: {

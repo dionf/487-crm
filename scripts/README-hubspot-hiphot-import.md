@@ -98,6 +98,26 @@ De API-exporter haalt Factor 30 en Factor 50 uit de HubSpot lijsten `SPF30 koper
 
 Deals en notities die in HubSpot niet direct aan een bedrijf hangen, maar wel aan een contactpersoon, krijgen via die contactpersoon alsnog `Associated Company ID`, `Company name` en `Associated Contact Email` in de export. Daardoor kan de import meer historie onder het juiste CRM-bedrijf plaatsen.
 
+De import gebruikt HubSpot deals ook om de HipHot pipelinefase te bepalen. Bedrijven zonder bruikbare dealhistorie starten als `Prospect`; bedrijven met order- of offertehistorie komen in de passende CRM-kolom:
+
+| HubSpot pipeline | HubSpot stadium | HipHot CRM pipelinefase |
+| --- | --- | --- |
+| Ecommerce | Checkout Abandoned | Prospect |
+| Ecommerce | Payment Pending/Failed | In Overweging |
+| Ecommerce | On hold | In de Wacht |
+| Ecommerce | Processing | Gewonnen |
+| Ecommerce | Completed | Gewonnen |
+| Ecommerce | Refunded/Cancelled | Verloren |
+| Offertes | Nieuwe aanvraag | Nieuwe Aanvraag |
+| Offertes | Offerte verstuurd | Offerte Gestuurd |
+| Offertes | Reminder gestuurd | Reminder Gestuurd |
+| Offertes | In de wacht | In de Wacht |
+| Offertes | In overweging | In Overweging |
+| Offertes | Offerte gewonnen | Gewonnen |
+| Offertes | Offerte verloren | Verloren |
+
+Bestaande CRM-leads behouden hun huidige pipelinefase, behalve wanneer ze nog `Prospect` zijn en HubSpot een duidelijkere fase heeft. Dat voorkomt dat actuele CRM-opvolging door oude HubSpot-data wordt overschreven.
+
 Benodigde HubSpot scopes voor een volledige API-export:
 
 - CRM objecten: bedrijven, contacten, deals en notities lezen.

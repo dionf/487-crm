@@ -800,7 +800,7 @@ function parseDeal(row) {
     associatedCompanyId,
     companyName,
     domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
-    email: normalizeEmail(get(row, ["Email", "Contact email", "E-mail", "E-mailadres"])),
+    email: normalizeEmail(get(row, ["Email", "Contact email", "Associated Contact Email", "E-mail", "E-mailadres"])),
     title: dealName || dealId || "HubSpot deal",
     date: cleanDate(closeDate || createDate),
     raw: row,

@@ -39,6 +39,26 @@ Exporteer uit HubSpot minimaal:
    - Algemene nieuwsbrief / marketingmail
    - Event/recreatie, outdoor werk, klant/prospect alleen als deze echt in HubSpot bestaan
 
+4. **Deals / verkoopkansen** (optioneel, maar nodig voor volledige historie)
+   - Record ID / Deal ID
+   - Deal name
+   - Associated Company ID
+   - Company name
+   - Amount
+   - Deal stage
+   - Pipeline
+   - Close date
+   - Deal owner
+
+5. **Notes / notities** (optioneel, maar nodig voor volledige historie)
+   - Record ID / Note ID
+   - Associated Company ID
+   - Company name
+   - Associated Contact Email
+   - Note body
+   - Create date / activity date
+   - Note owner / created by
+
 Als HubSpot lijstlidmaatschappen niet in de contact-export zitten, exporteer de relevante lijsten apart en voeg ze als kolommen toe aan het contactbestand voordat de import draait.
 
 Je kunt losse lijstexports ook apart meegeven. Zet de bestanden bijvoorbeeld in één map met herkenbare namen:
@@ -68,6 +88,8 @@ Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en h
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --deals=/pad/naar/hubspot-deals.xlsx \
+  --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-export-audit.json \
   --report-md=/tmp/hiphot-hubspot-export-audit.md \
@@ -87,6 +109,8 @@ Als de segmentnamen kloppen, draai daarna de CRM dry-run:
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --deals=/pad/naar/hubspot-deals.xlsx \
+  --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-import-report.json \
   --report-md=/tmp/hiphot-hubspot-import-report.md
@@ -99,6 +123,8 @@ Dit schrijft niets naar CRM. Controleer daarna vooral het `.md` rapport:
 - aantal contactpersonen
 - aantal bedrijven met marketing toegestaan
 - Factor 30 en Factor 50 aantallen
+- aantal HubSpot deals en notities dat gekoppeld wordt
+- niet-gekoppelde deals/notities die handmatig bekeken moeten worden
 - waarschuwingen over onbekende marketingstatussen of niet-herkende segmenten
 
 ## Live import
@@ -109,6 +135,8 @@ Alleen uitvoeren na controle van de dry-run:
 node scripts/import-hubspot-hiphot.mjs \
   --companies=/pad/naar/hubspot-companies.xlsx \
   --contacts=/pad/naar/hubspot-contacts.xlsx \
+  --deals=/pad/naar/hubspot-deals.xlsx \
+  --notes=/pad/naar/hubspot-notes.xlsx \
   --lists=/pad/naar/hubspot-lijsten \
   --report=/tmp/hiphot-hubspot-import-report.json \
   --report-md=/tmp/hiphot-hubspot-import-report.md \
@@ -122,5 +150,6 @@ Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marke
 - Bedrijven worden CRM-leads met `tenant='hiphot'`.
 - Marketingtoestemming, segmenten en tags worden op bedrijfsniveau opgeslagen op de lead.
 - Contactpersonen blijven contactpersonen onder het bedrijf.
+- HubSpot deals en HubSpot notities worden als interne CRM-notities onder het bedrijf opgeslagen.
 - HubSpot contact-ID's worden alleen gebruikt voor dedupe/audit, niet voor marketing op contactniveau.
 - De ruwe geïmporteerde HubSpot-rijen worden als activiteit-metadata bewaard, zodat exportdata later terug te vinden is.

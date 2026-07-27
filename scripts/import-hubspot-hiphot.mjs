@@ -45,6 +45,8 @@ const DRY = args.includes("--dry-run") || !args.includes("--commit");
 const OVERWRITE = args.includes("--overwrite");
 const companiesPath = argValue("--companies");
 const contactsPath = argValue("--contacts");
+const dealsPath = argValue("--deals");
+const notesPath = argValue("--notes");
 const listsPath = argValue("--lists") || argValue("--lists-dir");
 const listArgs = args.filter((arg) => arg.startsWith("--list=")).map((arg) => arg.slice("--list=".length));
 const reportPath = argValue("--report") || DEFAULT_REPORT;
@@ -133,6 +135,15 @@ function readListExports() {
       segmentLabel: HIPHOT_MARKETING_SEGMENTS.find((segment) => segment.id === spec.segmentId)?.label || null,
     };
   });
+}
+
+function associationKey({ hubspotCompanyId, associatedCompanyId, companyName, domain, email }) {
+  const companyId = hubspotCompanyId || associatedCompanyId;
+  if (companyId) return `company:${companyId}`;
+  if (domain) return `domain:${lower(domain)}`;
+  if (companyName) return `name:${lower(companyName)}`;
+  if (email) return `email:${lower(email)}`;
+  return "";
 }
 
 function normalizeKey(key) {
@@ -276,17 +287,21 @@ function auditMarketingValues(rows) {
   };
 }
 
-function buildAuditReport({ companyRows, contactRows, listExports }) {
+function buildAuditReport({ companyRows, contactRows, dealRows, noteRows, listExports }) {
   return {
     mode: "audit",
     tenant: TENANT,
     input: {
       companiesPath,
       contactsPath,
+      dealsPath,
+      notesPath,
       listsPath,
       listArgs,
       companyRows: companyRows.length,
       contactRows: contactRows.length,
+      dealRows: dealRows.length,
+      noteRows: noteRows.length,
       listFiles: listExports.length,
       listRows: listExports.reduce((sum, listExport) => sum + listExport.rows.length, 0),
     },
@@ -296,6 +311,12 @@ function buildAuditReport({ companyRows, contactRows, listExports }) {
     contacts: {
       columns: columnSummary(contactRows),
       marketing: auditMarketingValues(contactRows),
+    },
+    deals: {
+      columns: columnSummary(dealRows),
+    },
+    notes: {
+      columns: columnSummary(noteRows),
     },
     lists: listExports.map((listExport) => ({
       filePath: listExport.filePath,
@@ -362,6 +383,8 @@ function renderMarkdownReport(report) {
       "",
       `Bedrijvenrijen: ${formatCount(report.input.companyRows)}`,
       `Contactrijen: ${formatCount(report.input.contactRows)}`,
+      `Dealrijen: ${formatCount(report.input.dealRows)}`,
+      `Notitierijen: ${formatCount(report.input.noteRows)}`,
       `Losse lijstbestanden: ${formatCount(report.input.listFiles)}`,
       `Losse lijstrijen: ${formatCount(report.input.listRows)}`,
       "",
@@ -408,6 +431,15 @@ function renderMarkdownReport(report) {
         ])
       )
     );
+    if (report.deals.columns.length || report.notes.columns.length) {
+      lines.push(
+        "",
+        "## Deals en notities",
+        "",
+        `Dealkolommen: ${formatCount(report.deals.columns.length)}`,
+        `Notitiekolommen: ${formatCount(report.notes.columns.length)}`
+      );
+    }
     return `${lines.join("\n")}\n`;
   }
 
@@ -420,6 +452,8 @@ function renderMarkdownReport(report) {
     `Bestaande bedrijven bijwerken: ${formatCount(report.planned.updateLeads)}`,
     `Contactpersonen uit HubSpot: ${formatCount(report.planned.contactsSeen)}`,
     `Contactpersonen uit losse lijsten: ${formatCount(report.planned.listContactsSeen)}`,
+    `HubSpot deals als notitie: ${formatCount(report.planned.dealsSeen)}`,
+    `HubSpot notities als notitie: ${formatCount(report.planned.notesSeen)}`,
     `Bedrijven met marketing toegestaan: ${formatCount(report.planned.marketingAllowedCompanies)}`,
     `Bedrijven in Factor 30: ${formatCount(report.planned.factor30Companies)}`,
     `Bedrijven in Factor 50: ${formatCount(report.planned.factor50Companies)}`,
@@ -427,13 +461,15 @@ function renderMarkdownReport(report) {
     "## Voorbeelden",
     "",
     markdownTable(
-      ["Actie", "Bedrijf", "Marketing", "Segmenten", "Contacten"],
+      ["Actie", "Bedrijf", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
       report.samples.map((sample) => [
         sample.action === "insert_lead" ? "Nieuw" : "Bijwerken",
         sample.company,
         sample.marketingConsent ? "Ja" : "Nee",
         (sample.marketingSegments || []).map(segmentLabel).join(", "),
         sample.contacts.map((contact) => contact.email || contact.name).join(", "),
+        sample.dealCount,
+        sample.noteCount,
       ])
     ),
     "",
@@ -442,6 +478,8 @@ function renderMarkdownReport(report) {
     `Zonder bedrijfsnaam: ${formatCount(report.warnings.noCompanyName)}`,
     `Contacten met onbekende marketingstatus: ${formatCount(report.warnings.unknownMarketingStatusContacts)}`,
     `Contacten zonder herkend segment: ${formatCount(report.warnings.noRecognizedSegmentContacts)}`,
+    `Niet gekoppelde deals: ${formatCount(report.warnings.unmatchedDeals)}`,
+    `Niet gekoppelde notities: ${formatCount(report.warnings.unmatchedNotes)}`,
     `Lijstbestanden zonder segmentmapping: ${(report.warnings.listFilesWithoutSegmentMapping || []).join(", ") || "geen"}`,
     ""
   );
@@ -618,6 +656,121 @@ function parseListMember(listExport, row) {
   };
 }
 
+function parseDeal(row) {
+  const dealId = text(get(row, ["Record ID", "Deal ID", "HubSpot Deal ID", "hs_object_id"]));
+  const dealName = text(get(row, ["Deal name", "Deal Name", "Naam", "Dealnaam"]));
+  const amount = text(get(row, ["Amount", "Bedrag", "Deal amount", "Value", "Waarde"]));
+  const stage = text(get(row, ["Deal stage", "Stage", "Dealstadium", "Pipeline stage"]));
+  const pipeline = text(get(row, ["Pipeline", "Pijplijn"]));
+  const closeDate = text(get(row, ["Close date", "Closed date", "Sluitdatum"]));
+  const createDate = text(get(row, ["Create date", "Created date", "Aanmaakdatum"]));
+  const owner = text(get(row, ["Deal owner", "Owner", "Eigenaar"]));
+  const associatedCompanyId = text(get(row, [
+    "Associated Company ID",
+    "Associated company IDs",
+    "Company ID",
+    "Primary associated company ID",
+    "Associated company record ID",
+  ])).split(/[;,]/)[0]?.trim() || "";
+  const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
+
+  return {
+    type: "deal",
+    dealId,
+    associatedCompanyId,
+    companyName,
+    domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
+    email: normalizeEmail(get(row, ["Email", "Contact email", "E-mail", "E-mailadres"])),
+    title: dealName || dealId || "HubSpot deal",
+    date: cleanDate(closeDate || createDate),
+    raw: row,
+    content: [
+      "HubSpot deal",
+      dealId ? `ID: ${dealId}` : null,
+      dealName ? `Naam: ${dealName}` : null,
+      stage ? `Status: ${stage}` : null,
+      pipeline ? `Pipeline: ${pipeline}` : null,
+      amount ? `Bedrag: ${amount}` : null,
+      closeDate ? `Sluitdatum: ${closeDate}` : null,
+      owner ? `Eigenaar: ${owner}` : null,
+    ].filter(Boolean).join("\n"),
+  };
+}
+
+function parseHubSpotNote(row) {
+  const noteId = text(get(row, ["Record ID", "Note ID", "HubSpot Note ID", "hs_object_id"]));
+  const body = text(get(row, ["Note body", "Body", "Content", "Notitie", "Note", "Description", "Omschrijving"]));
+  const createDate = text(get(row, ["Create date", "Created date", "Activity date", "Timestamp", "Aanmaakdatum", "Datum"]));
+  const owner = text(get(row, ["Note owner", "Owner", "Eigenaar", "Created by"]));
+  const associatedCompanyId = text(get(row, [
+    "Associated Company ID",
+    "Associated company IDs",
+    "Company ID",
+    "Primary associated company ID",
+    "Associated company record ID",
+  ])).split(/[;,]/)[0]?.trim() || "";
+  const companyName = text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"]));
+
+  return {
+    type: "note",
+    noteId,
+    associatedCompanyId,
+    companyName,
+    domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
+    email: normalizeEmail(get(row, ["Email", "Contact email", "Associated Contact Email", "E-mail", "E-mailadres"])),
+    title: noteId || "HubSpot notitie",
+    date: cleanDate(createDate),
+    raw: row,
+    content: [
+      "HubSpot notitie",
+      noteId ? `ID: ${noteId}` : null,
+      createDate ? `Datum: ${createDate}` : null,
+      owner ? `Eigenaar: ${owner}` : null,
+      body ? "" : null,
+      body || "(geen notitietekst in export)",
+    ].filter((line) => line !== null).join("\n"),
+  };
+}
+
+function attachAssociatedRecords(groups, records) {
+  const byKey = new Map();
+  for (const group of groups) {
+    group.deals = group.deals || [];
+    group.notes = group.notes || [];
+    const keys = [
+      associationKey({
+        hubspotCompanyId: group.company.hubspotCompanyId,
+        companyName: group.company.companyName,
+        domain: group.company.domain,
+        email: group.company.lead.email,
+      }),
+      ...group.contacts.map((contact) => associationKey({
+        associatedCompanyId: contact.associatedCompanyId,
+        companyName: contact.companyName,
+        domain: contact.domain,
+        email: contact.email,
+      })),
+    ].filter(Boolean);
+    for (const key of keys) {
+      if (!byKey.has(key)) byKey.set(key, group);
+    }
+  }
+
+  const unmatched = [];
+  for (const record of records) {
+    const key = associationKey(record);
+    const group = key ? byKey.get(key) : null;
+    if (!group) {
+      unmatched.push(record);
+      continue;
+    }
+    if (record.type === "deal") group.deals.push(record);
+    if (record.type === "note") group.notes.push(record);
+  }
+
+  return unmatched;
+}
+
 function mergeMarketingRecords(a, b) {
   const priority = ["hard_bounce", "unsubscribed", "subscribed", "non_marketing", "unknown"];
   const statuses = [a.status, b.status].filter(Boolean);
@@ -757,23 +910,15 @@ function mergeMarketing(company, contacts) {
 function groupRecords(companies, contacts) {
   const groups = new Map();
 
-  function keyFor({ hubspotCompanyId, companyName, domain, email }) {
-    if (hubspotCompanyId) return `company:${hubspotCompanyId}`;
-    if (domain) return `domain:${domain}`;
-    if (companyName) return `name:${lower(companyName)}`;
-    if (email) return `email:${email}`;
-    return "";
-  }
-
   for (const company of companies) {
-    const key = keyFor(company);
+    const key = associationKey(company);
     if (!key || !company.companyName) continue;
-    groups.set(key, { company, contacts: [] });
+    groups.set(key, { company, contacts: [], deals: [], notes: [] });
   }
 
   for (const contact of contacts) {
-    const key = keyFor({
-      hubspotCompanyId: contact.associatedCompanyId,
+    const key = associationKey({
+      associatedCompanyId: contact.associatedCompanyId,
       companyName: contact.companyName,
       domain: contact.domain,
       email: contact.email,
@@ -787,7 +932,7 @@ function groupRecords(companies, contacts) {
         Phone: contact.phone || "",
       });
       fallbackCompany.domain = contact.domain;
-      groups.set(key, { company: fallbackCompany, contacts: [] });
+      groups.set(key, { company: fallbackCompany, contacts: [], deals: [], notes: [] });
     }
     groups.get(key).contacts.push(contact);
   }
@@ -833,6 +978,20 @@ function buildPlan(group, existingLead) {
       tenant: TENANT,
       marketing_consent: false,
     })),
+    associatedNotes: [
+      ...(group.deals || []).map((deal) => ({
+        type: "deal",
+        content: deal.content,
+        date: deal.date,
+        raw: cleanRawRow(deal.raw),
+      })),
+      ...(group.notes || []).map((note) => ({
+        type: "note",
+        content: note.content,
+        date: note.date,
+        raw: cleanRawRow(note.raw),
+      })),
+    ],
     noteContent: buildNote(group),
     raw: {
       company: cleanRawRow(group.company.raw),
@@ -899,6 +1058,8 @@ function buildNote(group) {
   ];
   if (group.company.hubspotCompanyId) lines.push(`HubSpot bedrijf-ID: ${group.company.hubspotCompanyId}`);
   if (group.contacts.length) lines.push(`Contactpersonen uit HubSpot: ${group.contacts.length}`);
+  if (group.deals?.length) lines.push(`Deals uit HubSpot: ${group.deals.length}`);
+  if (group.notes?.length) lines.push(`Notities uit HubSpot: ${group.notes.length}`);
   const segmentLabels = group.contacts.flatMap((contact) => contact.marketing.segments);
   if (segmentLabels.length) lines.push(`Marketingsegmenten: ${[...new Set(segmentLabels)].join(", ")}`);
   return lines.join("\n");
@@ -1009,6 +1170,15 @@ async function commitPlan(supabase, plan, maps) {
     created_by: IMPORT_USER,
     tenant: TENANT,
   });
+  for (const note of plan.associatedNotes) {
+    await supabase.from("notes").insert({
+      lead_id: leadId,
+      content: note.content,
+      note_type: "intern",
+      created_by: IMPORT_USER,
+      tenant: TENANT,
+    });
+  }
   await supabase.from("activities").insert({
     lead_id: leadId,
     activity_type: "hubspot_import",
@@ -1018,6 +1188,7 @@ async function commitPlan(supabase, plan, maps) {
     metadata: {
       action: plan.action,
       created_contact_ids: createdContacts,
+      associated_notes: plan.associatedNotes.length,
       source: SOURCE,
       raw: plan.raw,
     },
@@ -1031,24 +1202,30 @@ async function main() {
   console.log(`Tenant: ${TENANT}`);
   console.log(`Bedrijvenbestand: ${companiesPath || "(niet opgegeven)"}`);
   console.log(`Contactbestand: ${contactsPath || "(niet opgegeven)"}`);
+  console.log(`Dealsbestand: ${dealsPath || "(niet opgegeven)"}`);
+  console.log(`Notitiebestand: ${notesPath || "(niet opgegeven)"}`);
   console.log(`Lijstmap: ${listsPath || "(niet opgegeven)"}`);
   if (listArgs.length) console.log(`Losse lijstbestanden: ${listArgs.length}`);
   console.log(`Rapport: ${reportPath}\n`);
   if (markdownReportPath) console.log(`Leesbaar rapport: ${markdownReportPath}`);
 
-  if (!contactsPath && !companiesPath && !listsPath && listArgs.length === 0) {
-    throw new Error("Geef minimaal --contacts=..., --companies=..., --lists=... of --list=... mee.");
+  if (!contactsPath && !companiesPath && !dealsPath && !notesPath && !listsPath && listArgs.length === 0) {
+    throw new Error("Geef minimaal --contacts=..., --companies=..., --deals=..., --notes=..., --lists=... of --list=... mee.");
   }
 
   const companyRows = readRows(companiesPath);
   const contactRows = readRows(contactsPath);
+  const dealRows = readRows(dealsPath);
+  const noteRows = readRows(notesPath);
   const listExports = readListExports();
 
   if (AUDIT) {
-    const report = buildAuditReport({ companyRows, contactRows, listExports });
+    const report = buildAuditReport({ companyRows, contactRows, dealRows, noteRows, listExports });
     writeReports(report);
     console.log(`Bedrijfskolommen: ${report.companies.columns.length}`);
     console.log(`Contactkolommen: ${report.contacts.columns.length}`);
+    console.log(`Dealkolommen: ${report.deals.columns.length}`);
+    console.log(`Notitiekolommen: ${report.notes.columns.length}`);
     console.log(`Marketingkolommen gevonden: ${report.contacts.marketing.marketingColumns.length}`);
     console.log(`Lijstexports gevonden: ${report.lists.length}`);
     console.log(`Herkende segmenthits: ${report.contacts.marketing.recognizedSegments.length}`);
@@ -1067,6 +1244,8 @@ async function main() {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const companies = companyRows.map(parseCompany);
+  const deals = dealRows.map(parseDeal).filter((deal) => deal.content);
+  const hubspotNotes = noteRows.map(parseHubSpotNote).filter((note) => note.content);
   const listContacts = listExports
     .filter((listExport) => listExport.segmentId)
     .flatMap((listExport) => listExport.rows.map((row) => parseListMember(listExport, row)))
@@ -1076,6 +1255,9 @@ async function main() {
     ...listContacts,
   ]).filter((contact) => contact.email || contact.fullName || contact.companyName);
   const groups = groupRecords(companies, contacts);
+  const unmatchedAssociatedRecords = attachAssociatedRecords(groups, [...deals, ...hubspotNotes]);
+  const unmatchedDeals = unmatchedAssociatedRecords.filter((record) => record.type === "deal");
+  const unmatchedNotes = unmatchedAssociatedRecords.filter((record) => record.type === "note");
   const existing = await fetchExisting(supabase);
   const maps = buildMaps(existing);
 
@@ -1086,10 +1268,14 @@ async function main() {
     input: {
       companiesPath,
       contactsPath,
+      dealsPath,
+      notesPath,
       listsPath,
       listArgs,
       companyRows: companyRows.length,
       contactRows: contactRows.length,
+      dealRows: dealRows.length,
+      noteRows: noteRows.length,
       listFiles: listExports.length,
       listRows: listExports.reduce((sum, listExport) => sum + listExport.rows.length, 0),
     },
@@ -1103,6 +1289,9 @@ async function main() {
       updateLeads: plans.filter((plan) => plan.action === "update_lead").length,
       contactsSeen: contacts.length,
       contactsPlanned: plans.reduce((sum, plan) => sum + plan.contacts.length, 0),
+      dealsSeen: deals.length,
+      notesSeen: hubspotNotes.length,
+      associatedNotesPlanned: plans.reduce((sum, plan) => sum + plan.associatedNotes.length, 0),
       marketingAllowedCompanies: plans.filter((plan) => plan.lead.marketing_consent).length,
       factor30Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_30")).length,
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
@@ -1119,11 +1308,15 @@ async function main() {
         email: contact.email,
         hubspotContactId: contact.hubspot_contact_id,
       })),
+      dealCount: plan.associatedNotes.filter((note) => note.type === "deal").length,
+      noteCount: plan.associatedNotes.filter((note) => note.type === "note").length,
     })),
     warnings: {
       noCompanyName: groups.filter((group) => !group.company.companyName).length,
       unknownMarketingStatusContacts: contacts.filter((contact) => contact.marketing.status === "unknown").length,
       noRecognizedSegmentContacts: contacts.filter((contact) => contact.marketing.segments.length === 0).length,
+      unmatchedDeals: unmatchedDeals.length,
+      unmatchedNotes: unmatchedNotes.length,
       listFilesWithoutSegmentMapping: listExports.filter((listExport) => !listExport.segmentId).map((listExport) => listExport.fileName),
     },
   };
@@ -1150,6 +1343,8 @@ async function main() {
   console.log(`Bij te werken leads: ${report.planned.updateLeads}`);
   console.log(`Contactpersonen gevonden: ${report.planned.contactsSeen}`);
   console.log(`Contactpersonen uit losse lijsten: ${report.planned.listContactsSeen}`);
+  console.log(`HubSpot deals als notitie: ${report.planned.dealsSeen}`);
+  console.log(`HubSpot notities als notitie: ${report.planned.notesSeen}`);
   console.log(`Marketing toegestaan: ${report.planned.marketingAllowedCompanies}`);
   console.log(`Factor 30: ${report.planned.factor30Companies}`);
   console.log(`Factor 50: ${report.planned.factor50Companies}`);

@@ -1149,7 +1149,7 @@ function resolveLeadStatusFromDeals(deals = []) {
   const selected = candidates[0];
   if (!selected) {
     return {
-      status: "prospect",
+      status: "geen_lead",
       source: null,
     };
   }

@@ -98,7 +98,7 @@ De API-exporter haalt Factor 30 en Factor 50 uit de HubSpot lijsten `SPF30 koper
 
 Deals en notities die in HubSpot niet direct aan een bedrijf hangen, maar wel aan een contactpersoon, krijgen via die contactpersoon alsnog `Associated Company ID`, `Company name` en `Associated Contact Email` in de export. Daardoor kan de import meer historie onder het juiste CRM-bedrijf plaatsen.
 
-De import gebruikt HubSpot deals ook om de HipHot pipelinefase te bepalen. Bedrijven zonder bruikbare dealhistorie starten als `Prospect`; bedrijven met order- of offertehistorie komen in de passende CRM-kolom:
+De import gebruikt HubSpot deals ook om de HipHot pipelinefase te bepalen. Bedrijven zonder bruikbare dealhistorie starten als `Geen lead`; bedrijven met order- of offertehistorie komen in de passende CRM-kolom:
 
 | HubSpot pipeline | HubSpot stadium | HipHot CRM pipelinefase |
 | --- | --- | --- |

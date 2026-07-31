@@ -148,11 +148,13 @@ Deze check controleert:
 - het veld **Relatietype** (`relationship_type`)
 - tenantveilige leesbaarheid van leads, contacten, notities en activiteiten
 - of er al HubSpot-markeringen buiten tenant `hiphot` staan
+- of er een service-role sleutel beschikbaar is voor volledige databasecontrole
 
 Go/no-go:
 
 - Alle schema-controles moeten **OK** zijn.
 - Er mogen geen HubSpot company-IDs of contact-IDs buiten tenant `hiphot` staan.
+- Databasecontrole moet **volledig** zijn; met alleen de publieke sleutel kunnen tenantchecks door rechten beperkt zijn.
 - Als `relationship_type` ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe en draai daarna opnieuw de readiness-check.
 
 ## Fase 2: CRM dry-run
@@ -227,6 +229,7 @@ Importgedrag:
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
 - Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning, overwrite-modus of geplande schrijfdata afwijkt, stopt de import.
 - Live import stopt als de CRM-databasekolom `relationship_type` nog ontbreekt.
+- Live import vereist `SUPABASE_SERVICE_ROLE_KEY`, zodat bestaande CRM-data volledig gecontroleerd kan worden.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

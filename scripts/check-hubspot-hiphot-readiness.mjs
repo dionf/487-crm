@@ -173,6 +173,7 @@ function renderMarkdownReport(report) {
     `Datum: ${new Date(report.generatedAt).toISOString().slice(0, 10)}`,
     `Tenant: ${report.tenant}`,
     `Status: ${report.ready ? "Klaar voor dry-run/live-importstap" : "Niet klaar"}`,
+    `Databasecontrole: ${report.credentialMode === "service_role" ? "volledig" : "beperkt; service-role sleutel ontbreekt"}`,
     "",
     "## Schema",
     "",
@@ -204,6 +205,7 @@ function renderMarkdownReport(report) {
       "## Actie nodig",
       "",
       "Pas ontbrekende CRM-migraties toe, met name `migrations/013_hiphot_company_marketing_segments.sql`, `migrations/014_hiphot_hubspot_contact_metadata.sql` en `migrations/015_hiphot_relationship_type.sql`, en draai daarna deze check opnieuw.",
+      "Zorg voor live import ook dat `SUPABASE_SERVICE_ROLE_KEY` beschikbaar is; zonder die sleutel is de tenantveiligheidscontrole beperkt.",
       ""
     );
   }
@@ -228,10 +230,12 @@ async function main() {
 
   loadEnv();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseKey = serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Supabase credentials ontbreken. Check .env.local.");
   }
+  const credentialMode = serviceRoleKey ? "service_role" : "anon";
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const schemaChecks = [];
@@ -248,6 +252,7 @@ async function main() {
   }
 
   const ready = schemaChecks.every((check) => check.ok)
+    && credentialMode === "service_role"
     && !tenantCheckError
     && tenantChecks.every((check) => check.ok);
 
@@ -255,6 +260,7 @@ async function main() {
     mode: "readiness",
     tenant: TENANT,
     generatedAt: new Date().toISOString(),
+    credentialMode,
     ready,
     schemaChecks,
     tenantChecks,
@@ -269,6 +275,9 @@ async function main() {
   }
   for (const check of tenantChecks) {
     console.log(`${check.ok ? "OK" : "LET OP"} - ${check.label}: ${check.value}`);
+  }
+  if (credentialMode !== "service_role") {
+    console.log("LET OP - SUPABASE_SERVICE_ROLE_KEY ontbreekt; tenantchecks kunnen door rechten beperkt zijn.");
   }
   if (tenantCheckError) console.log(`LET OP - tenantchecks konden niet volledig draaien: ${tenantCheckError}`);
   if (!ready) {

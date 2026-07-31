@@ -137,7 +137,7 @@ npm run readiness:hubspot:hiphot -- \
   --report-md=/tmp/hiphot-hubspot-readiness.md
 ```
 
-Deze check schrijft niets. Hij controleert of de benodigde migratievelden aanwezig zijn op `leads` en `contacts`, inclusief `relationship_type`, en of er geen HubSpot-markeringen buiten tenant `hiphot` staan.
+Deze check schrijft niets. Hij controleert of de benodigde migratievelden aanwezig zijn op `leads` en `contacts`, inclusief `relationship_type`, en of er geen HubSpot-markeringen buiten tenant `hiphot` staan. Voor volledige tenantcontrole en live import moet `SUPABASE_SERVICE_ROLE_KEY` beschikbaar zijn; met alleen de publieke sleutel is de controle beperkt door database-rechten.
 
 Als deze check meldt dat **Relatietype** ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe. Live import stopt ook zelf als die kolom nog ontbreekt.
 
@@ -210,7 +210,7 @@ node scripts/import-hubspot-hiphot.mjs \
 
 Live import vereist `--approved-report` met een eerder gecontroleerd dry-run rapport. Als de huidige importplanning daarvan afwijkt, stopt het script zonder te schrijven. Die controle kijkt ook naar gedrag dat bestaande CRM-data kan wijzigen, zoals `--overwrite`, en naar een vaste vingerafdruk plus payloadoverzicht van alle geplande lead-, contact-, notitie- en activiteitwijzigingen.
 
-Live import stopt ook vroeg als de CRM-databasekolom `relationship_type` nog ontbreekt.
+Live import stopt ook vroeg als de CRM-databasekolom `relationship_type` nog ontbreekt of als `SUPABASE_SERVICE_ROLE_KEY` niet beschikbaar is.
 
 Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marketingvelden, HubSpot ID's en importmetadata worden wel bijgewerkt. Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 

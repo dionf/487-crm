@@ -131,6 +131,30 @@ Go/no-go:
 - De bedrijven- en contactpersonenbestanden bevatten genoeg koppelvelden: Company ID, bedrijfsnaam, e-mailadres of domein.
 - Deal- en notitiekolommen zijn aanwezig als historie wordt meegenomen.
 
+## Fase 1b: CRM readiness-check
+
+Doel: controleren of de CRM-database klaar is voor de HipHot HubSpot-import. Deze stap leest alleen uit CRM en schrijft niets.
+
+```bash
+npm run readiness:hubspot:hiphot -- \
+  --report=/tmp/hiphot-hubspot-readiness.json \
+  --report-md=/tmp/hiphot-hubspot-readiness.md
+```
+
+Deze check controleert:
+
+- leadvelden voor marketing, HubSpot IDs en importmetadata
+- contactvelden voor HubSpot contactmetadata
+- het veld **Relatietype** (`relationship_type`)
+- tenantveilige leesbaarheid van leads, contacten, notities en activiteiten
+- of er al HubSpot-markeringen buiten tenant `hiphot` staan
+
+Go/no-go:
+
+- Alle schema-controles moeten **OK** zijn.
+- Er mogen geen HubSpot company-IDs of contact-IDs buiten tenant `hiphot` staan.
+- Als `relationship_type` ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe en draai daarna opnieuw de readiness-check.
+
 ## Fase 2: CRM dry-run
 
 Doel: de HubSpot-export vergelijken met de bestaande HipHot CRM-data, zonder te schrijven.
@@ -157,7 +181,10 @@ Controleer in het `.md` rapport:
 - aantallen voor Factor 30 en Factor 50
 - aantal gekoppelde deals en notities
 - aantal niet-gekoppelde deals en notities
+- onderscheid tussen HubSpot Ecommerce en Offertes in `HubSpot deals per bronpipeline`
+- relatietype-aantallen voor klanten, mailcontacten, nieuwsbriefcontacten, website/formulier en alleen HubSpot-records
 - waarschuwingen over onbekende marketingstatussen of niet-herkende segmenten
+- waarschuwing `Relatietype-kolom ontbreekt in huidige CRM-database`; die moet **Nee** zijn voordat live import mag starten
 
 Go/no-go:
 
@@ -165,6 +192,7 @@ Go/no-go:
 - Geen onverwacht hoge aantallen niet-gekoppelde deals/notities.
 - Marketingaantallen passen bij HubSpot.
 - Factor 30 en Factor 50 aantallen passen bij HubSpot.
+- Relatietypes passen bij de review van de Geen-lead records.
 - Er is expliciet akkoord op het dry-run rapport voordat `--commit` wordt gebruikt.
 
 ## Fase 3: live import
@@ -198,6 +226,7 @@ Importgedrag:
 - HubSpot deal/notitie-notities krijgen een import-key, zodat opnieuw draaien geen dubbele historie-notities hoort te maken.
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
 - Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning, overwrite-modus of geplande schrijfdata afwijkt, stopt de import.
+- Live import stopt als de CRM-databasekolom `relationship_type` nog ontbreekt.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 
@@ -221,6 +250,7 @@ npm run verify:hubspot:hiphot -- \
    - bedrijven met Factor 50
    - bedrijven met HubSpot company-ID
    - contactpersonen met HubSpot contact-ID
+   - bedrijven per relatietype
 
 2. Steekproef in CRM
    - 10 nieuwe bedrijven

@@ -660,6 +660,18 @@ function renderMarkdownReport(report) {
       ])
     ),
     "",
+    "## HubSpot deals per bronpipeline",
+    "",
+    markdownTable(
+      ["Bronpipeline", "HubSpot fase", "CRM fase", "Deals"],
+      (report.planned.hubspotDealPipelines || []).map((row) => [
+        row.pipeline,
+        row.stage,
+        row.crmStatus,
+        formatCount(row.deals),
+      ])
+    ),
+    "",
     "## Relatietype na import",
     "",
     markdownTable(
@@ -1314,6 +1326,33 @@ function relationshipTypeCounts(plans) {
   return ordered;
 }
 
+function hubspotDealPipelineCounts(deals) {
+  const order = new Map(
+    HUBSPOT_DEAL_STAGE_RULES.map((rule, index) => [
+      `${pipelineLabel(rule.pipeline)}|${rule.stageLabel}|${statusLabel(rule.status)}`,
+      index,
+    ])
+  );
+  const counts = new Map();
+  for (const deal of deals) {
+    const pipeline = deal.pipelineLabel || pipelineLabel(deal.pipeline) || "Onbekende pipeline";
+    const stage = deal.stageLabel || stageLabel(deal.pipeline, deal.stage) || "Onbekende fase";
+    const crmStatus = deal.leadStatus ? statusLabel(deal.leadStatus) : "Niet herkend";
+    const key = `${pipeline}|${stage}|${crmStatus}`;
+    const current = counts.get(key) || { pipeline, stage, crmStatus, deals: 0 };
+    current.deals++;
+    counts.set(key, current);
+  }
+  return [...counts.values()].sort((a, b) => {
+    const orderA = order.get(`${a.pipeline}|${a.stage}|${a.crmStatus}`) ?? Number.MAX_SAFE_INTEGER;
+    const orderB = order.get(`${b.pipeline}|${b.stage}|${b.crmStatus}`) ?? Number.MAX_SAFE_INTEGER;
+    return orderA - orderB
+      || a.pipeline.localeCompare(b.pipeline)
+      || a.stage.localeCompare(b.stage)
+      || a.crmStatus.localeCompare(b.crmStatus);
+  });
+}
+
 function unmappedDealStageCounts(deals) {
   const counts = new Map();
   for (const deal of deals) {
@@ -1905,6 +1944,7 @@ async function main() {
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
       listContactsSeen: listContacts.length,
       leadStatuses: statusCounts(plans),
+      hubspotDealPipelines: hubspotDealPipelineCounts(deals),
       relationshipTypes: relationshipTypeCounts(plans),
     },
     samples: plans.slice(0, 5).map((plan) => ({

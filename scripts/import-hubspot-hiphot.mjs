@@ -81,11 +81,48 @@ const HUBSPOT_DEAL_STAGE_RULES = [
   { pipeline: "default", stage: "closedwon", stageLabel: "Offerte gewonnen", status: "offerte_gewonnen", rank: 55 },
   { pipeline: "default", stage: "closedlost", stageLabel: "Offerte verloren", status: "offerte_verloren", rank: 40 },
 ];
+
+function normalizeDealLookupValue(value) {
+  return text(value)
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dealRulePipelineAliases(rule) {
+  const aliases = new Set([
+    rule.pipeline,
+    pipelineLabel(rule.pipeline),
+  ].map(normalizeDealLookupValue).filter(Boolean));
+  if (rule.pipeline === "default") aliases.add("offertes");
+  return [...aliases];
+}
+
+function dealRuleStageAliases(rule) {
+  return [
+    rule.stage,
+    rule.stageLabel,
+  ].map(normalizeDealLookupValue).filter(Boolean);
+}
+
 const HUBSPOT_DEAL_STAGE_RULE_BY_KEY = new Map(
   HUBSPOT_DEAL_STAGE_RULES.map((rule) => [`${rule.pipeline}:${rule.stage}`, rule])
 );
 const HUBSPOT_DEAL_STAGE_RULE_BY_STAGE = new Map(
   HUBSPOT_DEAL_STAGE_RULES.map((rule) => [rule.stage, rule])
+);
+const HUBSPOT_DEAL_STAGE_RULE_BY_NORMALIZED_KEY = new Map(
+  HUBSPOT_DEAL_STAGE_RULES.flatMap((rule) =>
+    dealRulePipelineAliases(rule).flatMap((pipeline) =>
+      dealRuleStageAliases(rule).map((stage) => [`${pipeline}:${stage}`, rule])
+    )
+  )
+);
+const HUBSPOT_DEAL_STAGE_RULE_BY_NORMALIZED_STAGE = new Map(
+  HUBSPOT_DEAL_STAGE_RULES.flatMap((rule) =>
+    dealRuleStageAliases(rule).map((stage) => [stage, rule])
+  )
 );
 
 const args = process.argv.slice(2);
@@ -246,6 +283,8 @@ function dealStageRule(pipeline, stage) {
   const stageKey = text(stage);
   return HUBSPOT_DEAL_STAGE_RULE_BY_KEY.get(`${pipelineKey}:${stageKey}`)
     || HUBSPOT_DEAL_STAGE_RULE_BY_STAGE.get(stageKey)
+    || HUBSPOT_DEAL_STAGE_RULE_BY_NORMALIZED_KEY.get(`${normalizeDealLookupValue(pipeline)}:${normalizeDealLookupValue(stage)}`)
+    || HUBSPOT_DEAL_STAGE_RULE_BY_NORMALIZED_STAGE.get(normalizeDealLookupValue(stage))
     || null;
 }
 

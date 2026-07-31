@@ -221,7 +221,7 @@ Maak na de live import een post-import rapport:
 
 ```bash
 npm run verify:hubspot:hiphot -- \
-  --expected=/tmp/hiphot-hubspot-import-report.json \
+  --expected=/tmp/hiphot-hubspot-import-result.json \
   --report=/tmp/hiphot-hubspot-post-import-verification.json \
   --report-md=/tmp/hiphot-hubspot-post-import-verification.md
 ```

@@ -55,6 +55,13 @@ const HIPHOT_LEAD_STATUSES = [
   { id: "offerte_verloren", label: "Verloren" },
   { id: "geen_lead", label: "Geen lead" },
 ];
+const HIPHOT_RELATION_TYPES = [
+  { id: "customer", label: "Klant", rank: 50 },
+  { id: "mail_contact", label: "Mailcontact", rank: 40 },
+  { id: "website_activity", label: "Website/formulier", rank: 30 },
+  { id: "newsletter_contact", label: "Nieuwsbriefcontact", rank: 20 },
+  { id: "hubspot_record", label: "Alleen HubSpot-record", rank: 10 },
+];
 const HUBSPOT_PIPELINE_LABELS = {
   "707050616": "Ecommerce",
   default: "Offertes",
@@ -99,6 +106,8 @@ const limit = Number(argValue("--limit") || 0);
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
 const HIPHOT_LEAD_STATUS_LABELS = new Map(HIPHOT_LEAD_STATUSES.map((status) => [status.id, status.label]));
+const HIPHOT_RELATION_TYPE_LABELS = new Map(HIPHOT_RELATION_TYPES.map((type) => [type.id, type.label]));
+const HIPHOT_RELATION_TYPE_RANKS = new Map(HIPHOT_RELATION_TYPES.map((type) => [type.id, type.rank]));
 const SEGMENT_PATTERNS = [
   { id: "factor_30", patterns: [/factor[\s_-]*30/i, /spf[\s_-]*30/i] },
   { id: "factor_50", patterns: [/factor[\s_-]*50/i, /spf[\s_-]*50/i] },
@@ -225,6 +234,10 @@ function lower(value) {
 
 function statusLabel(status) {
   return HIPHOT_LEAD_STATUS_LABELS.get(status) || status || "Onbekend";
+}
+
+function relationTypeLabel(type) {
+  return HIPHOT_RELATION_TYPE_LABELS.get(type) || type || "Onbekend";
 }
 
 function dealStageRule(pipeline, stage) {
@@ -647,14 +660,25 @@ function renderMarkdownReport(report) {
       ])
     ),
     "",
+    "## Relatietype na import",
+    "",
+    markdownTable(
+      ["Relatietype", "Bedrijven"],
+      Object.entries(report.planned.relationshipTypes || {}).map(([type, count]) => [
+        relationTypeLabel(type),
+        formatCount(count),
+      ])
+    ),
+    "",
     "## Voorbeelden",
     "",
     markdownTable(
-      ["Actie", "Bedrijf", "Pipelinefase", "HubSpot bronfase", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
+      ["Actie", "Bedrijf", "Pipelinefase", "Relatietype", "HubSpot bronfase", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
       report.samples.map((sample) => [
         sample.action === "insert_lead" ? "Nieuw" : "Bijwerken",
         sample.company,
         statusLabel(sample.status),
+        relationTypeLabel(sample.relationshipType),
         sample.dealStatusSource
           ? `${sample.dealStatusSource.pipelineLabel} / ${sample.dealStatusSource.stageLabel}`
           : "",
@@ -1130,6 +1154,79 @@ function mergeMarketing(company, contacts) {
   };
 }
 
+function numericSignal(value) {
+  const parsed = Number(String(value ?? "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function truthySignal(value) {
+  return /^(true|yes|ja|1|customer|klant)$/i.test(text(value));
+}
+
+function anyRawValue(rows, aliases) {
+  return rows.map((row) => text(get(row, aliases))).filter(Boolean);
+}
+
+function anyRawNumber(rows, aliases) {
+  return anyRawValue(rows, aliases).some((value) => numericSignal(value) > 0);
+}
+
+function hasCustomerSignal(group, rawRows) {
+  const lifecycle = anyRawValue(rawRows, ["Lifecycle stage", "Lifecycle Stage", "lifecyclestage"]);
+  const currentCustomer = anyRawValue(rawRows, ["Current customer", "Current Customer", "hs_current_customer"]);
+  const orderValues = anyRawValue(rawRows, [
+    "Last order date",
+    "Recent closed order date",
+    "First order closed date",
+    "Last order status",
+    "Last order number",
+    "Last product bought",
+    "Last products bought",
+    "Last SKUs bought",
+  ]);
+  return lifecycle.some((value) => /^customer$/i.test(value))
+    || currentCustomer.some(truthySignal)
+    || orderValues.length > 0
+    || anyRawNumber(rawRows, ["Total revenue", "Total Revenue", "Last order value", "Total current orders"])
+    || group.deals?.some((deal) => deal.leadStatus === "offerte_gewonnen");
+}
+
+function hasSalesActivitySignal(group, rawRows) {
+  const datedActivity = anyRawValue(rawRows, [
+    "Last contacted",
+    "Last activity date",
+    "Last sales activity date",
+    "Last outgoing email date",
+    "Sales email last replied",
+    "Sales email last opened",
+    "Sales email last clicked",
+  ]);
+  return group.notes?.length > 0
+    || datedActivity.length > 0
+    || anyRawNumber(rawRows, ["Number of times contacted", "Number of sales activities", "Marketing emails replied"])
+    || group.deals?.length > 0;
+}
+
+function hasWebsiteActivitySignal(rawRows) {
+  return anyRawNumber(rawRows, ["Number of form submissions"])
+    || anyRawValue(rawRows, ["First conversion", "Recent conversion", "First conversion date", "Recent conversion date"]).length > 0;
+}
+
+function resolveRelationshipType(group, marketing, dealStatus) {
+  const rawRows = [
+    group.company.raw,
+    ...group.contacts.map((contact) => contact.raw),
+  ].filter(Boolean);
+
+  if (dealStatus.status === "offerte_gewonnen" || hasCustomerSignal(group, rawRows)) {
+    return "customer";
+  }
+  if (hasSalesActivitySignal(group, rawRows)) return "mail_contact";
+  if (hasWebsiteActivitySignal(rawRows)) return "website_activity";
+  if (marketing.marketing_consent || marketing.marketing_segments?.length > 0) return "newsletter_contact";
+  return "hubspot_record";
+}
+
 function dealTime(deal) {
   const time = deal.date ? new Date(deal.date).getTime() : 0;
   return Number.isNaN(time) ? 0 : time;
@@ -1172,7 +1269,17 @@ function shouldUpdateExistingStatus(existingStatus, incomingStatus) {
   if (!incomingStatus) return false;
   if (OVERWRITE) return true;
   if (!existingStatus) return incomingStatus !== "prospect";
+  if (existingStatus === "geen_lead" && incomingStatus === "offerte_gewonnen") return true;
   return existingStatus === "prospect" && incomingStatus !== "prospect";
+}
+
+function shouldUpdateExistingRelationshipType(existingType, incomingType) {
+  if (!incomingType) return false;
+  if (OVERWRITE) return true;
+  if (!existingType) return true;
+  const existingRank = HIPHOT_RELATION_TYPE_RANKS.get(existingType) || 0;
+  const incomingRank = HIPHOT_RELATION_TYPE_RANKS.get(incomingType) || 0;
+  return incomingRank > existingRank;
 }
 
 function statusCounts(plans) {
@@ -1187,6 +1294,22 @@ function statusCounts(plans) {
   }
   for (const [status, count] of Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]))) {
     if (!ordered[status]) ordered[status] = count;
+  }
+  return ordered;
+}
+
+function relationshipTypeCounts(plans) {
+  const counts = {};
+  for (const plan of plans) {
+    const type = plan.lead.relationship_type || plan.existingLead?.relationship_type || "unknown";
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  const ordered = {};
+  for (const type of HIPHOT_RELATION_TYPES) {
+    if (counts[type.id]) ordered[type.id] = counts[type.id];
+  }
+  for (const [type, count] of Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (!ordered[type]) ordered[type] = count;
   }
   return ordered;
 }
@@ -1239,10 +1362,16 @@ function groupRecords(companies, contacts) {
 function buildPlan(group, existingLead) {
   const primary = group.contacts.find((contact) => contact.email) || group.contacts[0];
   const dealStatus = resolveLeadStatusFromDeals(group.deals);
+  const marketing = mergeMarketing(group.company, group.contacts);
+  const relationshipType = resolveRelationshipType(group, marketing, dealStatus);
+  const status = relationshipType === "customer" && ["geen_lead", "prospect"].includes(dealStatus.status)
+    ? "offerte_gewonnen"
+    : dealStatus.status;
   const lead = {
     ...group.company.lead,
-    status: dealStatus.status,
-    ...mergeMarketing(group.company, group.contacts),
+    status,
+    relationship_type: relationshipType,
+    ...marketing,
   };
 
   if (primary) {
@@ -1262,6 +1391,9 @@ function buildPlan(group, existingLead) {
   const patchedLead = existingLead ? patchForExistingLead(lead, existingLead, hasMarketingEvidence) : lead;
   if (existingLead && shouldUpdateExistingStatus(existingLead.status, lead.status)) {
     patchedLead.status = lead.status;
+  }
+  if (existingLead && shouldUpdateExistingRelationshipType(existingLead.relationship_type, lead.relationship_type)) {
+    patchedLead.relationship_type = lead.relationship_type;
   }
   return {
     action,
@@ -1369,16 +1501,36 @@ function buildNote(group) {
   }
   const segmentLabels = group.contacts.flatMap((contact) => contact.marketing.segments);
   if (segmentLabels.length) lines.push(`Marketingsegmenten: ${[...new Set(segmentLabels)].join(", ")}`);
+  lines.push(`Relatietype: ${relationTypeLabel(resolveRelationshipType(group, mergeMarketing(group.company, group.contacts), dealStatus))}.`);
   return lines.join("\n");
+}
+
+const EXISTING_LEAD_SELECT = "id, company_name, city, email, status, relationship_type, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language";
+const EXISTING_LEAD_SELECT_WITHOUT_RELATIONSHIP = EXISTING_LEAD_SELECT
+  .replace("relationship_type, ", "");
+
+async function fetchExistingLeads(supabase) {
+  try {
+    return await fetchAllExistingRows(() => supabase
+      .from("leads")
+      .select(EXISTING_LEAD_SELECT)
+      .eq("tenant", TENANT)
+      .order("id", { ascending: true }), "bestaande HipHot leads");
+  } catch (error) {
+    if (!/relationship_type/i.test(error.message)) throw error;
+    console.warn("Kolom relationship_type ontbreekt nog in de CRM-database; dry-run gebruikt lege bestaande relatietypes.");
+    const rows = await fetchAllExistingRows(() => supabase
+      .from("leads")
+      .select(EXISTING_LEAD_SELECT_WITHOUT_RELATIONSHIP)
+      .eq("tenant", TENANT)
+      .order("id", { ascending: true }), "bestaande HipHot leads zonder relatietype");
+    return rows.map((row) => ({ ...row, relationship_type: null }));
+  }
 }
 
 async function fetchExisting(supabase) {
   const [leads, contacts] = await Promise.all([
-    fetchAllExistingRows(() => supabase
-      .from("leads")
-      .select("id, company_name, city, email, status, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language")
-      .eq("tenant", TENANT)
-      .order("id", { ascending: true }), "bestaande HipHot leads"),
+    fetchExistingLeads(supabase),
     fetchAllExistingRows(() => supabase
       .from("contacts")
       .select("id, lead_id, email, hubspot_contact_id")
@@ -1753,12 +1905,14 @@ async function main() {
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
       listContactsSeen: listContacts.length,
       leadStatuses: statusCounts(plans),
+      relationshipTypes: relationshipTypeCounts(plans),
     },
     samples: plans.slice(0, 5).map((plan) => ({
       action: plan.action,
       existingLeadId: plan.existingLead?.id || null,
       company: plan.existingLead?.company_name || plan.lead.company_name,
       status: plan.lead.status || plan.existingLead?.status || null,
+      relationshipType: plan.lead.relationship_type || plan.existingLead?.relationship_type || null,
       dealStatusSource: plan.dealStatus.source,
       marketingConsent: plan.lead.marketing_consent,
       marketingSegments: plan.lead.marketing_segments,
@@ -1820,6 +1974,7 @@ async function main() {
   console.log(`Algemene nieuwsbrief: ${report.planned.algemeneNieuwsbriefCompanies}`);
   console.log(`Factor 30: ${report.planned.factor30Companies}`);
   console.log(`Factor 50: ${report.planned.factor50Companies}`);
+  console.log(`Relatietypes: ${Object.entries(report.planned.relationshipTypes || {}).map(([type, count]) => `${relationTypeLabel(type)} ${count}`).join(", ") || "geen"}`);
   if (report.commit) {
     console.log(`Commit: ${report.commit.committed} gelukt, ${report.commit.failed} mislukt`);
     console.log(`HubSpot notities toegevoegd: ${report.commit.createdAssociatedNotes}`);

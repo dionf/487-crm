@@ -2,10 +2,12 @@ import { supabase } from "@/lib/supabase";
 import {
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
+  HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
+const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
 const HIPHOT_MARKETING_FIELD_NAMES = [
   "marketing_consent",
   "marketing_segments",
@@ -18,6 +20,7 @@ const HIPHOT_MARKETING_FIELD_NAMES = [
   "hubspot_contact_ids",
   "hubspot_subscription_status",
   "hubspot_imported_at",
+  "relationship_type",
 ];
 
 function cleanDate(value) {
@@ -54,6 +57,11 @@ function cleanHipHotMarketingPatch(body) {
   if ("hubspot_contact_ids" in body) patch.hubspot_contact_ids = cleanHubSpotIds(body.hubspot_contact_ids);
   if ("hubspot_subscription_status" in body) patch.hubspot_subscription_status = body.hubspot_subscription_status || null;
   if ("hubspot_imported_at" in body) patch.hubspot_imported_at = cleanDate(body.hubspot_imported_at);
+  if ("relationship_type" in body) {
+    patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
+      ? body.relationship_type
+      : null;
+  }
 
   const status = patch.marketing_subscription_status;
   if (patch.marketing_consent === true && !status) {

@@ -2,10 +2,12 @@ import { supabase } from "@/lib/supabase";
 import {
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
+  HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
+const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
 
 function cleanDate(value) {
   if (!value) return null;
@@ -58,6 +60,7 @@ export async function GET(request) {
   const call_filter = searchParams.get("call_filter");
   const marketing = searchParams.get("marketing");
   const marketing_segment = searchParams.get("marketing_segment");
+  const relationship_type = searchParams.get("relationship_type");
 
   let query = supabase
     .from("leads")
@@ -71,6 +74,9 @@ export async function GET(request) {
   if (tenant === "hiphot" && marketing === "true") query = query.eq("marketing_consent", true);
   if (tenant === "hiphot" && marketing_segment && HIPHOT_MARKETING_SEGMENT_IDS.has(marketing_segment)) {
     query = query.contains("marketing_segments", [marketing_segment]);
+  }
+  if (tenant === "hiphot" && relationship_type && HIPHOT_RELATION_TYPE_IDS.has(relationship_type)) {
+    query = query.eq("relationship_type", relationship_type);
   }
 
   // HipHot bellijst filters
@@ -135,6 +141,9 @@ export async function POST(request) {
 
   const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
   const marketingFields = tenant === "hiphot" ? cleanHipHotMarketingFields(body) : {};
+  const relationshipFields = tenant === "hiphot" && HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
+    ? { relationship_type: body.relationship_type }
+    : {};
 
   // Als 'leveradres = factuuradres', kopieer billing → delivery server-side
   const useSame = delivery_same_as_billing !== false;
@@ -183,6 +192,7 @@ export async function POST(request) {
       customer_reference: customer_reference || null,
       ...deliveryFields,
       ...marketingFields,
+      ...relationshipFields,
     })
     .select()
     .single();

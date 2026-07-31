@@ -1923,9 +1923,13 @@ async function main() {
 
   loadEnv();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseKey = serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Supabase credentials ontbreken. Check .env.local.");
+  }
+  if (!DRY && !serviceRoleKey) {
+    throw new Error("Live import vereist SUPABASE_SERVICE_ROLE_KEY, zodat bestaande CRM-data volledig gecontroleerd kan worden.");
   }
   const supabase = createClient(supabaseUrl, supabaseKey);
 

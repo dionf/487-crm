@@ -38,10 +38,10 @@ const CHECKS = [
     ].join(", "),
   },
   {
-    id: "leads_relationship_type_column",
-    label: "Leadveld Relatietype",
+    id: "leads_hubspot_classification_columns",
+    label: "Leadvelden Relatietype en HubSpot-herkomst",
     table: "leads",
-    select: "id, tenant, relationship_type",
+    select: "id, tenant, relationship_type, hubspot_deal_origin",
   },
   {
     id: "contacts_hubspot_metadata_columns",

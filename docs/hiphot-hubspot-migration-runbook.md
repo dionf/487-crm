@@ -146,6 +146,7 @@ Deze check controleert:
 - leadvelden voor marketing, HubSpot IDs en importmetadata
 - contactvelden voor HubSpot contactmetadata
 - het veld **Relatietype** (`relationship_type`)
+- het veld **HubSpot-herkomst** (`hubspot_deal_origin`) voor Ecommerce/Offertes
 - tenantveilige leesbaarheid van leads, contacten, notities en activiteiten
 - of er al HubSpot-markeringen buiten tenant `hiphot` staan
 - of er een service-role sleutel beschikbaar is voor volledige databasecontrole
@@ -155,7 +156,7 @@ Go/no-go:
 - Alle schema-controles moeten **OK** zijn.
 - Er mogen geen HubSpot company-IDs of contact-IDs buiten tenant `hiphot` staan.
 - Databasecontrole moet **volledig** zijn; met alleen de publieke sleutel kunnen tenantchecks door rechten beperkt zijn.
-- Als `relationship_type` ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe en draai daarna opnieuw de readiness-check.
+- Als `relationship_type` of `hubspot_deal_origin` ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe en draai daarna opnieuw de readiness-check.
 
 ## Fase 2: CRM dry-run
 
@@ -184,9 +185,10 @@ Controleer in het `.md` rapport:
 - aantal gekoppelde deals en notities
 - aantal niet-gekoppelde deals en notities
 - onderscheid tussen HubSpot Ecommerce en Offertes in `HubSpot deals per bronpipeline`
+- herkomst per bedrijf: Ecommerce, Offertes, Ecommerce + Offertes of Geen HubSpot deal
 - relatietype-aantallen voor klanten, mailcontacten, nieuwsbriefcontacten, website/formulier en alleen HubSpot-records
 - waarschuwingen over onbekende marketingstatussen of niet-herkende segmenten
-- waarschuwing `Relatietype-kolom ontbreekt in huidige CRM-database`; die moet **Nee** zijn voordat live import mag starten
+- waarschuwing `Classificatiekolommen ontbreken in huidige CRM-database`; die moet **Nee** zijn voordat live import mag starten
 
 Go/no-go:
 
@@ -224,11 +226,12 @@ Importgedrag:
 - Marketingvelden, HubSpot IDs en importmetadata worden bijgewerkt.
 - Contactpersonen worden onder het bedrijf gezet.
 - Marketingtoestemming en segmenten worden op bedrijfsniveau gezet, niet op contactniveau.
+- HubSpot-herkomst wordt op bedrijfsniveau gezet, los van de pipelinefase, zodat Leads/Bellijst kan filteren op Ecommerce en Offertes.
 - HubSpot deals en notities worden als interne CRM-notities onder het bedrijf gezet.
 - HubSpot deal/notitie-notities krijgen een import-key, zodat opnieuw draaien geen dubbele historie-notities hoort te maken.
 - Ruwe HubSpot-rijen worden bewaard in activity metadata voor audit.
 - Live import vereist `--approved-report` met een eerder dry-run rapport. Als de huidige planning, overwrite-modus of geplande schrijfdata afwijkt, stopt de import.
-- Live import stopt als de CRM-databasekolom `relationship_type` nog ontbreekt.
+- Live import stopt als de CRM-databasekolom `relationship_type` of `hubspot_deal_origin` nog ontbreekt.
 - Live import vereist `SUPABASE_SERVICE_ROLE_KEY`, zodat bestaande CRM-data volledig gecontroleerd kan worden.
 
 Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
@@ -254,6 +257,7 @@ npm run verify:hubspot:hiphot -- \
    - bedrijven met HubSpot company-ID
    - contactpersonen met HubSpot contact-ID
    - bedrijven per relatietype
+   - bedrijven per HubSpot-herkomst
 
 2. Steekproef in CRM
    - 10 nieuwe bedrijven

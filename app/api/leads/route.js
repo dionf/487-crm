@@ -1,10 +1,12 @@
 import { supabase } from "@/lib/supabase";
 import {
+  HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
   HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
+const HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS = new Set(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((s) => s.id));
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
 const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
@@ -61,6 +63,7 @@ export async function GET(request) {
   const marketing = searchParams.get("marketing");
   const marketing_segment = searchParams.get("marketing_segment");
   const relationship_type = searchParams.get("relationship_type");
+  const hubspot_deal_origin = searchParams.get("hubspot_deal_origin");
 
   let query = supabase
     .from("leads")
@@ -77,6 +80,9 @@ export async function GET(request) {
   }
   if (tenant === "hiphot" && relationship_type && HIPHOT_RELATION_TYPE_IDS.has(relationship_type)) {
     query = query.eq("relationship_type", relationship_type);
+  }
+  if (tenant === "hiphot" && hubspot_deal_origin && HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(hubspot_deal_origin)) {
+    query = query.eq("hubspot_deal_origin", hubspot_deal_origin);
   }
 
   // HipHot bellijst filters
@@ -144,6 +150,9 @@ export async function POST(request) {
   const relationshipFields = tenant === "hiphot" && HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
     ? { relationship_type: body.relationship_type }
     : {};
+  const hubspotOriginFields = tenant === "hiphot" && HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
+    ? { hubspot_deal_origin: body.hubspot_deal_origin }
+    : {};
 
   // Als 'leveradres = factuuradres', kopieer billing → delivery server-side
   const useSame = delivery_same_as_billing !== false;
@@ -193,6 +202,7 @@ export async function POST(request) {
       ...deliveryFields,
       ...marketingFields,
       ...relationshipFields,
+      ...hubspotOriginFields,
     })
     .select()
     .single();

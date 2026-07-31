@@ -62,6 +62,11 @@ const HIPHOT_RELATION_TYPES = [
   { id: "newsletter_contact", label: "Nieuwsbriefcontact", rank: 20 },
   { id: "hubspot_record", label: "Alleen HubSpot-record", rank: 10 },
 ];
+const HIPHOT_HUBSPOT_DEAL_ORIGINS = [
+  { id: "ecommerce", label: "Ecommerce" },
+  { id: "offertes", label: "Offertes" },
+  { id: "mixed", label: "Ecommerce + Offertes" },
+];
 const HUBSPOT_PIPELINE_LABELS = {
   "707050616": "Ecommerce",
   default: "Offertes",
@@ -146,6 +151,7 @@ const MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id))
 const HIPHOT_LEAD_STATUS_LABELS = new Map(HIPHOT_LEAD_STATUSES.map((status) => [status.id, status.label]));
 const HIPHOT_RELATION_TYPE_LABELS = new Map(HIPHOT_RELATION_TYPES.map((type) => [type.id, type.label]));
 const HIPHOT_RELATION_TYPE_RANKS = new Map(HIPHOT_RELATION_TYPES.map((type) => [type.id, type.rank]));
+const HIPHOT_HUBSPOT_DEAL_ORIGIN_LABELS = new Map(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((origin) => [origin.id, origin.label]));
 const SEGMENT_PATTERNS = [
   { id: "factor_30", patterns: [/factor[\s_-]*30/i, /spf[\s_-]*30/i] },
   { id: "factor_50", patterns: [/factor[\s_-]*50/i, /spf[\s_-]*50/i] },
@@ -278,6 +284,10 @@ function relationTypeLabel(type) {
   return HIPHOT_RELATION_TYPE_LABELS.get(type) || type || "Onbekend";
 }
 
+function hubspotDealOriginLabel(origin) {
+  return HIPHOT_HUBSPOT_DEAL_ORIGIN_LABELS.get(origin) || origin || "Onbekend";
+}
+
 function dealStageRule(pipeline, stage) {
   const pipelineKey = text(pipeline);
   const stageKey = text(stage);
@@ -291,6 +301,16 @@ function dealStageRule(pipeline, stage) {
 function pipelineLabel(pipeline) {
   const value = text(pipeline);
   return HUBSPOT_PIPELINE_LABELS[value] || value;
+}
+
+function hubspotDealOrigin(pipeline, stage) {
+  const pipelineKey = normalizeDealLookupValue(pipeline);
+  const rule = dealStageRule(pipeline, stage);
+  if (pipelineKey === "707050616" || pipelineKey === "ecommerce" || rule?.pipeline === "707050616") {
+    return "ecommerce";
+  }
+  if (pipelineKey || rule) return "offertes";
+  return null;
 }
 
 function stageLabel(pipeline, stage) {
@@ -712,6 +732,16 @@ function renderMarkdownReport(report) {
       ])
     ),
     "",
+    "## HubSpot herkomst per bedrijf",
+    "",
+    markdownTable(
+      ["Herkomst", "Bedrijven"],
+      Object.entries(report.planned.hubspotDealOrigins || {}).map(([origin, count]) => [
+        origin === "none" ? "Geen HubSpot deal" : hubspotDealOriginLabel(origin),
+        formatCount(count),
+      ])
+    ),
+    "",
     "## Relatietype na import",
     "",
     markdownTable(
@@ -725,12 +755,13 @@ function renderMarkdownReport(report) {
     "## Voorbeelden",
     "",
     markdownTable(
-      ["Actie", "Bedrijf", "Pipelinefase", "Relatietype", "HubSpot bronfase", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
+      ["Actie", "Bedrijf", "Pipelinefase", "Relatietype", "HubSpot herkomst", "HubSpot bronfase", "Marketing", "Segmenten", "Contacten", "Deals", "Notities"],
       report.samples.map((sample) => [
         sample.action === "insert_lead" ? "Nieuw" : "Bijwerken",
         sample.company,
         statusLabel(sample.status),
         relationTypeLabel(sample.relationshipType),
+        sample.hubspotDealOrigin ? hubspotDealOriginLabel(sample.hubspotDealOrigin) : "",
         sample.dealStatusSource
           ? `${sample.dealStatusSource.pipelineLabel} / ${sample.dealStatusSource.stageLabel}`
           : "",
@@ -749,7 +780,7 @@ function renderMarkdownReport(report) {
     `Contacten zonder herkend segment: ${formatCount(report.warnings.noRecognizedSegmentContacts)}`,
     `Niet gekoppelde deals: ${formatCount(report.warnings.unmatchedDeals)}`,
     `Niet gekoppelde notities: ${formatCount(report.warnings.unmatchedNotes)}`,
-    `Relatietype-kolom ontbreekt in huidige CRM-database: ${report.warnings.relationshipTypeColumnMissing ? "Ja" : "Nee"}`,
+    `Classificatiekolommen ontbreken in huidige CRM-database: ${report.warnings.relationshipTypeColumnMissing ? "Ja" : "Nee"}`,
     `Lijstbestanden zonder segmentmapping: ${(report.warnings.listFilesWithoutSegmentMapping || []).join(", ") || "geen"}`,
     ""
   );
@@ -961,6 +992,7 @@ function parseDeal(row) {
   const mappedStage = dealStageRule(pipeline, stage);
   const readableStage = stageLabel(pipeline, stage);
   const readablePipeline = pipelineLabel(pipeline);
+  const dealOrigin = hubspotDealOrigin(pipeline, stage);
 
   const importKey = dealId ? `hubspot-deal:${dealId}` : `hubspot-deal:${lower(companyName)}:${lower(dealName)}:${amount}:${closeDate}`;
   return {
@@ -971,6 +1003,7 @@ function parseDeal(row) {
     stageLabel: mappedStage?.stageLabel || readableStage,
     pipeline,
     pipelineLabel: readablePipeline,
+    dealOrigin,
     leadStatus: mappedStage?.status || null,
     leadStatusRank: mappedStage?.rank || 0,
     associatedCompanyId,
@@ -987,6 +1020,7 @@ function parseDeal(row) {
       dealName ? `Naam: ${dealName}` : null,
       stage ? `Status: ${readableStage}` : null,
       pipeline ? `Pipeline: ${readablePipeline}${readablePipeline !== pipeline ? ` (${pipeline})` : ""}` : null,
+      dealOrigin ? `HubSpot herkomst: ${hubspotDealOriginLabel(dealOrigin)}` : null,
       mappedStage?.status ? `CRM pipelinefase: ${statusLabel(mappedStage.status)}` : null,
       amount ? `Bedrag: ${amount}` : null,
       closeDate ? `Sluitdatum: ${closeDate}` : null,
@@ -1335,6 +1369,20 @@ function shouldUpdateExistingRelationshipType(existingType, incomingType) {
   return incomingRank > existingRank;
 }
 
+function resolveHubSpotDealOrigin(deals = []) {
+  const origins = new Set(deals.map((deal) => deal.dealOrigin).filter(Boolean));
+  if (origins.has("ecommerce") && origins.has("offertes")) return "mixed";
+  return origins.values().next().value || null;
+}
+
+function shouldUpdateExistingHubSpotDealOrigin(existingOrigin, incomingOrigin) {
+  if (!incomingOrigin) return false;
+  if (OVERWRITE) return true;
+  if (!existingOrigin) return true;
+  if (existingOrigin === incomingOrigin) return false;
+  return incomingOrigin === "mixed";
+}
+
 function statusCounts(plans) {
   const counts = {};
   for (const plan of plans) {
@@ -1347,6 +1395,23 @@ function statusCounts(plans) {
   }
   for (const [status, count] of Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]))) {
     if (!ordered[status]) ordered[status] = count;
+  }
+  return ordered;
+}
+
+function hubspotDealOriginCounts(plans) {
+  const counts = {};
+  for (const plan of plans) {
+    const origin = plan.lead.hubspot_deal_origin || plan.existingLead?.hubspot_deal_origin || "none";
+    counts[origin] = (counts[origin] || 0) + 1;
+  }
+  const ordered = {};
+  for (const origin of HIPHOT_HUBSPOT_DEAL_ORIGINS) {
+    if (counts[origin.id]) ordered[origin.id] = counts[origin.id];
+  }
+  if (counts.none) ordered.none = counts.none;
+  for (const [origin, count] of Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (!ordered[origin]) ordered[origin] = count;
   }
   return ordered;
 }
@@ -1444,6 +1509,7 @@ function buildPlan(group, existingLead) {
   const dealStatus = resolveLeadStatusFromDeals(group.deals);
   const marketing = mergeMarketing(group.company, group.contacts);
   const relationshipType = resolveRelationshipType(group, marketing, dealStatus);
+  const dealOrigin = resolveHubSpotDealOrigin(group.deals);
   const status = relationshipType === "customer" && ["geen_lead", "prospect"].includes(dealStatus.status)
     ? "offerte_gewonnen"
     : dealStatus.status;
@@ -1451,6 +1517,7 @@ function buildPlan(group, existingLead) {
     ...group.company.lead,
     status,
     relationship_type: relationshipType,
+    hubspot_deal_origin: dealOrigin,
     ...marketing,
   };
 
@@ -1474,6 +1541,9 @@ function buildPlan(group, existingLead) {
   }
   if (existingLead && shouldUpdateExistingRelationshipType(existingLead.relationship_type, lead.relationship_type)) {
     patchedLead.relationship_type = lead.relationship_type;
+  }
+  if (existingLead && shouldUpdateExistingHubSpotDealOrigin(existingLead.hubspot_deal_origin, lead.hubspot_deal_origin)) {
+    patchedLead.hubspot_deal_origin = lead.hubspot_deal_origin;
   }
   return {
     action,
@@ -1579,15 +1649,18 @@ function buildNote(group) {
   if (dealStatus.source) {
     lines.push(`CRM pipelinefase uit HubSpot: ${statusLabel(dealStatus.status)} (${dealStatus.source.pipelineLabel} / ${dealStatus.source.stageLabel}).`);
   }
+  const dealOrigin = resolveHubSpotDealOrigin(group.deals);
+  if (dealOrigin) lines.push(`HubSpot dealherkomst: ${hubspotDealOriginLabel(dealOrigin)}.`);
   const segmentLabels = group.contacts.flatMap((contact) => contact.marketing.segments);
   if (segmentLabels.length) lines.push(`Marketingsegmenten: ${[...new Set(segmentLabels)].join(", ")}`);
   lines.push(`Relatietype: ${relationTypeLabel(resolveRelationshipType(group, mergeMarketing(group.company, group.contacts), dealStatus))}.`);
   return lines.join("\n");
 }
 
-const EXISTING_LEAD_SELECT = "id, company_name, city, email, status, relationship_type, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language";
-const EXISTING_LEAD_SELECT_WITHOUT_RELATIONSHIP = EXISTING_LEAD_SELECT
-  .replace("relationship_type, ", "");
+const EXISTING_LEAD_SELECT = "id, company_name, city, email, status, relationship_type, hubspot_deal_origin, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language";
+const EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION = EXISTING_LEAD_SELECT
+  .replace("relationship_type, ", "")
+  .replace("hubspot_deal_origin, ", "");
 
 async function fetchExistingLeads(supabase) {
   try {
@@ -1597,18 +1670,18 @@ async function fetchExistingLeads(supabase) {
       .eq("tenant", TENANT)
       .order("id", { ascending: true }), "bestaande HipHot leads");
   } catch (error) {
-    if (!/relationship_type/i.test(error.message)) throw error;
+    if (!/relationship_type|hubspot_deal_origin/i.test(error.message)) throw error;
     relationshipTypeColumnMissing = true;
     if (!DRY) {
-      throw new Error("Kolom relationship_type ontbreekt nog in de CRM-database. Pas migratie 015_hiphot_relationship_type.sql toe en draai daarna opnieuw een dry-run.");
+      throw new Error("Kolom relationship_type of hubspot_deal_origin ontbreekt nog in de CRM-database. Pas migratie 015_hiphot_relationship_type.sql toe en draai daarna opnieuw een dry-run.");
     }
-    console.warn("Kolom relationship_type ontbreekt nog in de CRM-database; dry-run gebruikt lege bestaande relatietypes.");
+    console.warn("Kolom relationship_type of hubspot_deal_origin ontbreekt nog in de CRM-database; dry-run gebruikt lege bestaande classificaties.");
     const rows = await fetchAllExistingRows(() => supabase
       .from("leads")
-      .select(EXISTING_LEAD_SELECT_WITHOUT_RELATIONSHIP)
+      .select(EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION)
       .eq("tenant", TENANT)
-      .order("id", { ascending: true }), "bestaande HipHot leads zonder relatietype");
-    return rows.map((row) => ({ ...row, relationship_type: null }));
+      .order("id", { ascending: true }), "bestaande HipHot leads zonder classificatie");
+    return rows.map((row) => ({ ...row, relationship_type: null, hubspot_deal_origin: null }));
   }
 }
 
@@ -1994,6 +2067,7 @@ async function main() {
       listContactsSeen: listContacts.length,
       leadStatuses: statusCounts(plans),
       hubspotDealPipelines: hubspotDealPipelineCounts(deals),
+      hubspotDealOrigins: hubspotDealOriginCounts(plans),
       relationshipTypes: relationshipTypeCounts(plans),
     },
     samples: plans.slice(0, 5).map((plan) => ({
@@ -2002,6 +2076,7 @@ async function main() {
       company: plan.existingLead?.company_name || plan.lead.company_name,
       status: plan.lead.status || plan.existingLead?.status || null,
       relationshipType: plan.lead.relationship_type || plan.existingLead?.relationship_type || null,
+      hubspotDealOrigin: plan.lead.hubspot_deal_origin || plan.existingLead?.hubspot_deal_origin || null,
       dealStatusSource: plan.dealStatus.source,
       marketingConsent: plan.lead.marketing_consent,
       marketingSegments: plan.lead.marketing_segments,

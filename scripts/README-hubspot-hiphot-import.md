@@ -127,6 +127,20 @@ Benodigde HubSpot scopes voor een volledige API-export:
 
 Zonder lijst- of communicatievoorkeur-scope maakt de exporter wel bedrijven/contacten/deals/notities, maar geeft hij waarschuwingen voor marketinglijsten en nieuwsbriefstatussen.
 
+## CRM readiness-check
+
+Draai vóór de CRM dry-run een read-only check op de CRM-database:
+
+```bash
+npm run readiness:hubspot:hiphot -- \
+  --report=/tmp/hiphot-hubspot-readiness.json \
+  --report-md=/tmp/hiphot-hubspot-readiness.md
+```
+
+Deze check schrijft niets. Hij controleert of de benodigde migratievelden aanwezig zijn op `leads` en `contacts`, inclusief `relationship_type`, en of er geen HubSpot-markeringen buiten tenant `hiphot` staan.
+
+Als deze check meldt dat **Relatietype** ontbreekt, pas eerst `migrations/015_hiphot_relationship_type.sql` toe. Live import stopt ook zelf als die kolom nog ontbreekt.
+
 ## Dry-run
 
 Doe eerst een export-audit. Die kijkt alleen naar de HubSpot-bestanden zelf en heeft geen CRM-toegang nodig:
@@ -171,8 +185,11 @@ Dit schrijft niets naar CRM. Controleer daarna vooral het `.md` rapport:
 - aantal bedrijven met marketing toegestaan
 - Factor 30 en Factor 50 aantallen
 - aantal HubSpot deals en notities dat gekoppeld wordt
+- HubSpot deals per bronpipeline: Ecommerce en Offertes
+- relatietype-aantallen
 - niet-gekoppelde deals/notities die handmatig bekeken moeten worden
 - waarschuwingen over onbekende marketingstatussen of niet-herkende segmenten
+- of de relatietype-kolom in de huidige CRM-database ontbreekt
 
 ## Live import
 
@@ -193,6 +210,8 @@ node scripts/import-hubspot-hiphot.mjs \
 
 Live import vereist `--approved-report` met een eerder gecontroleerd dry-run rapport. Als de huidige importplanning daarvan afwijkt, stopt het script zonder te schrijven. Die controle kijkt ook naar gedrag dat bestaande CRM-data kan wijzigen, zoals `--overwrite`, en naar een vaste vingerafdruk plus payloadoverzicht van alle geplande lead-, contact-, notitie- en activiteitwijzigingen.
 
+Live import stopt ook vroeg als de CRM-databasekolom `relationship_type` nog ontbreekt.
+
 Standaard vult de import bestaande CRM-velden alleen aan als ze leeg zijn. Marketingvelden, HubSpot ID's en importmetadata worden wel bijgewerkt. Gebruik `--overwrite` alleen als HubSpot bewust leidend moet zijn voor bestaande CRM-velden.
 
 ## Verificatie na import
@@ -206,7 +225,7 @@ npm run verify:hubspot:hiphot -- \
   --report-md=/tmp/hiphot-hubspot-post-import-verification.md
 ```
 
-Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-markeringen buiten HipHot zijn gevonden.
+Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-markeringen buiten HipHot zijn gevonden. Als een dry-run rapport als `--expected` wordt meegegeven, vergelijkt het verificatiescript ook de relatietype-aantallen met die goedgekeurde dry-run.
 
 ## Wat wordt waar opgeslagen?
 

@@ -226,12 +226,13 @@ npm run verify:hubspot:hiphot -- \
   --report-md=/tmp/hiphot-hubspot-post-import-verification.md
 ```
 
-Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-markeringen buiten HipHot zijn gevonden. Als een dry-run rapport als `--expected` wordt meegegeven, vergelijkt het verificatiescript ook de relatietype-aantallen met die goedgekeurde dry-run.
+Dit rapport leest alleen tenant `hiphot` en controleert ook of er geen HubSpot-markeringen buiten HipHot zijn gevonden. Als een dry-run rapport als `--expected` wordt meegegeven, vergelijkt het verificatiescript ook de relatietype- en HubSpot-herkomstaantallen met die goedgekeurde dry-run.
 
 ## Wat wordt waar opgeslagen?
 
 - Bedrijven worden CRM-leads met `tenant='hiphot'`.
 - Marketingtoestemming, segmenten en tags worden op bedrijfsniveau opgeslagen op de lead.
+- HubSpot-herkomst wordt op bedrijfsniveau opgeslagen als Ecommerce, Offertes of Ecommerce + Offertes.
 - Contactpersonen blijven contactpersonen onder het bedrijf.
 - HubSpot deals en HubSpot notities worden als interne CRM-notities onder het bedrijf opgeslagen.
 - HubSpot deal/notitie-notities krijgen een import-key om dubbele historie-notities bij een tweede run te voorkomen.

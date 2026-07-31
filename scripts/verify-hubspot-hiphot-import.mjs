@@ -85,6 +85,10 @@ function compareExpected(expected, actual) {
   for (const [type, expectedValue] of Object.entries(expected.planned.relationshipTypes || {})) {
     checks.push([`bedrijven met relatietype ${type}`, expectedValue, actual.relationshipTypeCounts[type] || 0]);
   }
+  for (const [origin, expectedValue] of Object.entries(expected.planned.hubspotDealOrigins || {})) {
+    if (origin === "none") continue;
+    checks.push([`bedrijven met HubSpot-herkomst ${origin}`, expectedValue, actual.hubspotDealOriginCounts[origin] || 0]);
+  }
   return checks.map(([label, expectedValue, actualValue]) => ({
     label,
     expected: expectedValue,
@@ -118,6 +122,13 @@ function renderMarkdownReport(report) {
       Object.entries(report.relationshipTypeCounts).map(([type, count]) => [type, formatCount(count)])
     ),
     "",
+    "## HubSpot-herkomst",
+    "",
+    markdownTable(
+      ["Herkomst", "Aantal"],
+      Object.entries(report.hubspotDealOriginCounts).map(([origin, count]) => [origin, formatCount(count)])
+    ),
+    "",
     "## Marketingstatussen",
     "",
     markdownTable(
@@ -128,10 +139,11 @@ function renderMarkdownReport(report) {
     "## Steekproef bedrijven",
     "",
     markdownTable(
-      ["Bedrijf", "Relatietype", "Marketing", "Segmenten", "HubSpot company ID"],
+      ["Bedrijf", "Relatietype", "HubSpot-herkomst", "Marketing", "Segmenten", "HubSpot company ID"],
       report.samples.leads.map((lead) => [
         lead.company_name,
         lead.relationship_type || "",
+        lead.hubspot_deal_origin || "",
         lead.marketing_consent ? "Ja" : "Nee",
         (lead.marketing_segments || []).join(", "),
         lead.hubspot_company_id || "",
@@ -200,7 +212,7 @@ async function main() {
     fetchAllPages(
       supabase
         .from("leads")
-        .select("id, company_name, relationship_type, marketing_consent, marketing_segments, marketing_subscription_status, hubspot_company_id, hubspot_contact_ids, hubspot_imported_at")
+        .select("id, company_name, relationship_type, hubspot_deal_origin, marketing_consent, marketing_segments, marketing_subscription_status, hubspot_company_id, hubspot_contact_ids, hubspot_imported_at")
         .eq("tenant", TENANT)
         .order("company_name", { ascending: true })
     ),
@@ -247,6 +259,7 @@ async function main() {
   const factor50Leads = hiphotLeads.filter((lead) => (lead.marketing_segments || []).includes("factor_50"));
   const marketingConsentLeads = hiphotLeads.filter((lead) => lead.marketing_consent);
   const relationshipTypeCounts = countBy(importedLeads, (lead) => lead.relationship_type || "unknown");
+  const hubspotDealOriginCounts = countBy(importedLeads, (lead) => lead.hubspot_deal_origin || "none");
   const counts = {
     totalLeads: hiphotLeads.length,
     importedLeads: importedLeads.length,
@@ -260,6 +273,7 @@ async function main() {
   const actualForExpectedComparison = {
     ...counts,
     relationshipTypeCounts,
+    hubspotDealOriginCounts,
   };
 
   const report = {
@@ -269,6 +283,7 @@ async function main() {
     expectedReportPath: expectedPath || null,
     counts,
     relationshipTypeCounts,
+    hubspotDealOriginCounts,
     marketingStatusCounts: countBy(hiphotLeads, (lead) => lead.marketing_subscription_status || "unknown"),
     expectedComparisons: compareExpected(expected, actualForExpectedComparison),
     samples: {
@@ -290,6 +305,7 @@ async function main() {
   console.log(`Factor 30 bedrijven: ${counts.factor30Leads}`);
   console.log(`Factor 50 bedrijven: ${counts.factor50Leads}`);
   console.log(`Relatietypes: ${Object.entries(report.relationshipTypeCounts).map(([type, count]) => `${type} ${count}`).join(", ") || "geen"}`);
+  console.log(`HubSpot-herkomst: ${Object.entries(report.hubspotDealOriginCounts).map(([origin, count]) => `${origin} ${count}`).join(", ") || "geen"}`);
   console.log(`Records buiten HipHot met HubSpot-markering: ${report.warnings.nonHipHotHubspotMarkedLeads}`);
   console.log(`Contacten buiten HipHot met HubSpot-markering: ${report.warnings.nonHipHotHubspotMarkedContacts}`);
 }

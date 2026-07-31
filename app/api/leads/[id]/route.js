@@ -1,10 +1,12 @@
 import { supabase } from "@/lib/supabase";
 import {
+  HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
   HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
+const HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS = new Set(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((s) => s.id));
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
 const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
@@ -21,6 +23,7 @@ const HIPHOT_MARKETING_FIELD_NAMES = [
   "hubspot_subscription_status",
   "hubspot_imported_at",
   "relationship_type",
+  "hubspot_deal_origin",
 ];
 
 function cleanDate(value) {
@@ -60,6 +63,11 @@ function cleanHipHotMarketingPatch(body) {
   if ("relationship_type" in body) {
     patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
       ? body.relationship_type
+      : null;
+  }
+  if ("hubspot_deal_origin" in body) {
+    patch.hubspot_deal_origin = HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
+      ? body.hubspot_deal_origin
       : null;
   }
 

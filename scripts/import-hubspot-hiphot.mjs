@@ -102,6 +102,7 @@ const reportPath = argValue("--report") || DEFAULT_REPORT;
 const markdownReportPath = argValue("--report-md");
 const approvedReportPath = argValue("--approved-report") || argValue("--approved-dry-run");
 const limit = Number(argValue("--limit") || 0);
+let relationshipTypeColumnMissing = false;
 
 const MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
@@ -709,6 +710,7 @@ function renderMarkdownReport(report) {
     `Contacten zonder herkend segment: ${formatCount(report.warnings.noRecognizedSegmentContacts)}`,
     `Niet gekoppelde deals: ${formatCount(report.warnings.unmatchedDeals)}`,
     `Niet gekoppelde notities: ${formatCount(report.warnings.unmatchedNotes)}`,
+    `Relatietype-kolom ontbreekt in huidige CRM-database: ${report.warnings.relationshipTypeColumnMissing ? "Ja" : "Nee"}`,
     `Lijstbestanden zonder segmentmapping: ${(report.warnings.listFilesWithoutSegmentMapping || []).join(", ") || "geen"}`,
     ""
   );
@@ -1557,6 +1559,10 @@ async function fetchExistingLeads(supabase) {
       .order("id", { ascending: true }), "bestaande HipHot leads");
   } catch (error) {
     if (!/relationship_type/i.test(error.message)) throw error;
+    relationshipTypeColumnMissing = true;
+    if (!DRY) {
+      throw new Error("Kolom relationship_type ontbreekt nog in de CRM-database. Pas migratie 015_hiphot_relationship_type.sql toe en draai daarna opnieuw een dry-run.");
+    }
     console.warn("Kolom relationship_type ontbreekt nog in de CRM-database; dry-run gebruikt lege bestaande relatietypes.");
     const rows = await fetchAllExistingRows(() => supabase
       .from("leads")
@@ -1971,6 +1977,7 @@ async function main() {
       unmatchedDeals: unmatchedDeals.length,
       unmatchedNotes: unmatchedNotes.length,
       unmappedDealStages: unmappedDealStageCounts(deals),
+      relationshipTypeColumnMissing,
       listFilesWithoutSegmentMapping: listExports.filter((listExport) => !listExport.segmentId).map((listExport) => listExport.fileName),
     },
     approval: {

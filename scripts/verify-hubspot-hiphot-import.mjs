@@ -82,6 +82,9 @@ function compareExpected(expected, actual) {
     ["bedrijven met Factor 50", expected.planned.factor50Companies, actual.factor50Leads],
     ["bedrijven met marketing toegestaan", expected.planned.marketingAllowedCompanies, actual.marketingConsentLeads],
   ];
+  for (const [type, expectedValue] of Object.entries(expected.planned.relationshipTypes || {})) {
+    checks.push([`bedrijven met relatietype ${type}`, expectedValue, actual.relationshipTypeCounts[type] || 0]);
+  }
   return checks.map(([label, expectedValue, actualValue]) => ({
     label,
     expected: expectedValue,
@@ -108,6 +111,13 @@ function renderMarkdownReport(report) {
     `HubSpot importactiviteiten: ${formatCount(report.counts.hubspotActivities)}`,
     `HubSpot importnotities: ${formatCount(report.counts.hubspotNotes)}`,
     "",
+    "## Relatietypes",
+    "",
+    markdownTable(
+      ["Relatietype", "Aantal"],
+      Object.entries(report.relationshipTypeCounts).map(([type, count]) => [type, formatCount(count)])
+    ),
+    "",
     "## Marketingstatussen",
     "",
     markdownTable(
@@ -118,9 +128,10 @@ function renderMarkdownReport(report) {
     "## Steekproef bedrijven",
     "",
     markdownTable(
-      ["Bedrijf", "Marketing", "Segmenten", "HubSpot company ID"],
+      ["Bedrijf", "Relatietype", "Marketing", "Segmenten", "HubSpot company ID"],
       report.samples.leads.map((lead) => [
         lead.company_name,
+        lead.relationship_type || "",
         lead.marketing_consent ? "Ja" : "Nee",
         (lead.marketing_segments || []).join(", "),
         lead.hubspot_company_id || "",
@@ -189,7 +200,7 @@ async function main() {
     fetchAllPages(
       supabase
         .from("leads")
-        .select("id, company_name, marketing_consent, marketing_segments, marketing_subscription_status, hubspot_company_id, hubspot_contact_ids, hubspot_imported_at")
+        .select("id, company_name, relationship_type, marketing_consent, marketing_segments, marketing_subscription_status, hubspot_company_id, hubspot_contact_ids, hubspot_imported_at")
         .eq("tenant", TENANT)
         .order("company_name", { ascending: true })
     ),
@@ -235,6 +246,7 @@ async function main() {
   const factor30Leads = hiphotLeads.filter((lead) => (lead.marketing_segments || []).includes("factor_30"));
   const factor50Leads = hiphotLeads.filter((lead) => (lead.marketing_segments || []).includes("factor_50"));
   const marketingConsentLeads = hiphotLeads.filter((lead) => lead.marketing_consent);
+  const relationshipTypeCounts = countBy(importedLeads, (lead) => lead.relationship_type || "unknown");
   const counts = {
     totalLeads: hiphotLeads.length,
     importedLeads: importedLeads.length,
@@ -245,6 +257,10 @@ async function main() {
     hubspotActivities: hiphotActivities.length,
     hubspotNotes: hiphotNotes.length,
   };
+  const actualForExpectedComparison = {
+    ...counts,
+    relationshipTypeCounts,
+  };
 
   const report = {
     mode: "post-import-verification",
@@ -252,8 +268,9 @@ async function main() {
     generatedAt: new Date().toISOString(),
     expectedReportPath: expectedPath || null,
     counts,
+    relationshipTypeCounts,
     marketingStatusCounts: countBy(hiphotLeads, (lead) => lead.marketing_subscription_status || "unknown"),
-    expectedComparisons: compareExpected(expected, counts),
+    expectedComparisons: compareExpected(expected, actualForExpectedComparison),
     samples: {
       leads: importedLeads.slice(0, 20),
       factor30: factor30Leads.slice(0, 10),
@@ -272,6 +289,7 @@ async function main() {
   console.log(`HubSpot contactpersonen herkend: ${counts.importedContacts}`);
   console.log(`Factor 30 bedrijven: ${counts.factor30Leads}`);
   console.log(`Factor 50 bedrijven: ${counts.factor50Leads}`);
+  console.log(`Relatietypes: ${Object.entries(report.relationshipTypeCounts).map(([type, count]) => `${type} ${count}`).join(", ") || "geen"}`);
   console.log(`Records buiten HipHot met HubSpot-markering: ${report.warnings.nonHipHotHubspotMarkedLeads}`);
   console.log(`Contacten buiten HipHot met HubSpot-markering: ${report.warnings.nonHipHotHubspotMarkedContacts}`);
 }

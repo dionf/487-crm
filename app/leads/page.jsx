@@ -7,7 +7,7 @@ import StatusBadge from "@/components/StatusBadge";
 import LeadForm from "@/components/LeadForm";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
-import { HIPHOT_MARKETING_SEGMENTS, marketingSegmentLabels } from "@/lib/hiphot-marketing";
+import { HIPHOT_MARKETING_SEGMENTS, HIPHOT_RELATION_TYPES, marketingSegmentLabels, relationTypeLabel } from "@/lib/hiphot-marketing";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch, getTenantFromSession, isAdminFromSession, getUserIdFromSession } from "@/lib/api";
 import {
@@ -34,6 +34,14 @@ const CALL_OUTCOME_LABELS = {
   vraag_opvolgen_collega: { label: "Int. collega", color: "bg-purple-100 text-purple-700" },
 };
 
+const RELATION_TYPE_BADGES = {
+  customer: "bg-green-50 text-green-700 border-green-100",
+  mail_contact: "bg-blue-50 text-blue-700 border-blue-100",
+  newsletter_contact: "bg-amber-50 text-brand-orange border-amber-100",
+  website_activity: "bg-purple-50 text-purple-700 border-purple-100",
+  hubspot_record: "bg-gray-50 text-gray-600 border-gray-100",
+};
+
 export default function LeadsPage() {
   const { tenant, user, isAdmin } = useOrg();
   const effectiveTenant = tenant || getTenantFromSession();
@@ -48,6 +56,7 @@ export default function LeadsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
+  const [relationshipTypeFilter, setRelationshipTypeFilter] = useState("");
   const [marketingFilter, setMarketingFilter] = useState("");
   const [marketingSegmentFilter, setMarketingSegmentFilter] = useState("");
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -72,6 +81,7 @@ export default function LeadsPage() {
       const userId = user?.id || getUserIdFromSession();
       if (userId) params.set("assigned_to", userId);
     }
+    if (isHipHot && relationshipTypeFilter) params.set("relationship_type", relationshipTypeFilter);
 
     try {
       const res = await apiFetch(`/api/leads?${params}`);
@@ -82,7 +92,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, serviceFilter, agentFilter, marketingFilter, marketingSegmentFilter, isHipHot, effectiveAdmin, user]);
+  }, [search, statusFilter, serviceFilter, agentFilter, relationshipTypeFilter, marketingFilter, marketingSegmentFilter, isHipHot, effectiveAdmin, user]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -337,6 +347,17 @@ export default function LeadsPage() {
         {isHipHot && (
           <>
             <select
+              value={relationshipTypeFilter}
+              onChange={(e) => setRelationshipTypeFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
+            >
+              <option value="">Alle relatietypes</option>
+              {HIPHOT_RELATION_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>{type.label}</option>
+              ))}
+            </select>
+
+            <select
               value={marketingFilter}
               onChange={(e) => setMarketingFilter(e.target.value)}
               className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
@@ -378,6 +399,7 @@ export default function LeadsPage() {
                 {isHipHot ? (
                   <>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Plaats</th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Relatie</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Branche</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Telefoon</th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Marketing</th>
@@ -397,13 +419,13 @@ export default function LeadsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={isHipHot ? 10 : 7} className="text-center py-12">
+                  <td colSpan={isHipHot ? 11 : 7} className="text-center py-12">
                     <div className="w-6 h-6 border-2 border-brand-amber border-t-transparent rounded-full animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={isHipHot ? 10 : 7} className="text-center py-12 text-gray-400 text-sm">
+                  <td colSpan={isHipHot ? 11 : 7} className="text-center py-12 text-gray-400 text-sm">
                     Geen leads gevonden
                   </td>
                 </tr>
@@ -432,6 +454,15 @@ export default function LeadsPage() {
                       {isHipHot ? (
                         <>
                           <td className="px-4 py-3 text-sm text-gray-600">{lead.city || "—"}</td>
+                          <td className="px-4 py-3">
+                            {lead.relationship_type ? (
+                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border ${RELATION_TYPE_BADGES[lead.relationship_type] || RELATION_TYPE_BADGES.hubspot_record}`}>
+                                {relationTypeLabel(lead.relationship_type)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-300">—</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{lead.industry || "—"}</td>
                           <td className="px-4 py-3">
                             {lead.phone ? (

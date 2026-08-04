@@ -155,6 +155,9 @@ export async function POST(request) {
   const hubspotOriginFields = tenant === "hiphot" && HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
     ? { hubspot_deal_origin: body.hubspot_deal_origin }
     : {};
+  const lastOrderFields = tenant === "hiphot" && body.last_order_at
+    ? { last_order_at: cleanDate(body.last_order_at) }
+    : {};
 
   // Als 'leveradres = factuuradres', kopieer billing → delivery server-side
   const useSame = delivery_same_as_billing !== false;
@@ -205,6 +208,7 @@ export async function POST(request) {
       ...marketingFields,
       ...relationshipFields,
       ...hubspotOriginFields,
+      ...lastOrderFields,
     })
     .select()
     .single();

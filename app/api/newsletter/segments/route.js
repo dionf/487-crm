@@ -17,6 +17,7 @@ const SOURCE_TYPES = new Set([
   "hubspot_deal_origin",
   "industry",
   "recipient_email_contains",
+  "recent_order_days",
 ]);
 
 export async function GET(request) {

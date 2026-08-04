@@ -3,6 +3,7 @@ import {
   getCampaignForTenant,
   isMissingNewsletterTable,
   missingNewsletterSetupResponse,
+  normalizeRecipientLimit,
   requireAdmin,
 } from "@/lib/newsletters";
 
@@ -101,6 +102,7 @@ export async function PATCH(request, { params }) {
     for (const field of ["name", "subject", "preview_text", "body_html", "segment_id"]) {
       if (field in body) patch[field] = body[field] || null;
     }
+    if ("recipient_limit" in body) patch.recipient_limit = normalizeRecipientLimit(body.recipient_limit);
     if ("scheduled_at" in body) patch.scheduled_at = normalizeScheduledAt(body.scheduled_at);
     const patchedIncludeSegment = "segment_id" in patch ? await validateSegment(tenant, patch.segment_id) : null;
     if ("excluded_segment_ids" in body) {
@@ -116,6 +118,7 @@ export async function PATCH(request, { params }) {
       ("preview_text" in patch && normalizeText(patch.preview_text) !== normalizeText(currentCampaign.preview_text)) ||
       ("body_html" in patch && normalizeText(patch.body_html) !== normalizeText(currentCampaign.body_html)) ||
       ("segment_id" in patch && String(patch.segment_id || "") !== String(currentCampaign.segment_id || "")) ||
+      ("recipient_limit" in patch && Number(patch.recipient_limit || 0) !== Number(currentCampaign.recipient_limit || 0)) ||
       ("excluded_segment_ids" in patch && !sameIdList(patch.excluded_segment_ids, currentCampaign.excluded_segment_ids));
 
     if (approvalBreakingChange) {

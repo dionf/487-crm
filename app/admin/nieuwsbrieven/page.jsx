@@ -59,6 +59,7 @@ function emptyCampaign(segmentId = "", excludedSegmentIds = []) {
     preview_text: "",
     segment_id: segmentId,
     excluded_segment_ids: excludedSegmentIds,
+    recipient_limit: "",
     scheduled_at: "",
     body_html: "",
   };
@@ -275,6 +276,7 @@ export default function NieuwsbrievenPage() {
       normalizeText(campaign.preview_text) !== normalizeText(form.preview_text) ||
       normalizeText(campaign.body_html) !== normalizeText(form.body_html) ||
       String(campaign.segment_id || "") !== String(form.segment_id || "") ||
+      Number(campaign.recipient_limit || 0) !== Number(form.recipient_limit || 0) ||
       !sameIdList(campaign.excluded_segment_ids, form.excluded_segment_ids)
     );
   }
@@ -320,6 +322,7 @@ export default function NieuwsbrievenPage() {
       preview_text: campaign.preview_text || "",
       segment_id: campaign.segment_id || "",
       excluded_segment_ids: campaign.excluded_segment_ids || [],
+      recipient_limit: campaign.recipient_limit || "",
       scheduled_at: campaign.scheduled_at || "",
       body_html: campaign.body_html || "",
     });
@@ -923,6 +926,21 @@ export default function NieuwsbrievenPage() {
                     {selectedSegment.source_value ? ` (${selectedSegment.source_value})` : ""}
                   </p>
                 )}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Batchgrootte</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={campaignForm.recipient_limit}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, recipient_limit: e.target.value })}
+                    placeholder="Geen limiet"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Vul bijvoorbeeld 100 in om alleen de eerste 100 ontvangers uit de preview te versturen.
+                  </p>
+                </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Segmenten uitsluiten</p>
                   {availableExclusionSegments.length ? (
@@ -1079,6 +1097,11 @@ export default function NieuwsbrievenPage() {
                               {scheduledAtLabel(campaign)}: {formatDateTime(campaign.scheduled_at)}
                             </p>
                           )}
+                          {campaign.recipient_limit && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Batch: max. {campaign.recipient_limit} ontvangers
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           <p>
@@ -1192,7 +1215,19 @@ export default function NieuwsbrievenPage() {
                 {recipients ? (
                   <>
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-medium">{recipients.count} unieke ontvangers</p>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {recipients.count} unieke ontvangers
+                          {recipients.limited && recipients.total_count > recipients.count
+                            ? ` van ${recipients.total_count}`
+                            : ""}
+                        </p>
+                        {recipients.recipient_limit && (
+                          <p className="text-xs text-gray-500">
+                            Batchlimiet: max. {recipients.recipient_limit} ontvangers
+                          </p>
+                        )}
+                      </div>
                       {recipients.truncated && <p className="text-xs text-gray-400">Eerste 250 getoond</p>}
                     </div>
                     <div className="max-h-80 overflow-auto border border-gray-100 rounded-xl">

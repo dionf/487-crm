@@ -7,11 +7,19 @@ export async function GET(request, { params }) {
     const { tenant } = requireAdmin(request);
     const { id } = await params;
     const campaign = await getCampaignForTenant(tenant, id);
-    const recipients = await buildRecipientsForCampaign(tenant, campaign.segment_id, campaign.excluded_segment_ids);
+    const result = await buildRecipientsForCampaign(
+      tenant,
+      campaign.segment_id,
+      campaign.excluded_segment_ids,
+      campaign.recipient_limit
+    );
     return Response.json({
-      count: recipients.length,
-      recipients: recipients.slice(0, 250),
-      truncated: recipients.length > 250,
+      count: result.recipients.length,
+      total_count: result.total_count,
+      recipient_limit: result.limit,
+      limited: result.limited,
+      recipients: result.recipients.slice(0, 250),
+      truncated: result.recipients.length > 250,
     });
   } catch (error) {
     if (error instanceof Response) return error;

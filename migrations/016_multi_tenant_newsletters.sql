@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS newsletter_campaigns (
   preview_text TEXT,
   body_html TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft',
+  recipient_limit INTEGER,
   recipient_count INTEGER NOT NULL DEFAULT 0,
   resend_segment_id TEXT,
   resend_broadcast_id TEXT,
@@ -77,6 +78,16 @@ CREATE TABLE IF NOT EXISTS newsletter_campaigns (
 
 ALTER TABLE newsletter_campaigns
   ADD COLUMN IF NOT EXISTS excluded_segment_ids UUID[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE newsletter_campaigns
+  ADD COLUMN IF NOT EXISTS recipient_limit INTEGER;
+
+ALTER TABLE newsletter_campaigns
+  DROP CONSTRAINT IF EXISTS newsletter_campaigns_recipient_limit_check;
+
+ALTER TABLE newsletter_campaigns
+  ADD CONSTRAINT newsletter_campaigns_recipient_limit_check
+  CHECK (recipient_limit IS NULL OR recipient_limit >= 1);
 
 ALTER TABLE newsletter_campaigns
   DROP CONSTRAINT IF EXISTS newsletter_campaigns_status_check;

@@ -1,11 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
   const tenant = request.headers.get("x-auth-tenant");
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("quotes")
     .select("*, leads(company_name, contact_person)")
     .eq("tenant", tenant)
@@ -39,8 +39,17 @@ export async function POST(request) {
     );
   }
 
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("id, tenant")
+    .eq("id", lead_id)
+    .single();
+  if (!lead || lead.tenant !== tenant) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
+  }
+
   // Generate quote number
-  const { data: numData } = await supabase.rpc("generate_quote_number");
+  const { data: numData } = await supabaseAdmin.rpc("generate_quote_number");
   const quote_number = numData;
 
   const insertData = {
@@ -66,7 +75,7 @@ export async function POST(request) {
   if (contact_phone) insertData.contact_phone = contact_phone;
   if (language) insertData.language = language;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quotes")
     .insert(insertData)
     .select()
@@ -77,7 +86,7 @@ export async function POST(request) {
   }
 
   // Update lead estimated_value with total of all quotes
-  const { data: allQuotes } = await supabase
+  const { data: allQuotes } = await supabaseAdmin
     .from("quotes")
     .select("amount_excl_vat")
     .eq("lead_id", lead_id)
@@ -85,11 +94,11 @@ export async function POST(request) {
 
   if (allQuotes?.length) {
     const totalValue = allQuotes.reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);
-    await supabase.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id);
+    await supabaseAdmin.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id).eq("tenant", tenant);
   }
 
   // Log activity
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id,
     activity_type: "quote_created",
     description: `Offerte ${quote_number} aangemaakt (${new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount_excl_vat)} excl. BTW)`,

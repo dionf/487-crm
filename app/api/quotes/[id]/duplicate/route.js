@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
@@ -6,7 +6,7 @@ export async function POST(request, { params }) {
   const { id } = await params;
 
   // Bron-quote ophalen + verificatie
-  const { data: source } = await supabase
+  const { data: source } = await supabaseAdmin
     .from("quotes")
     .select("*, leads(tenant)")
     .eq("id", id)
@@ -17,7 +17,7 @@ export async function POST(request, { params }) {
   }
 
   // Nieuwe quote_number via RPC (zelfde nummerreeks als bij aanmaken)
-  const { data: newNumber, error: numError } = await supabase.rpc("generate_quote_number");
+  const { data: newNumber, error: numError } = await supabaseAdmin.rpc("generate_quote_number");
   if (numError || !newNumber) {
     return Response.json(
       { error: `Kon quote-nummer niet genereren: ${numError?.message || "onbekend"}` },
@@ -60,7 +60,7 @@ export async function POST(request, { params }) {
     .split("T")[0];
   newQuote.created_by = userName || null;
 
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabaseAdmin
     .from("quotes")
     .insert(newQuote)
     .select()
@@ -74,7 +74,7 @@ export async function POST(request, { params }) {
   }
 
   // Line items kopiëren
-  const { data: lineItems } = await supabase
+  const { data: lineItems } = await supabaseAdmin
     .from("quote_line_items")
     .select("*")
     .eq("quote_id", id)
@@ -85,9 +85,9 @@ export async function POST(request, { params }) {
       const { id: _id, quote_id: _q, created_at: _c, ...rest } = item;
       return { ...rest, quote_id: inserted.id };
     });
-    const { error: linesError } = await supabase.from("quote_line_items").insert(newLines);
+    const { error: linesError } = await supabaseAdmin.from("quote_line_items").insert(newLines);
     if (linesError) {
-      await supabase.from("quotes").delete().eq("id", inserted.id);
+      await supabaseAdmin.from("quotes").delete().eq("id", inserted.id).eq("tenant", tenant);
       return Response.json(
         { error: `Kon regels niet dupliceren: ${linesError.message}` },
         { status: 500 }
@@ -95,7 +95,7 @@ export async function POST(request, { params }) {
     }
   }
 
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id: source.lead_id,
     activity_type: "quote_duplicated",
     description: `Offerte ${newNumber} aangemaakt als kopie van ${source.quote_number}`,

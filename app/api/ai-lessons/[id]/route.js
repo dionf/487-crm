@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export async function PATCH(request, { params }) {
   }
   update.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("ai_quote_lessons")
     .update(update)
     .eq("id", id)
@@ -52,7 +52,7 @@ export async function DELETE(request, { params }) {
   }
 
   const { id } = await params;
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("ai_quote_lessons")
     .delete()
     .eq("id", id)

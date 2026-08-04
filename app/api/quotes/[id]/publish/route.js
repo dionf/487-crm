@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { randomBytes } from "crypto";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
@@ -9,7 +9,7 @@ export async function POST(request, { params }) {
   const { id } = await params;
 
   // Verify quote belongs to tenant
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("quotes").select("*, leads(*)").eq("id", id).single();
   if (!existing || existing.leads?.tenant !== tenant) {
     return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
@@ -33,7 +33,7 @@ export async function POST(request, { params }) {
 
   // Auto-generate HTML for HipHot quotes
   if (body.generate_hiphot_html && tenant === "hiphot") {
-    const { data: lineItems } = await supabase
+    const { data: lineItems } = await supabaseAdmin
       .from("quote_line_items")
       .select("*")
       .eq("quote_id", id)
@@ -42,7 +42,7 @@ export async function POST(request, { params }) {
     const enriched = calculateLineTotals(lineItems || []);
 
     // Get settings
-    const { data: settingsData } = await supabase
+    const { data: settingsData } = await supabaseAdmin
       .from("hiphot_settings")
       .select("*")
       .eq("tenant", "hiphot")
@@ -55,10 +55,11 @@ export async function POST(request, { params }) {
     const lang = body.language || existing.language || "nl";
     let branchText = null;
     if (body.branch_text_id) {
-      const { data: bt } = await supabase
+      const { data: bt } = await supabaseAdmin
         .from("quote_branch_texts")
         .select("*")
         .eq("id", body.branch_text_id)
+        .eq("tenant", tenant)
         .single();
       branchText = bt;
     }
@@ -82,10 +83,11 @@ export async function POST(request, { params }) {
   if (body.html_content) updates.html_content = body.html_content;
   if (body.template_type) updates.template_type = body.template_type;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quotes")
     .update(updates)
     .eq("id", id)
+    .eq("tenant", tenant)
     .select("*, leads(company_name)")
     .single();
 
@@ -95,7 +97,7 @@ export async function POST(request, { params }) {
 
   // Log activity
   if (data.lead_id) {
-    await supabase.from("activities").insert({
+    await supabaseAdmin.from("activities").insert({
       lead_id: data.lead_id,
       activity_type: "quote_published",
       description: `Offerte ${data.quote_number} gepubliceerd — geldig tot ${validUntil}`,

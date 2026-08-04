@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
 import { getShippingCost } from "@/lib/hiphot-pricing";
 
@@ -32,7 +32,7 @@ export async function POST(request) {
   }
 
   // Verify lead bestaat en hoort bij tenant
-  const { data: lead } = await supabase
+  const { data: lead } = await supabaseAdmin
     .from("leads")
     .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, phone, language, delivery_country, billing_country")
     .eq("id", lead_id)
@@ -84,7 +84,7 @@ export async function POST(request) {
   });
 
   // Genereer quote_number via RPC
-  const { data: numData, error: numError } = await supabase.rpc("generate_quote_number");
+  const { data: numData, error: numError } = await supabaseAdmin.rpc("generate_quote_number");
   if (numError || !numData) {
     return Response.json(
       { error: `Kon quote-nummer niet genereren: ${numError?.message || "onbekend"}` },
@@ -100,7 +100,7 @@ export async function POST(request) {
   // Deze vullen de contact_* velden op de quote, NIET de klant-gegevens.
   let sender = null;
   if (userId) {
-    const { data } = await supabase
+    const { data } = await supabaseAdmin
       .from("users")
       .select("name, email, phone")
       .eq("id", userId)
@@ -117,7 +117,7 @@ export async function POST(request) {
   const skus = lineItems.map((l) => l.sku).filter(Boolean);
   let articlesBySku = {};
   if (skus.length > 0) {
-    const { data: articles } = await supabase
+    const { data: articles } = await supabaseAdmin
       .from("hiphot_articles")
       .select("id, sku, name, category, wc_product_id, inkoop_price")
       .in("sku", skus);
@@ -182,7 +182,7 @@ export async function POST(request) {
   const patchedRationale = patchRationale(quote_state.rationale);
 
   // Insert quote
-  const { data: newQuote, error: quoteErr } = await supabase
+  const { data: newQuote, error: quoteErr } = await supabaseAdmin
     .from("quotes")
     .insert({
       lead_id,
@@ -235,10 +235,10 @@ export async function POST(request) {
     };
   });
 
-  const { error: linesErr } = await supabase.from("quote_line_items").insert(lineItemsToInsert);
+  const { error: linesErr } = await supabaseAdmin.from("quote_line_items").insert(lineItemsToInsert);
   if (linesErr) {
     // Rollback: verwijder de lege quote zodat er geen weeskind achterblijft
-    await supabase.from("quotes").delete().eq("id", newQuote.id);
+    await supabaseAdmin.from("quotes").delete().eq("id", newQuote.id).eq("tenant", tenant);
     return Response.json(
       { error: `Kon regels niet opslaan: ${linesErr.message}` },
       { status: 500 }
@@ -246,14 +246,14 @@ export async function POST(request) {
   }
 
   // Update lead estimated_value (som van alle non-rejected quotes)
-  const { data: allQuotes } = await supabase
+  const { data: allQuotes } = await supabaseAdmin
     .from("quotes")
     .select("amount_excl_vat")
     .eq("lead_id", lead_id)
     .not("status", "eq", "afgewezen");
   if (allQuotes?.length) {
     const totalValue = allQuotes.reduce((s, q) => s + (Number(q.amount_excl_vat) || 0), 0);
-    await supabase.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id);
+    await supabaseAdmin.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id).eq("tenant", tenant);
   }
 
   // Audit note: chat-history + quote link
@@ -261,7 +261,7 @@ export async function POST(request) {
     const chatText = chat_log
       .map((m) => `**${m.from === "ai" ? "AI" : "Medewerker"}:** ${m.text}`)
       .join("\n\n");
-    await supabase.from("notes").insert({
+    await supabaseAdmin.from("notes").insert({
       lead_id,
       content: `**AI offerte-advies → offerte ${quote_number}**\n\n${chatText}${quote_state.rationale ? `\n\n---\n**Rationale:** ${quote_state.rationale}` : ""}`,
       note_type: "intern",
@@ -271,7 +271,7 @@ export async function POST(request) {
   }
 
   // Activity log
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id,
     activity_type: "quote_created",
     description: `Offerte ${quote_number} aangemaakt via AI offerte-advies`,
@@ -304,7 +304,7 @@ export async function POST(request) {
       // conversation_data is optioneel — alleen als deze lead een chatbot-submission heeft
       let conversationData = null;
       if (form_submission_id) {
-        const { data: fs } = await supabase
+        const { data: fs } = await supabaseAdmin
           .from("form_submissions")
           .select("conversation_data")
           .eq("id", form_submission_id)
@@ -349,7 +349,7 @@ export async function POST(request) {
         const extraTags = buildContextTags(conversationData);
         for (const l of lessons) {
           const mergedTags = [...new Set([...(l.context_tags || []), ...extraTags])].slice(0, 8);
-          const { data: existing } = await supabase
+          const { data: existing } = await supabaseAdmin
             .from("ai_quote_lessons")
             .select("id, priority")
             .eq("tenant", tenant)
@@ -357,7 +357,7 @@ export async function POST(request) {
             .maybeSingle();
 
           if (existing) {
-            await supabase
+            await supabaseAdmin
               .from("ai_quote_lessons")
               .update({
                 priority: Math.min(10, (existing.priority || 5) + 1),
@@ -366,7 +366,7 @@ export async function POST(request) {
               .eq("id", existing.id);
             lessonsSkipped++;
           } else {
-            const { error: insErr } = await supabase.from("ai_quote_lessons").insert({
+            const { error: insErr } = await supabaseAdmin.from("ai_quote_lessons").insert({
               tenant,
               lesson: l.lesson,
               context_tags: mergedTags,

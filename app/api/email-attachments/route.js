@@ -1,14 +1,16 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (!tenant) {
+  const session = getVerifiedSession(request);
+  if (!session) {
     return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   }
+  const tenant = session.tenant;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("email_standard_attachments")
     .select("*")
     .eq("tenant", tenant)
@@ -23,11 +25,12 @@ export async function GET(request) {
 
 // POST: create a signed upload URL + DB record (file uploads directly to Supabase from client)
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant || role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") {
     return Response.json({ error: "Geen toegang" }, { status: 403 });
   }
+  const tenant = session.tenant;
 
   const body = await request.json();
   const { name, file_name, file_size, content_type } = body;
@@ -39,7 +42,7 @@ export async function POST(request) {
   const storagePath = `email-attachments/${tenant}/${Date.now()}_${file_name}`;
 
   // Create signed upload URL (valid for 2 minutes)
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
     .from("attachments")
     .createSignedUploadUrl(storagePath);
 
@@ -48,7 +51,7 @@ export async function POST(request) {
   }
 
   // Insert DB record
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("email_standard_attachments")
     .insert({
       tenant,
@@ -73,11 +76,12 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant || role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") {
     return Response.json({ error: "Geen toegang" }, { status: 403 });
   }
+  const tenant = session.tenant;
 
   const { id } = await request.json();
   if (!id) {
@@ -85,7 +89,7 @@ export async function DELETE(request) {
   }
 
   // Get record first (tenant check)
-  const { data: att } = await supabase
+  const { data: att } = await supabaseAdmin
     .from("email_standard_attachments")
     .select("*")
     .eq("id", id)
@@ -97,13 +101,14 @@ export async function DELETE(request) {
   }
 
   // Delete from storage
-  await supabase.storage.from("attachments").remove([att.storage_path]);
+  await supabaseAdmin.storage.from("attachments").remove([att.storage_path]);
 
   // Delete DB record
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("email_standard_attachments")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant", tenant);
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });

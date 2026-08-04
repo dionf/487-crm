@@ -1,19 +1,21 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant || role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") {
     return Response.json({ error: "Geen toegang" }, { status: 403 });
   }
+  const tenant = session.tenant;
 
   const { id } = await params;
   const body = await request.json();
 
   // Verify ownership
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("email_templates")
     .select("id")
     .eq("id", id)
@@ -31,10 +33,11 @@ export async function PATCH(request, { params }) {
   if (body.language !== undefined) updates.language = body.language;
   if (body.sort_order !== undefined) updates.sort_order = body.sort_order;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("email_templates")
     .update(updates)
     .eq("id", id)
+    .eq("tenant", tenant)
     .select()
     .single();
 
@@ -46,15 +49,16 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant || role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") {
     return Response.json({ error: "Geen toegang" }, { status: 403 });
   }
+  const tenant = session.tenant;
 
   const { id } = await params;
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("email_templates")
     .delete()
     .eq("id", id)

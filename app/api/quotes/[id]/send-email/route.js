@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -15,14 +16,16 @@ function getResendKey(tenant) {
 }
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const resend = new Resend(getResendKey(tenant));
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "CRM");
-  const userId = request.headers.get("x-auth-user-id");
+  const userName = session.name || "CRM";
+  const userId = session.user_id;
   const { id } = await params;
 
   // Verify quote
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
     .select("*, leads(id, company_name, contact_person, email, tenant)")
     .eq("id", id)
@@ -49,14 +52,14 @@ export async function POST(request, { params }) {
     const attachmentRecords = [];
 
     if (attachment_ids?.length) {
-      const { data: stdAttachments } = await supabase
+      const { data: stdAttachments } = await supabaseAdmin
         .from("email_standard_attachments")
         .select("*")
         .in("id", attachment_ids)
         .eq("tenant", tenant);
 
       for (const att of stdAttachments || []) {
-        const { data: fileData, error: dlError } = await supabase.storage
+        const { data: fileData, error: dlError } = await supabaseAdmin.storage
           .from("attachments")
           .download(att.storage_path);
 
@@ -91,7 +94,7 @@ export async function POST(request, { params }) {
     }
 
     // Save to quote_emails
-    const { data: emailRecord } = await supabase
+    const { data: emailRecord } = await supabaseAdmin
       .from("quote_emails")
       .insert({
         quote_id: id,
@@ -111,14 +114,14 @@ export async function POST(request, { params }) {
 
     // Save attachment records
     if (emailRecord && attachmentRecords.length) {
-      await supabase.from("quote_email_attachments").insert(
+      await supabaseAdmin.from("quote_email_attachments").insert(
         attachmentRecords.map((r) => ({ ...r, email_id: emailRecord.id }))
       );
     }
 
     // Auto-update quote status naar "verstuurd" (als die nog op concept of leeg staat)
     if (!quote.status || quote.status === "concept") {
-      await supabase
+      await supabaseAdmin
         .from("quotes")
         .update({ status: "verstuurd" })
         .eq("id", id);
@@ -126,25 +129,27 @@ export async function POST(request, { params }) {
 
     // Auto-update lead status to "offerte gestuurd/verstuurd"
     const quoteStatusId = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
-    const { data: currentLead } = await supabase
+    const { data: currentLead } = await supabaseAdmin
       .from("leads")
       .select("status")
       .eq("id", quote.lead_id)
+      .eq("tenant", tenant)
       .single();
 
     // Only upgrade status if lead is still in an early stage
     const earlyStatuses = ["prospect", "nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
     if (currentLead && earlyStatuses.includes(currentLead.status)) {
-      await supabase
+      await supabaseAdmin
         .from("leads")
         .update({ status: quoteStatusId })
+        .eq("tenant", tenant)
         .eq("id", quote.lead_id);
     }
 
     // Optional: schedule a reminder follow-up for the sender
     const validReminderDays = [3, 5].includes(Number(reminder_days)) ? Number(reminder_days) : null;
     if (validReminderDays && userId) {
-      await supabase.from("follow_up_tasks").insert({
+      await supabaseAdmin.from("follow_up_tasks").insert({
         lead_id: quote.lead_id,
         task_type: "quote_reminder",
         description: `Offerte ${quote.quote_number} opvolgen`,
@@ -157,7 +162,7 @@ export async function POST(request, { params }) {
     // Log activity
     const attSuffix = attachmentRecords.length ? ` (${attachmentRecords.length} bijlage${attachmentRecords.length > 1 ? "n" : ""})` : "";
     const reminderSuffix = validReminderDays ? ` — herinnering over ${validReminderDays} dagen` : "";
-    await supabase.from("activities").insert({
+    await supabaseAdmin.from("activities").insert({
       lead_id: quote.lead_id,
       activity_type: "quote_emailed",
       description: `Offerte ${quote.quote_number} gemaild naar ${to}${attSuffix}${reminderSuffix}`,

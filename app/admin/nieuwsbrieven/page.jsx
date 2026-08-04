@@ -1232,6 +1232,17 @@ export default function NieuwsbrievenPage() {
                             Batchlimiet: max. {recipients.recipient_limit} ontvangers
                           </p>
                         )}
+                        {recipients.deduplicated_count > 0 && (
+                          <p className="text-xs text-amber-700">
+                            {recipients.deduplicated_count} dubbele kandidaatadressen verwijderd
+                            {recipients.candidate_count ? ` uit ${recipients.candidate_count} kandidaten` : ""}.
+                          </p>
+                        )}
+                        {recipients.duplicate_address_count > 0 && (
+                          <p className="text-xs text-gray-500">
+                            {recipients.duplicate_address_count} adres(sen) kwamen meer dan 1 keer voor.
+                          </p>
+                        )}
                       </div>
                       {recipients.truncated && <p className="text-xs text-gray-400">Eerste 250 getoond</p>}
                     </div>

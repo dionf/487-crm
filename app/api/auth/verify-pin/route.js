@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createHash } from "crypto";
 import { signToken } from "@/lib/auth";
 import { NextResponse } from "next/server";
@@ -17,7 +17,7 @@ export async function POST(request) {
   const pinHash = createHash("sha256").update(pin).digest("hex");
 
   // Fetch user with org info
-  const { data: user, error } = await supabase
+  const { data: user, error } = await supabaseAdmin
     .from("users")
     .select("id, name, email, phone, role, organization_id, pin_hash, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
     .eq("id", user_id)

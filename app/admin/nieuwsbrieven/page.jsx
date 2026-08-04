@@ -43,6 +43,7 @@ const STATUS_LABELS = {
   sent: "Verzonden",
   failed: "Mislukt",
 };
+const MAX_RECIPIENT_LIMIT = 100000;
 
 function statusClass(status) {
   if (status === "sent") return "bg-green-50 text-green-700 border-green-100";
@@ -931,6 +932,7 @@ export default function NieuwsbrievenPage() {
                   <input
                     type="number"
                     min="1"
+                    max={MAX_RECIPIENT_LIMIT}
                     step="1"
                     value={campaignForm.recipient_limit}
                     onChange={(e) => setCampaignForm({ ...campaignForm, recipient_limit: e.target.value })}
@@ -938,7 +940,7 @@ export default function NieuwsbrievenPage() {
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
                   />
                   <p className="text-xs text-gray-500">
-                    Vul bijvoorbeeld 100 in om alleen de eerste 100 ontvangers uit de preview te versturen.
+                    Vul bijvoorbeeld 100 in om alleen de eerste 100 ontvangers uit de preview te versturen. Maximum: {MAX_RECIPIENT_LIMIT}.
                   </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">

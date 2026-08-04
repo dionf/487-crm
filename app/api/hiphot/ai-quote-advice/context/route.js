@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export async function GET(request) {
   }
 
   // Verify lead bestaat en hoort bij tenant
-  const { data: lead, error: leadErr } = await supabase
+  const { data: lead, error: leadErr } = await supabaseAdmin
     .from("leads")
     .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
     .eq("id", leadId)
@@ -35,18 +35,18 @@ export async function GET(request) {
 
   // Parallel fetches
   const [quotesRes, notesRes, submissionsRes] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("quotes")
       .select("id, created_at, quote_number, status, amount_excl_vat")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: false }),
-    supabase
+    supabaseAdmin
       .from("notes")
       .select("id, created_at, note_type, content, created_by")
       .eq("lead_id", leadId)
       .in("note_type", ["gesprek", "intern", "formulier", "email", "todo"])
       .order("created_at", { ascending: false }),
-    supabase
+    supabaseAdmin
       .from("form_submissions")
       .select("id, created_at, source, message, conversation_data, first_name, last_name")
       .eq("lead_id", leadId)

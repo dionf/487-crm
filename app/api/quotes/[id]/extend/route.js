@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request, { params }) {
   const tenant = request.headers.get("x-auth-tenant");
@@ -7,7 +7,7 @@ export async function POST(request, { params }) {
   const body = await request.json().catch(() => ({}));
   const days = Number(body.days) > 0 ? Number(body.days) : 30;
 
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
     .select("id, quote_number, lead_id, status, accepted_at, leads(tenant)")
     .eq("id", id)
@@ -34,10 +34,11 @@ export async function POST(request, { params }) {
       ? "verstuurd"
       : quote.status;
 
-  const { data: updated, error } = await supabase
+  const { data: updated, error } = await supabaseAdmin
     .from("quotes")
     .update({ valid_until: validUntil, status: newStatus })
     .eq("id", id)
+    .eq("tenant", tenant)
     .select()
     .single();
 
@@ -45,7 +46,7 @@ export async function POST(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id: quote.lead_id,
     activity_type: "quote_extended",
     description: `Offerte ${quote.quote_number} verlengd tot ${validUntil} (${days} dagen)`,

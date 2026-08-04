@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateOrRefine } from "@/lib/ai-quote-advisor";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export async function POST(request) {
   // Resolve lead_id (legacy pad: via form_submission_id)
   let resolvedLeadId = lead_id;
   if (!resolvedLeadId && form_submission_id) {
-    const { data: fs } = await supabase
+    const { data: fs } = await supabaseAdmin
       .from("form_submissions")
       .select("lead_id, tenant")
       .eq("id", form_submission_id)
@@ -43,7 +43,7 @@ export async function POST(request) {
   }
 
   // Fetch lead + gebruikersselectie
-  const { data: lead } = await supabase
+  const { data: lead } = await supabaseAdmin
     .from("leads")
     .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
     .eq("id", resolvedLeadId)
@@ -59,7 +59,7 @@ export async function POST(request) {
 
   const [notesRes, submissionsRes] = await Promise.all([
     noteIds.length > 0
-      ? supabase
+      ? supabaseAdmin
           .from("notes")
           .select("id, created_at, note_type, content, created_by")
           .in("id", noteIds)
@@ -67,7 +67,7 @@ export async function POST(request) {
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     subIds.length > 0
-      ? supabase
+      ? supabaseAdmin
           .from("form_submissions")
           .select("id, created_at, source, message, conversation_data, first_name, last_name")
           .in("id", subIds)

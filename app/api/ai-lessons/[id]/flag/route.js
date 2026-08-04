@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export async function POST(request, { params }) {
   }
 
   // Verify lesson bestaat en hoort bij deze tenant
-  const { data: lesson } = await supabase
+  const { data: lesson } = await supabaseAdmin
     .from("ai_quote_lessons")
     .select("id, tenant, flag_count")
     .eq("id", id)
@@ -32,7 +32,7 @@ export async function POST(request, { params }) {
   }
 
   // Insert flag (PK enforced — dezelfde user kan niet 2x flaggen)
-  const { error: flagErr } = await supabase
+  const { error: flagErr } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .insert({
       lesson_id: id,
@@ -49,7 +49,7 @@ export async function POST(request, { params }) {
   }
 
   // Tel alle flags voor deze lesson
-  const { count } = await supabase
+  const { count } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .select("lesson_id", { count: "exact", head: true })
     .eq("lesson_id", id);
@@ -60,7 +60,7 @@ export async function POST(request, { params }) {
   const update = { flag_count: newFlagCount, updated_at: new Date().toISOString() };
   if (newFlagCount >= 2) update.is_active = false;
 
-  await supabase.from("ai_quote_lessons").update(update).eq("id", id);
+  await supabaseAdmin.from("ai_quote_lessons").update(update).eq("id", id).eq("tenant", tenant);
 
   return Response.json({
     success: true,
@@ -79,18 +79,28 @@ export async function DELETE(request, { params }) {
 
   const { id } = await params;
 
-  await supabase
+  const { data: lesson } = await supabaseAdmin
+    .from("ai_quote_lessons")
+    .select("id, tenant")
+    .eq("id", id)
+    .single();
+
+  if (!lesson || lesson.tenant !== tenant) {
+    return Response.json({ error: "Regel niet gevonden" }, { status: 404 });
+  }
+
+  await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .delete()
     .eq("lesson_id", id)
     .eq("user_id", userId);
 
-  const { count } = await supabase
+  const { count } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .select("lesson_id", { count: "exact", head: true })
     .eq("lesson_id", id);
 
-  await supabase
+  await supabaseAdmin
     .from("ai_quote_lessons")
     .update({ flag_count: count || 0, updated_at: new Date().toISOString() })
     .eq("id", id)

@@ -32,11 +32,11 @@ ALTER TABLE newsletter_segments
 
 INSERT INTO newsletter_segments (tenant, name, slug, source_type, source_value, default_excluded, sort_order)
 VALUES
-  ('hiphot', 'Recent besteld (14 dagen)', 'recent-besteld-14-dagen', 'recent_order_days', '14', true, 80)
+  ('hiphot', 'Recent besteld (14 dagen)', 'recent-besteld-14-dagen', 'recent_order_days', '14', false, 80)
 ON CONFLICT (tenant, slug) DO UPDATE
 SET
   source_type = EXCLUDED.source_type,
   source_value = EXCLUDED.source_value,
-  default_excluded = true,
+  default_excluded = EXCLUDED.default_excluded,
   sort_order = EXCLUDED.sort_order,
   updated_at = now();

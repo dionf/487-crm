@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/api/poll-inbox",    // Cron job (has own CRON_SECRET auth)
   "/api/track/",        // Public tracking pixel
   "/api/public/",       // Public quote pages
+  "/api/newsletter/webhook", // Resend webhook (Svix signature verified in route)
 ];
 
 function isPublicPath(pathname) {

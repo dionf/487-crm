@@ -32,6 +32,7 @@ const SOURCE_TYPES = [
   { id: "hubspot_deal_origin", label: "HubSpot-herkomst is" },
   { id: "industry", label: "Branche is" },
   { id: "recipient_email_contains", label: "Ontvanger e-mail bevat" },
+  { id: "recent_order_days", label: "Recent besteld binnen dagen" },
 ];
 
 const STATUS_LABELS = {
@@ -748,6 +749,8 @@ export default function NieuwsbrievenPage() {
                         ? "Bijv. factor_30,factor_50"
                         : segmentForm.source_type === "recipient_email_contains"
                           ? "Bijv. bol.com"
+                          : segmentForm.source_type === "recent_order_days"
+                            ? "Bijv. 14"
                           : "Kies hieronder of typ exact"
                     }
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"

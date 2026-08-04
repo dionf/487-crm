@@ -25,12 +25,21 @@ function emailDomain(email) {
   return value ? value.split("@")[1] : "";
 }
 
+function recentOrderCount(rows, days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return (rows || []).filter((lead) => {
+    if (!lead.last_order_at) return false;
+    const orderedAt = new Date(lead.last_order_at).getTime();
+    return !Number.isNaN(orderedAt) && orderedAt >= cutoff;
+  }).length;
+}
+
 export async function GET(request) {
   try {
     const { tenant } = requireAdmin(request);
     const { data, error } = await supabaseAdmin
       .from("leads")
-      .select("id, email, status, relationship_type, hubspot_deal_origin, industry, marketing_segments, marketing_consent, marketing_subscription_status, marketing_hard_bounced")
+      .select("id, email, status, relationship_type, hubspot_deal_origin, industry, last_order_at, marketing_segments, marketing_consent, marketing_subscription_status, marketing_hard_bounced")
       .eq("tenant", tenant)
       .eq("marketing_consent", true);
     if (error) throw new Error(error.message);
@@ -69,6 +78,10 @@ export async function GET(request) {
         hubspot_deal_origin: countValues(eligible, (lead) => lead.hubspot_deal_origin),
         industry: countValues(eligible, (lead) => lead.industry),
         recipient_email_contains: countValues([...leadEmailDomains, ...contactEmails], (item) => item.domain),
+        recent_order_days: [7, 14, 30, 60, 90].map((days) => ({
+          value: String(days),
+          count: recentOrderCount(eligible, days),
+        })).filter((option) => option.count > 0),
       },
     });
   } catch (error) {

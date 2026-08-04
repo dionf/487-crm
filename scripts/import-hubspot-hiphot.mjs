@@ -345,6 +345,16 @@ function cleanDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function latestCleanDate(values) {
+  const dates = values
+    .map(cleanDate)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+  return dates[0]?.toISOString() || null;
+}
+
 function splitMulti(value) {
   return text(value)
     .split(/[;,|\n]+/)
@@ -877,6 +887,10 @@ function parseCompany(row) {
       source: SOURCE,
       status: "prospect",
       language: "nl",
+      last_order_at: latestCleanDate([
+        get(row, ["Last order date", "Recent closed order date", "First order closed date"]),
+        get(row, ["hs_recent_closed_order_date", "hs_first_order_closed_date", "last_order_date"]),
+      ]),
       hubspot_company_id: hubspotCompanyId || null,
       hubspot_imported_at: new Date().toISOString(),
     },
@@ -1383,6 +1397,37 @@ function shouldUpdateExistingHubSpotDealOrigin(existingOrigin, incomingOrigin) {
   return incomingOrigin === "mixed";
 }
 
+function latestOrderAtFromGroup(group) {
+  return latestCleanDate([
+    group.company.lead.last_order_at,
+    ...(group.deals || [])
+      .filter((deal) => deal.dealOrigin === "ecommerce" && deal.leadStatus === "offerte_gewonnen")
+      .map((deal) => deal.date),
+  ]);
+}
+
+function shouldUpdateExistingLastOrderAt(existingLastOrderAt, incomingLastOrderAt) {
+  if (!incomingLastOrderAt) return false;
+  if (OVERWRITE || !existingLastOrderAt) return true;
+  const existingTime = new Date(existingLastOrderAt).getTime();
+  const incomingTime = new Date(incomingLastOrderAt).getTime();
+  return !Number.isNaN(incomingTime) && (Number.isNaN(existingTime) || incomingTime > existingTime);
+}
+
+function lastOrderAtForPlan(plan) {
+  return plan.lead.last_order_at || plan.existingLead?.last_order_at || null;
+}
+
+function recentOrderCompanyCount(plans, days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return plans.filter((plan) => {
+    const lastOrderAt = lastOrderAtForPlan(plan);
+    if (!lastOrderAt) return false;
+    const orderTime = new Date(lastOrderAt).getTime();
+    return !Number.isNaN(orderTime) && orderTime >= cutoff;
+  }).length;
+}
+
 function statusCounts(plans) {
   const counts = {};
   for (const plan of plans) {
@@ -1510,6 +1555,7 @@ function buildPlan(group, existingLead) {
   const marketing = mergeMarketing(group.company, group.contacts);
   const relationshipType = resolveRelationshipType(group, marketing, dealStatus);
   const dealOrigin = resolveHubSpotDealOrigin(group.deals);
+  const lastOrderAt = latestOrderAtFromGroup(group);
   const status = relationshipType === "customer" && ["geen_lead", "prospect"].includes(dealStatus.status)
     ? "offerte_gewonnen"
     : dealStatus.status;
@@ -1518,6 +1564,7 @@ function buildPlan(group, existingLead) {
     status,
     relationship_type: relationshipType,
     hubspot_deal_origin: dealOrigin,
+    last_order_at: lastOrderAt,
     ...marketing,
   };
 
@@ -1544,6 +1591,9 @@ function buildPlan(group, existingLead) {
   }
   if (existingLead && shouldUpdateExistingHubSpotDealOrigin(existingLead.hubspot_deal_origin, lead.hubspot_deal_origin)) {
     patchedLead.hubspot_deal_origin = lead.hubspot_deal_origin;
+  }
+  if (existingLead && shouldUpdateExistingLastOrderAt(existingLead.last_order_at, lead.last_order_at)) {
+    patchedLead.last_order_at = lead.last_order_at;
   }
   return {
     action,
@@ -1657,10 +1707,14 @@ function buildNote(group) {
   return lines.join("\n");
 }
 
-const EXISTING_LEAD_SELECT = "id, company_name, city, email, status, relationship_type, hubspot_deal_origin, hubspot_company_id, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language";
+const EXISTING_LEAD_SELECT = "id, company_name, city, email, status, relationship_type, hubspot_deal_origin, hubspot_company_id, last_order_at, marketing_segments, marketing_consent, contact_person, contact_first_name, contact_last_name, contact_function, phone, website_url, address, billing_street, billing_postal_code, billing_city, billing_country, delivery_same_as_billing, delivery_street, delivery_postal_code, delivery_city, delivery_country, industry, language";
 const EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION = EXISTING_LEAD_SELECT
   .replace("relationship_type, ", "")
   .replace("hubspot_deal_origin, ", "");
+const EXISTING_LEAD_SELECT_WITHOUT_LAST_ORDER_AT = EXISTING_LEAD_SELECT
+  .replace("last_order_at, ", "");
+const EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION_AND_LAST_ORDER_AT = EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION
+  .replace("last_order_at, ", "");
 
 async function fetchExistingLeads(supabase) {
   try {
@@ -1670,18 +1724,46 @@ async function fetchExistingLeads(supabase) {
       .eq("tenant", TENANT)
       .order("id", { ascending: true }), "bestaande HipHot leads");
   } catch (error) {
+    if (/last_order_at/i.test(error.message)) {
+      if (!DRY) {
+        throw new Error("Kolom last_order_at ontbreekt nog in de CRM-database. Pas migratie 019_newsletter_recent_order_exclusion.sql toe en draai daarna opnieuw een dry-run.");
+      }
+      console.warn("Kolom last_order_at ontbreekt nog in de CRM-database; dry-run gebruikt lege besteldata.");
+      const rows = await fetchAllExistingRows(() => supabase
+        .from("leads")
+        .select(EXISTING_LEAD_SELECT_WITHOUT_LAST_ORDER_AT)
+        .eq("tenant", TENANT)
+        .order("id", { ascending: true }), "bestaande HipHot leads zonder laatste besteldatum");
+      return rows.map((row) => ({ ...row, last_order_at: null }));
+    }
     if (!/relationship_type|hubspot_deal_origin/i.test(error.message)) throw error;
     relationshipTypeColumnMissing = true;
     if (!DRY) {
       throw new Error("Kolom relationship_type of hubspot_deal_origin ontbreekt nog in de CRM-database. Pas migratie 015_hiphot_relationship_type.sql toe en draai daarna opnieuw een dry-run.");
     }
     console.warn("Kolom relationship_type of hubspot_deal_origin ontbreekt nog in de CRM-database; dry-run gebruikt lege bestaande classificaties.");
-    const rows = await fetchAllExistingRows(() => supabase
-      .from("leads")
-      .select(EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION)
-      .eq("tenant", TENANT)
-      .order("id", { ascending: true }), "bestaande HipHot leads zonder classificatie");
-    return rows.map((row) => ({ ...row, relationship_type: null, hubspot_deal_origin: null }));
+    try {
+      const rows = await fetchAllExistingRows(() => supabase
+        .from("leads")
+        .select(EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION)
+        .eq("tenant", TENANT)
+        .order("id", { ascending: true }), "bestaande HipHot leads zonder classificatie");
+      return rows.map((row) => ({ ...row, relationship_type: null, hubspot_deal_origin: null }));
+    } catch (fallbackError) {
+      if (!/last_order_at/i.test(fallbackError.message)) throw fallbackError;
+      console.warn("Kolom last_order_at ontbreekt ook nog; dry-run gebruikt lege bestaande besteldata.");
+      const rows = await fetchAllExistingRows(() => supabase
+        .from("leads")
+        .select(EXISTING_LEAD_SELECT_WITHOUT_CLASSIFICATION_AND_LAST_ORDER_AT)
+        .eq("tenant", TENANT)
+        .order("id", { ascending: true }), "bestaande HipHot leads zonder classificatie en laatste besteldatum");
+      return rows.map((row) => ({
+        ...row,
+        relationship_type: null,
+        hubspot_deal_origin: null,
+        last_order_at: null,
+      }));
+    }
   }
 }
 
@@ -2064,6 +2146,7 @@ async function main() {
       algemeneNieuwsbriefCompanies: plans.filter((plan) => plan.lead.marketing_segments?.includes("algemene_nieuwsbrief")).length,
       factor30Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_30")).length,
       factor50Companies: plans.filter((plan) => plan.lead.marketing_segments?.includes("factor_50")).length,
+      recentOrder14DaysCompanies: recentOrderCompanyCount(plans, 14),
       listContactsSeen: listContacts.length,
       leadStatuses: statusCounts(plans),
       hubspotDealPipelines: hubspotDealPipelineCounts(deals),
@@ -2077,6 +2160,7 @@ async function main() {
       status: plan.lead.status || plan.existingLead?.status || null,
       relationshipType: plan.lead.relationship_type || plan.existingLead?.relationship_type || null,
       hubspotDealOrigin: plan.lead.hubspot_deal_origin || plan.existingLead?.hubspot_deal_origin || null,
+      lastOrderAt: lastOrderAtForPlan(plan),
       dealStatusSource: plan.dealStatus.source,
       marketingConsent: plan.lead.marketing_consent,
       marketingSegments: plan.lead.marketing_segments,

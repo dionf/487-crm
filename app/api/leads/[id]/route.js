@@ -24,6 +24,7 @@ const HIPHOT_MARKETING_FIELD_NAMES = [
   "hubspot_imported_at",
   "relationship_type",
   "hubspot_deal_origin",
+  "last_order_at",
 ];
 
 function cleanDate(value) {
@@ -73,6 +74,7 @@ function cleanMarketingPatch(body, tenant) {
         ? body.hubspot_deal_origin
         : null;
     }
+    if ("last_order_at" in body) patch.last_order_at = cleanDate(body.last_order_at);
   }
 
   const status = patch.marketing_subscription_status;

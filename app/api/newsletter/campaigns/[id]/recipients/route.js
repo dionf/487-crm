@@ -16,6 +16,10 @@ export async function GET(request, { params }) {
     return Response.json({
       count: result.recipients.length,
       total_count: result.total_count,
+      candidate_count: result.candidate_count,
+      deduplicated_count: result.deduplicated_count,
+      duplicate_address_count: result.duplicate_address_count,
+      duplicate_emails: result.duplicate_emails,
       recipient_limit: result.limit,
       limited: result.limited,
       recipients: result.recipients.slice(0, 250),

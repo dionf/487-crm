@@ -1,5 +1,5 @@
 import { getAuthCookie, verifyToken } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // GET /api/auth/session — validate cookie and return current session
 export async function GET(request) {
@@ -15,12 +15,12 @@ export async function GET(request) {
 
   // Fetch fresh user + org data (may have changed since login)
   const [{ data: freshUser }, { data: org }] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("users")
       .select("id, name, email, role, phone")
       .eq("id", payload.user_id)
       .single(),
-    supabase
+    supabaseAdmin
       .from("organizations")
       .select("id, slug, display_name, pipeline_stages, service_types, theme")
       .eq("slug", payload.tenant)

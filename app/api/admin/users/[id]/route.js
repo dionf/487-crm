@@ -1,7 +1,24 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createHash } from "crypto";
 
+async function getSessionOrg(session) {
+  const { data: org, error } = await supabaseAdmin
+    .from("organizations")
+    .select("id")
+    .eq("slug", session.tenant)
+    .single();
+  if (error || !org) return null;
+  return org;
+}
+
 export async function PATCH(request, { params }) {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Alleen admins" }, { status: 403 });
+  const org = await getSessionOrg(session);
+  if (!org) return Response.json({ error: "Org niet gevonden" }, { status: 404 });
+  const { id } = await params;
   const body = await request.json();
   const updates = {};
 
@@ -12,10 +29,11 @@ export async function PATCH(request, { params }) {
   if (body.is_active !== undefined) updates.is_active = body.is_active;
   if (body.pin) updates.pin_hash = createHash("sha256").update(body.pin).digest("hex");
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .update(updates)
-    .eq("id", (await params).id)
+    .eq("id", id)
+    .eq("organization_id", org.id)
     .select("id, name, email, phone, role, is_active")
     .single();
 
@@ -25,12 +43,27 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  // Unassign all leads from this user before deleting
-  await supabase.from("leads").update({ assigned_to: null }).eq("assigned_to", (await params).id);
-  await supabase.from("leads").update({ last_called_by: null }).eq("last_called_by", (await params).id);
-  await supabase.from("follow_up_tasks").update({ assigned_to: null }).eq("assigned_to", (await params).id);
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Alleen admins" }, { status: 403 });
+  const org = await getSessionOrg(session);
+  if (!org) return Response.json({ error: "Org niet gevonden" }, { status: 404 });
+  const { id } = await params;
 
-  const { error } = await supabase.from("users").delete().eq("id", (await params).id);
+  const { data: user, error: userError } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .single();
+  if (userError || !user) return Response.json({ error: "Gebruiker niet gevonden" }, { status: 404 });
+
+  // Unassign all leads from this user before deleting
+  await supabaseAdmin.from("leads").update({ assigned_to: null }).eq("tenant", session.tenant).eq("assigned_to", id);
+  await supabaseAdmin.from("leads").update({ last_called_by: null }).eq("tenant", session.tenant).eq("last_called_by", id);
+  await supabaseAdmin.from("follow_up_tasks").update({ assigned_to: null }).eq("tenant", session.tenant).eq("assigned_to", id);
+
+  const { error } = await supabaseAdmin.from("users").delete().eq("id", id).eq("organization_id", org.id);
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true });
 }

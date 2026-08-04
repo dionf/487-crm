@@ -9,6 +9,7 @@
     "lint": "next lint",
     "export:hubspot:hiphot": "node scripts/export-hubspot-hiphot-api.mjs",
     "readiness:hubspot:hiphot": "node scripts/check-hubspot-hiphot-readiness.mjs",
+    "check:newsletter:dedup": "node scripts/check-newsletter-recipient-dedup.mjs",
     "import:hubspot:hiphot": "node scripts/import-hubspot-hiphot.mjs",
     "verify:hubspot:hiphot": "node scripts/verify-hubspot-hiphot-import.mjs"
   },

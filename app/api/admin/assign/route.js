@@ -1,19 +1,18 @@
-import { supabase } from "@/lib/supabase";
-
-function getTenant(request) {
-  return request.headers.get("x-tenant") || "48-7";
-}
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // POST /api/admin/assign — bulk assign leads to agents
 export async function POST(request) {
-  const tenant = getTenant(request);
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const { lead_ids, user_id, mode } = body;
 
   // Mode: "manual" (assign specific leads) or "auto" (distribute evenly)
   if (mode === "auto") {
     // Get all unassigned leads for this tenant
-    const { data: unassigned } = await supabase
+    const { data: unassigned } = await supabaseAdmin
       .from("leads")
       .select("id")
       .eq("tenant", tenant)
@@ -25,8 +24,8 @@ export async function POST(request) {
     if (body.agent_ids?.length) {
       agentList = body.agent_ids.map((id) => ({ id }));
     } else {
-      const { data: org } = await supabase.from("organizations").select("id").eq("slug", tenant).single();
-      const { data: agents } = await supabase
+      const { data: org } = await supabaseAdmin.from("organizations").select("id").eq("slug", tenant).single();
+      const { data: agents } = await supabaseAdmin
         .from("users")
         .select("id")
         .eq("organization_id", org.id)
@@ -43,7 +42,11 @@ export async function POST(request) {
     let assigned = 0;
     for (let i = 0; i < unassigned.length; i++) {
       const agent = agentList[i % agentList.length];
-      await supabase.from("leads").update({ assigned_to: agent.id }).eq("id", unassigned[i].id);
+      await supabaseAdmin
+        .from("leads")
+        .update({ assigned_to: agent.id })
+        .eq("tenant", tenant)
+        .eq("id", unassigned[i].id);
       assigned++;
     }
 
@@ -55,9 +58,10 @@ export async function POST(request) {
     return Response.json({ error: "lead_ids en user_id zijn verplicht" }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("leads")
     .update({ assigned_to: user_id })
+    .eq("tenant", tenant)
     .in("id", lead_ids);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

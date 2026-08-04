@@ -38,12 +38,14 @@ function cleanHubSpotIds(value) {
     : [];
 }
 
-function cleanHipHotMarketingPatch(body) {
+function cleanMarketingPatch(body, tenant) {
   const patch = {};
 
   if ("marketing_segments" in body) {
     patch.marketing_segments = Array.isArray(body.marketing_segments)
-      ? body.marketing_segments.filter((id) => HIPHOT_MARKETING_SEGMENT_IDS.has(id))
+      ? body.marketing_segments
+          .map((id) => String(id).trim())
+          .filter((id) => tenant === "hiphot" ? HIPHOT_MARKETING_SEGMENT_IDS.has(id) : Boolean(id))
       : [];
   }
   if ("marketing_subscription_status" in body) {
@@ -56,19 +58,21 @@ function cleanHipHotMarketingPatch(body) {
   if ("marketing_consent_date" in body) patch.marketing_consent_date = cleanDate(body.marketing_consent_date);
   if ("marketing_unsubscribed_at" in body) patch.marketing_unsubscribed_at = cleanDate(body.marketing_unsubscribed_at);
   if ("marketing_hard_bounced" in body) patch.marketing_hard_bounced = body.marketing_hard_bounced === true;
-  if ("hubspot_company_id" in body) patch.hubspot_company_id = body.hubspot_company_id || null;
-  if ("hubspot_contact_ids" in body) patch.hubspot_contact_ids = cleanHubSpotIds(body.hubspot_contact_ids);
-  if ("hubspot_subscription_status" in body) patch.hubspot_subscription_status = body.hubspot_subscription_status || null;
-  if ("hubspot_imported_at" in body) patch.hubspot_imported_at = cleanDate(body.hubspot_imported_at);
-  if ("relationship_type" in body) {
-    patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
-      ? body.relationship_type
-      : null;
-  }
-  if ("hubspot_deal_origin" in body) {
-    patch.hubspot_deal_origin = HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
-      ? body.hubspot_deal_origin
-      : null;
+  if (tenant === "hiphot") {
+    if ("hubspot_company_id" in body) patch.hubspot_company_id = body.hubspot_company_id || null;
+    if ("hubspot_contact_ids" in body) patch.hubspot_contact_ids = cleanHubSpotIds(body.hubspot_contact_ids);
+    if ("hubspot_subscription_status" in body) patch.hubspot_subscription_status = body.hubspot_subscription_status || null;
+    if ("hubspot_imported_at" in body) patch.hubspot_imported_at = cleanDate(body.hubspot_imported_at);
+    if ("relationship_type" in body) {
+      patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
+        ? body.relationship_type
+        : null;
+    }
+    if ("hubspot_deal_origin" in body) {
+      patch.hubspot_deal_origin = HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
+        ? body.hubspot_deal_origin
+        : null;
+    }
   }
 
   const status = patch.marketing_subscription_status;
@@ -158,13 +162,9 @@ export async function PATCH(request, { params }) {
     if (body.billing_country !== undefined) body.delivery_country = body.billing_country;
   }
 
-  if (tenant === "hiphot") {
-    const marketingPatch = cleanHipHotMarketingPatch(body);
-    removeMarketingFields(body);
-    Object.assign(body, marketingPatch);
-  } else {
-    removeMarketingFields(body);
-  }
+  const marketingPatch = cleanMarketingPatch(body, tenant);
+  removeMarketingFields(body);
+  Object.assign(body, marketingPatch);
 
   const { data, error } = await supabase
     .from("leads")

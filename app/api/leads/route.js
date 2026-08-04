@@ -23,7 +23,7 @@ function cleanHubSpotIds(value) {
     : [];
 }
 
-function cleanHipHotMarketingFields(body) {
+function cleanMarketingFields(body, tenant) {
   let status = HIPHOT_MARKETING_STATUS_IDS.has(body.marketing_subscription_status)
     ? body.marketing_subscription_status
     : "unknown";
@@ -36,7 +36,9 @@ function cleanHipHotMarketingFields(body) {
   return {
     marketing_consent: blocked ? false : body.marketing_consent === true,
     marketing_segments: Array.isArray(body.marketing_segments)
-      ? body.marketing_segments.filter((id) => HIPHOT_MARKETING_SEGMENT_IDS.has(id))
+      ? body.marketing_segments
+          .map((id) => String(id).trim())
+          .filter((id) => tenant === "hiphot" ? HIPHOT_MARKETING_SEGMENT_IDS.has(id) : Boolean(id))
       : [],
     marketing_subscription_status: status,
     marketing_consent_source: body.marketing_consent_source || null,
@@ -74,8 +76,8 @@ export async function GET(request) {
   if (status) query = query.eq("status", status);
   if (service_type) query = query.eq("service_type", service_type);
   if (assigned_to) query = query.eq("assigned_to", assigned_to);
-  if (tenant === "hiphot" && marketing === "true") query = query.eq("marketing_consent", true);
-  if (tenant === "hiphot" && marketing_segment && HIPHOT_MARKETING_SEGMENT_IDS.has(marketing_segment)) {
+  if (marketing === "true") query = query.eq("marketing_consent", true);
+  if (marketing_segment && (tenant !== "hiphot" || HIPHOT_MARKETING_SEGMENT_IDS.has(marketing_segment))) {
     query = query.contains("marketing_segments", [marketing_segment]);
   }
   if (tenant === "hiphot" && relationship_type && HIPHOT_RELATION_TYPE_IDS.has(relationship_type)) {
@@ -146,7 +148,7 @@ export async function POST(request) {
   }
 
   const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
-  const marketingFields = tenant === "hiphot" ? cleanHipHotMarketingFields(body) : {};
+  const marketingFields = cleanMarketingFields(body, tenant);
   const relationshipFields = tenant === "hiphot" && HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
     ? { relationship_type: body.relationship_type }
     : {};

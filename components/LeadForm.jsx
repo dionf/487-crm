@@ -600,86 +600,86 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
             )}
           </div>
 
-          {isHipHot && (
-            <div className="border-t border-gray-100 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowMarketing(!showMarketing)}
-                className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-brand-black"
-              >
-                {showMarketing ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                <Megaphone className="w-3.5 h-3.5 text-brand-orange" />
-                Marketing bedrijf
-              </button>
+          <div className="border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowMarketing(!showMarketing)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-brand-black"
+            >
+              {showMarketing ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <Megaphone className="w-3.5 h-3.5 text-brand-orange" />
+              Marketing bedrijf
+            </button>
 
-              {showMarketing && (
-                <div className="mt-3 space-y-3">
-                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            {showMarketing && (
+              <div className="mt-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.marketing_consent}
+                    onChange={(e) => setForm({ ...form, marketing_consent: e.target.checked })}
+                    className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                  />
+                  Nieuwsbrief toegestaan
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Status
+                    </label>
+                    <select
+                      value={form.marketing_subscription_status}
+                      onChange={(e) => setForm({ ...form, marketing_subscription_status: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
+                    >
+                      {HIPHOT_MARKETING_STATUSES.map((status) => (
+                        <option key={status.id} value={status.id}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Bron toestemming
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={form.marketing_consent}
-                      onChange={(e) => setForm({ ...form, marketing_consent: e.target.checked })}
-                      className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                      type="text"
+                      value={form.marketing_consent_source}
+                      onChange={(e) => setForm({ ...form, marketing_consent_source: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                      placeholder="Formulier, import..."
                     />
-                    Nieuwsbrief toegestaan
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Status
-                      </label>
-                      <select
-                        value={form.marketing_subscription_status}
-                        onChange={(e) => setForm({ ...form, marketing_subscription_status: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-white"
-                      >
-                        {HIPHOT_MARKETING_STATUSES.map((status) => (
-                          <option key={status.id} value={status.id}>
-                            {status.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Bron toestemming
-                      </label>
-                      <input
-                        type="text"
-                        value={form.marketing_consent_source}
-                        onChange={(e) => setForm({ ...form, marketing_consent_source: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                        placeholder="HubSpot, formulier..."
-                      />
-                    </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Toestemming datum
-                      </label>
-                      <input
-                        type="date"
-                        value={form.marketing_consent_date}
-                        onChange={(e) => setForm({ ...form, marketing_consent_date: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Uitschrijfdatum
-                      </label>
-                      <input
-                        type="date"
-                        value={form.marketing_unsubscribed_at}
-                        onChange={(e) => setForm({ ...form, marketing_unsubscribed_at: e.target.value })}
-                        className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                      />
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Toestemming datum
+                    </label>
+                    <input
+                      type="date"
+                      value={form.marketing_consent_date}
+                      onChange={(e) => setForm({ ...form, marketing_consent_date: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    />
                   </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Uitschrijfdatum
+                    </label>
+                    <input
+                      type="date"
+                      value={form.marketing_unsubscribed_at}
+                      onChange={(e) => setForm({ ...form, marketing_unsubscribed_at: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                    />
+                  </div>
+                </div>
 
+                {isHipHot && (
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Segmenten
@@ -704,10 +704,10 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
                       })}
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-3 pt-2">
             <button

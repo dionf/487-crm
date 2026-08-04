@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   isMissingNewsletterTable,
   missingNewsletterSetupResponse,
+  normalizeRecipientLimit,
   reconcileScheduledBroadcasts,
   requireAdmin,
 } from "@/lib/newsletters";
@@ -80,6 +81,7 @@ export async function POST(request) {
     const subject = String(body.subject || "").trim();
     const bodyHtml = String(body.body_html || "").trim();
     const scheduledAt = normalizeScheduledAt(body.scheduled_at);
+    const recipientLimit = normalizeRecipientLimit(body.recipient_limit);
     if (!name || !subject || !bodyHtml) {
       return Response.json({ error: "Naam, onderwerp en HTML zijn verplicht" }, { status: 400 });
     }
@@ -107,6 +109,7 @@ export async function POST(request) {
         subject,
         preview_text: body.preview_text || null,
         body_html: bodyHtml,
+        recipient_limit: recipientLimit,
         scheduled_at: scheduledAt,
         created_by: userName,
       })

@@ -1,12 +1,15 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const { id } = await params;
 
   // Verify contact belongs to tenant
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("contacts").select("tenant, lead_id").eq("id", id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Contact niet gevonden" }, { status: 404 });
@@ -14,20 +17,24 @@ export async function PATCH(request, { params }) {
 
   // If setting as primary, unset other primaries
   if (body.is_primary) {
-    await supabase
+    await supabaseAdmin
       .from("contacts")
       .update({ is_primary: false })
       .eq("lead_id", existing.lead_id)
       .eq("tenant", tenant);
   }
 
-  const { data, error } = await supabase
+  const blockedFields = new Set(["id", "tenant", "lead_id", "created_at"]);
+  const updates = { updated_at: new Date().toISOString() };
+  for (const [key, value] of Object.entries(body)) {
+    if (!blockedFields.has(key)) updates[key] = value;
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("contacts")
-    .update({
-      ...body,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updates)
     .eq("id", id)
+    .eq("tenant", tenant)
     .select()
     .single();
 
@@ -38,7 +45,7 @@ export async function PATCH(request, { params }) {
     const nameParts = (data.name || "").split(" ");
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
-    await supabase
+    await supabaseAdmin
       .from("leads")
       .update({
         contact_person: data.name,
@@ -55,17 +62,19 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   // Verify contact belongs to tenant
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("contacts").select("tenant").eq("id", id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Contact niet gevonden" }, { status: 404 });
   }
 
-  const { error } = await supabase.from("contacts").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("contacts").delete().eq("id", id).eq("tenant", tenant);
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true });
 }

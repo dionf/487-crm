@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
@@ -53,7 +54,9 @@ function cleanMarketingFields(body, tenant) {
 }
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const service_type = searchParams.get("service_type");
@@ -67,7 +70,7 @@ export async function GET(request) {
   const relationship_type = searchParams.get("relationship_type");
   const hubspot_deal_origin = searchParams.get("hubspot_deal_origin");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("leads")
     .select("*, quotes(id), notes(id, is_completed, note_type)")
     .eq("tenant", tenant)
@@ -122,7 +125,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const {
     company_name, contact_first_name, contact_last_name, contact_function, contact_person,
@@ -179,7 +184,7 @@ export async function POST(request) {
         delivery_country: delivery_country || "NL",
       };
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("leads")
     .insert({
       company_name,
@@ -218,7 +223,7 @@ export async function POST(request) {
   }
 
   // Log activity
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id: data.id,
     activity_type: "lead_created",
     description: `Lead aangemaakt: ${company_name}`,

@@ -1,12 +1,16 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const { id } = await params;
   const body = await request.json();
 
   // Verify task belongs to tenant
-  const { data: existing } = await supabase
-    .from("follow_up_tasks").select("tenant").eq("id", (await params).id).single();
+  const { data: existing } = await supabaseAdmin
+    .from("follow_up_tasks").select("tenant").eq("id", id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Taak niet gevonden" }, { status: 404 });
   }
@@ -19,10 +23,11 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("follow_up_tasks")
     .update(updates)
-    .eq("id", (await params).id)
+    .eq("id", id)
+    .eq("tenant", tenant)
     .select()
     .single();
 

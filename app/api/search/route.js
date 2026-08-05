@@ -1,7 +1,10 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q");
 
@@ -10,13 +13,13 @@ export async function GET(request) {
   }
 
   const [leadsRes, notesRes] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("leads")
       .select("id, company_name, contact_person, contact_first_name, contact_last_name, status")
       .eq("tenant", tenant)
       .or(`company_name.ilike.%${q}%,contact_person.ilike.%${q}%,contact_first_name.ilike.%${q}%,contact_last_name.ilike.%${q}%,email.ilike.%${q}%`)
       .limit(5),
-    supabase
+    supabaseAdmin
       .from("notes")
       .select("id, content, lead_id, note_type, leads(company_name)")
       .eq("tenant", tenant)

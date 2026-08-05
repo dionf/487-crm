@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 import { getAuthCookie, verifyToken } from "@/lib/auth";
@@ -54,7 +54,7 @@ export async function GET(request) {
 
   // Detecteren: status = 'verstuurd', sent_at >= 10d geleden,
   // geen accept/afwijzing, niet verlopen.
-  const { data: quotes, error } = await supabase
+  const { data: quotes, error } = await supabaseAdmin
     .from("quotes")
     .select(
       "id, quote_number, sent_at, valid_until, amount_excl_vat, public_hash, lead_id, leads(id, company_name, contact_first_name, contact_last_name, contact_person, email, tenant)"

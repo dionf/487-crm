@@ -1,9 +1,12 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
 
-  const { data: leads, error } = await supabase
+  const { data: leads, error } = await supabaseAdmin
     .from("leads")
     .select("status, service_type, estimated_value, created_at, won_at, updated_at")
     .eq("tenant", tenant);

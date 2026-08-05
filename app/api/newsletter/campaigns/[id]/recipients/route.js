@@ -17,6 +17,7 @@ export async function GET(request, { params }) {
       count: result.recipients.length,
       total_count: result.total_count,
       candidate_count: result.candidate_count,
+      suppressed_count: result.suppressed_count,
       deduplicated_count: result.deduplicated_count,
       duplicate_address_count: result.duplicate_address_count,
       duplicate_emails: result.duplicate_emails,

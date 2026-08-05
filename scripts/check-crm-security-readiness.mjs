@@ -62,7 +62,13 @@ with server_tables(table_name) as (
     ('quote_email_attachments'),
     ('ai_quote_lessons'),
     ('ai_quote_lesson_flags'),
-    ('form_submissions')
+    ('form_submissions'),
+    ('newsletter_settings'),
+    ('newsletter_segments'),
+    ('newsletter_campaigns'),
+    ('newsletter_campaign_recipients'),
+    ('newsletter_events'),
+    ('newsletter_email_suppressions')
 ),
 server_table_status as (
   select

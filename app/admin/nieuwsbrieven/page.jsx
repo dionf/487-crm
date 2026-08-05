@@ -1238,6 +1238,11 @@ export default function NieuwsbrievenPage() {
                             {recipients.candidate_count ? ` uit ${recipients.candidate_count} kandidaten` : ""}.
                           </p>
                         )}
+                        {recipients.suppressed_count > 0 && (
+                          <p className="text-xs text-red-600">
+                            {recipients.suppressed_count} persoonlijk uitgeschreven/geblokkeerde adres(sen) uitgesloten.
+                          </p>
+                        )}
                         {recipients.duplicate_address_count > 0 && (
                           <p className="text-xs text-gray-500">
                             {recipients.duplicate_address_count} adres(sen) kwamen meer dan 1 keer voor.

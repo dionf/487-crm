@@ -887,10 +887,9 @@ function parseCompany(row) {
       source: SOURCE,
       status: "prospect",
       language: "nl",
-      last_order_at: latestCleanDate([
-        get(row, ["Last order date", "Recent closed order date", "First order closed date"]),
-        get(row, ["hs_recent_closed_order_date", "hs_first_order_closed_date", "last_order_date"]),
-      ]),
+      // WooCommerce is the source of truth for purchase recency. HubSpot can be
+      // stale, so imports must not overwrite lead.last_order_at from HubSpot.
+      last_order_at: null,
       hubspot_company_id: hubspotCompanyId || null,
       hubspot_imported_at: new Date().toISOString(),
     },
@@ -1398,12 +1397,7 @@ function shouldUpdateExistingHubSpotDealOrigin(existingOrigin, incomingOrigin) {
 }
 
 function latestOrderAtFromGroup(group) {
-  return latestCleanDate([
-    group.company.lead.last_order_at,
-    ...(group.deals || [])
-      .filter((deal) => deal.dealOrigin === "ecommerce" && deal.leadStatus === "offerte_gewonnen")
-      .map((deal) => deal.date),
-  ]);
+  return group.company.lead.last_order_at || null;
 }
 
 function shouldUpdateExistingLastOrderAt(existingLastOrderAt, incomingLastOrderAt) {

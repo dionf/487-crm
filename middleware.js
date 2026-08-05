@@ -5,6 +5,7 @@ import { getAuthCookie, verifyToken } from "@/lib/auth";
 const PUBLIC_PATHS = [
   "/api/auth/",         // Login flow
   "/api/poll-inbox",    // Cron job (has own CRON_SECRET auth)
+  "/api/cron/newsletter-batches", // Cron job (has own CRON_SECRET auth)
   "/api/track/",        // Public tracking pixel
   "/api/public/",       // Public quote pages
   "/api/newsletter/webhook", // Resend webhook (Svix signature verified in route)

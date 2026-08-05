@@ -55,12 +55,24 @@ function statusClass(status) {
   return "bg-gray-50 text-gray-600 border-gray-100";
 }
 
-function emptyCampaign(segmentId = "", excludedSegmentIds = []) {
+function normalizeIds(ids) {
+  return [...new Set((Array.isArray(ids) ? ids : []).filter(Boolean))];
+}
+
+function campaignTargetIds(campaign) {
+  const ids = normalizeIds(campaign?.included_segment_ids || []);
+  if (ids.length) return ids;
+  return campaign?.segment_id ? [campaign.segment_id] : [];
+}
+
+function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
+  const targets = normalizeIds(includedSegmentIds);
   return {
     name: "",
     subject: "",
     preview_text: "",
-    segment_id: segmentId,
+    segment_id: targets[0] || "",
+    included_segment_ids: targets,
     excluded_segment_ids: excludedSegmentIds,
     recipient_limit: "",
     scheduled_at: "",
@@ -115,15 +127,10 @@ function sameSegmentRule(a, b) {
   );
 }
 
-function isExactEmailSegment(segment) {
-  return segment?.source_type === "recipient_email_in";
-}
-
-function segmentCanExclude(segment, includeSegment) {
+function segmentCanExclude(segment, includeSegments = []) {
   if (!segment || segment.source_type === "all_marketing") return false;
-  if (isExactEmailSegment(includeSegment)) return false;
-  if (segment.id === includeSegment?.id || sameSegmentRule(segment, includeSegment)) return false;
-  if (includeSegment?.source_type === "recipient_email_contains" && !segment.default_excluded) {
+  if (includeSegments.some((includeSegment) => segment.id === includeSegment.id || sameSegmentRule(segment, includeSegment))) return false;
+  if (includeSegments.some((includeSegment) => includeSegment.source_type === "recipient_email_contains") && !segment.default_excluded) {
     return segment.source_type === "recipient_email_contains";
   }
   return true;
@@ -165,9 +172,13 @@ export default function NieuwsbrievenPage() {
     settings?.from_email &&
     settings?.reply_to
   );
-  const selectedSegment = useMemo(
-    () => segments.find((segment) => segment.id === campaignForm.segment_id),
-    [segments, campaignForm.segment_id]
+  const targetSegmentIds = useMemo(
+    () => campaignTargetIds(campaignForm),
+    [campaignForm]
+  );
+  const selectedTargetSegments = useMemo(
+    () => targetSegmentIds.map((id) => segments.find((segment) => segment.id === id)).filter(Boolean),
+    [segments, targetSegmentIds]
   );
   const defaultExcludedSegmentIds = useMemo(
     () => segments.filter((segment) => segment.default_excluded).map((segment) => segment.id),
@@ -178,10 +189,13 @@ export default function NieuwsbrievenPage() {
     [campaignForm.excluded_segment_ids, defaultExcludedSegmentIds]
   );
   const availableExclusionSegments = useMemo(
-    () => segments.filter((segment) => segmentCanExclude(segment, selectedSegment)),
-    [segments, selectedSegment]
+    () => segments.filter((segment) => segmentCanExclude(segment, selectedTargetSegments)),
+    [segments, selectedTargetSegments]
   );
-  const exactEmailTargetSelected = isExactEmailSegment(selectedSegment);
+  const availableTargetSegments = useMemo(
+    () => segments.filter((segment) => !segment.default_excluded),
+    [segments]
+  );
   const availableSourceValues = segmentOptions?.options?.[segmentForm.source_type] || [];
 
   useEffect(() => {
@@ -226,8 +240,13 @@ export default function NieuwsbrievenPage() {
         resend_api_key: "",
         resend_webhook_secret: "",
       });
-      if (!campaignForm.segment_id && segmentsJson.segments?.[0]) {
-        setCampaignForm((current) => ({ ...current, segment_id: segmentsJson.segments[0].id }));
+      const defaultTarget = (segmentsJson.segments || []).find((segment) => !segment.default_excluded) || segmentsJson.segments?.[0];
+      if (!campaignTargetIds(campaignForm).length && defaultTarget) {
+        setCampaignForm((current) => ({
+          ...current,
+          segment_id: defaultTarget.id,
+          included_segment_ids: [defaultTarget.id],
+        }));
       }
     } catch (err) {
       setError(err.message);
@@ -244,33 +263,47 @@ export default function NieuwsbrievenPage() {
 
   function toggleExcludedSegment(segmentId) {
     const segment = segments.find((item) => item.id === segmentId);
-    if (!segmentCanExclude(segment, selectedSegment)) return;
+    if (!segmentCanExclude(segment, selectedTargetSegments)) return;
     const current = new Set(campaignForm.excluded_segment_ids || []);
     if (current.has(segmentId)) current.delete(segmentId);
     else current.add(segmentId);
     setCampaignForm({ ...campaignForm, excluded_segment_ids: [...current] });
   }
 
-  function selectCampaignSegment(segmentId) {
-    const nextSegment = segments.find((segment) => segment.id === segmentId);
-    setCampaignForm((current) => ({
-      ...current,
-      segment_id: segmentId,
-      excluded_segment_ids: isExactEmailSegment(nextSegment)
-        ? []
-        : (current.excluded_segment_ids || []).filter((id) => id !== segmentId),
-    }));
+  function toggleTargetSegment(segmentId) {
+    setCampaignForm((current) => {
+      const currentTargets = new Set(campaignTargetIds(current));
+      if (currentTargets.has(segmentId)) {
+        if (currentTargets.size === 1) return current;
+        currentTargets.delete(segmentId);
+      } else {
+        currentTargets.add(segmentId);
+      }
+      const targets = [...currentTargets];
+      return {
+        ...current,
+        segment_id: targets[0] || "",
+        included_segment_ids: targets,
+        excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segmentId),
+      };
+    });
   }
 
   function excludedSegmentNames(campaign) {
     const ids = new Set([...(campaign.excluded_segment_ids || []), ...defaultExcludedSegmentIds]);
+    const includeSegments = campaignTargetIds(campaign).map((id) => segments.find((item) => item.id === id)).filter(Boolean);
     return segments
       .filter((segment) => ids.has(segment.id))
-      .filter((segment) => {
-        const includeSegment = segments.find((item) => item.id === campaign.segment_id);
-        return segmentCanExclude(segment, includeSegment);
-      })
+      .filter((segment) => segmentCanExclude(segment, includeSegments))
       .map((segment) => segment.name);
+  }
+
+  function targetSegmentNames(campaign) {
+    const ids = campaignTargetIds(campaign);
+    if (!ids.length) return ["Alle marketingcontacten"];
+    return ids
+      .map((id) => segments.find((segment) => segment.id === id)?.name)
+      .filter(Boolean);
   }
 
   function canMutateCampaign(campaign) {
@@ -287,7 +320,7 @@ export default function NieuwsbrievenPage() {
       normalizeText(campaign.subject) !== normalizeText(form.subject) ||
       normalizeText(campaign.preview_text) !== normalizeText(form.preview_text) ||
       normalizeText(campaign.body_html) !== normalizeText(form.body_html) ||
-      String(campaign.segment_id || "") !== String(form.segment_id || "") ||
+      !sameIdList(campaignTargetIds(campaign), campaignTargetIds(form)) ||
       Number(campaign.recipient_limit || 0) !== Number(form.recipient_limit || 0) ||
       !sameIdList(campaign.excluded_segment_ids, form.excluded_segment_ids)
     );
@@ -298,6 +331,7 @@ export default function NieuwsbrievenPage() {
       editingCampaignId &&
       selected?.id === editingCampaignId &&
       selected?.test_sent_at &&
+      targetSegmentIds.length &&
       isFutureDateTime(campaignForm.scheduled_at) &&
       !formNeedsRetest(selected, campaignForm) &&
       resendReady
@@ -327,14 +361,15 @@ export default function NieuwsbrievenPage() {
 
   function startEditCampaign(campaign) {
     if (!canMutateCampaign(campaign)) return;
-    const includeSegment = segments.find((segment) => segment.id === campaign.segment_id);
+    const targetIds = campaignTargetIds(campaign);
     setEditingCampaignId(campaign.id);
     setCampaignForm({
       name: campaign.name || "",
       subject: campaign.subject || "",
       preview_text: campaign.preview_text || "",
-      segment_id: campaign.segment_id || "",
-      excluded_segment_ids: isExactEmailSegment(includeSegment) ? [] : campaign.excluded_segment_ids || [],
+      segment_id: targetIds[0] || "",
+      included_segment_ids: targetIds,
+      excluded_segment_ids: campaign.excluded_segment_ids || [],
       recipient_limit: campaign.recipient_limit || "",
       scheduled_at: campaign.scheduled_at || "",
       body_html: campaign.body_html || "",
@@ -346,9 +381,9 @@ export default function NieuwsbrievenPage() {
   }
 
   function cancelEditCampaign() {
-    const fallbackSegmentId = campaignForm.segment_id || segments[0]?.id || "";
+    const fallbackTargetIds = campaignTargetIds(campaignForm);
     setEditingCampaignId("");
-    setCampaignForm(emptyCampaign(fallbackSegmentId, []));
+    setCampaignForm(emptyCampaign(fallbackTargetIds, []));
   }
 
   async function saveSettings(e) {
@@ -416,7 +451,8 @@ export default function NieuwsbrievenPage() {
               ...campaign,
               status: "draft",
               test_sent_at: null,
-              segment_id: campaign.segment_id === segment.id ? null : campaign.segment_id,
+              included_segment_ids: campaignTargetIds(campaign).filter((id) => id !== segment.id),
+              segment_id: campaignTargetIds(campaign).filter((id) => id !== segment.id)[0] || null,
               excluded_segment_ids: (campaign.excluded_segment_ids || []).filter((id) => id !== segment.id),
               newsletter_segments: campaign.segment_id === segment.id ? null : campaign.newsletter_segments,
             }
@@ -424,7 +460,8 @@ export default function NieuwsbrievenPage() {
       )));
       setCampaignForm((current) => ({
         ...current,
-        segment_id: current.segment_id === segment.id ? "" : current.segment_id,
+        included_segment_ids: campaignTargetIds(current).filter((id) => id !== segment.id),
+        segment_id: campaignTargetIds(current).filter((id) => id !== segment.id)[0] || "",
         excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segment.id),
       }));
       if (selected && canMutateCampaign(selected)) {
@@ -432,7 +469,8 @@ export default function NieuwsbrievenPage() {
           ...current,
           status: "draft",
           test_sent_at: null,
-          segment_id: current.segment_id === segment.id ? null : current.segment_id,
+          included_segment_ids: campaignTargetIds(current).filter((id) => id !== segment.id),
+          segment_id: campaignTargetIds(current).filter((id) => id !== segment.id)[0] || null,
           excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segment.id),
           newsletter_segments: current.segment_id === segment.id ? null : current.newsletter_segments,
         } : current);
@@ -472,7 +510,7 @@ export default function NieuwsbrievenPage() {
       ));
       setSelected(json.campaign);
       setEditingCampaignId("");
-      setCampaignForm(emptyCampaign(campaignForm.segment_id, campaignForm.excluded_segment_ids));
+      setCampaignForm(emptyCampaign(campaignTargetIds(campaignForm), campaignForm.excluded_segment_ids));
       setRecipients(null);
       if (testAfterSave) {
         await sendTest(json.campaign);
@@ -509,7 +547,7 @@ export default function NieuwsbrievenPage() {
       }
       if (editingCampaignId === campaign.id) {
         setEditingCampaignId("");
-        setCampaignForm(emptyCampaign(campaignForm.segment_id, campaignForm.excluded_segment_ids));
+        setCampaignForm(emptyCampaign(campaignTargetIds(campaignForm), campaignForm.excluded_segment_ids));
       }
       flash("Campagne verwijderd");
     } catch (err) {
@@ -902,7 +940,7 @@ export default function NieuwsbrievenPage() {
                       <button
                         type="button"
                         onClick={() => saveCampaign()}
-                        disabled={busy === "campaign" || setupRequired}
+                        disabled={busy === "campaign" || setupRequired || !targetSegmentIds.length}
                         className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-pill text-xs font-semibold border border-gray-200 bg-white hover:border-brand-amber disabled:opacity-60"
                       >
                         <Save className="w-4 h-4" />
@@ -934,31 +972,38 @@ export default function NieuwsbrievenPage() {
                   )}
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase">Doelgroep</label>
-                  <select
-                    value={campaignForm.segment_id}
-                    onChange={(e) => selectCampaignSegment(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
-                  >
-                    <option value="">Alle marketingcontacten</option>
-                    {segments.map((segment) => (
-                      <option key={segment.id} value={segment.id}>{segment.name}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500">
-                    Kies hier wie de nieuwsbrief krijgt. Een testsegment moet hier staan, niet bij uitsluitingen.
-                  </p>
-                  {selectedSegment && (
-                    <p className="text-xs text-gray-500">
-                      Type: {SOURCE_TYPES.find((type) => type.id === selectedSegment.source_type)?.label || selectedSegment.source_type}
-                      {selectedSegment.source_value && !exactEmailTargetSelected ? ` (${selectedSegment.source_value})` : ""}
-                    </p>
-                  )}
-                  {exactEmailTargetSelected && (
-                    <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">
-                      Testdoelgroep actief: er wordt alleen naar de exacte e-mailadressen in dit segment gekeken. Segmentuitsluitingen worden hierbij overgeslagen.
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase">Mailen naar</label>
+                    <span className="text-xs text-gray-400">{targetSegmentIds.length} gekozen</span>
+                  </div>
+                  {availableTargetSegments.length ? (
+                    <div className="space-y-2 max-h-48 overflow-auto">
+                      {availableTargetSegments.map((segment) => {
+                        const checked = targetSegmentIds.includes(segment.id);
+                        return (
+                          <label key={segment.id} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleTargetSegment(segment.id)}
+                                className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                              />
+                              <span className="truncate">{segment.name}</span>
+                            </span>
+                            <span className="shrink-0 text-[10px] font-semibold uppercase text-gray-400">
+                              {SOURCE_TYPES.find((type) => type.id === segment.source_type)?.label || segment.source_type}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Maak eerst een doelgroepsegment aan.</p>
                   )}
+                  <p className="text-xs text-gray-500">
+                    Meerdere doelgroepen worden samengevoegd. Dubbele e-mailadressen worden bij verzending automatisch ontdubbeld.
+                  </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase">Batchgrootte</label>
@@ -977,12 +1022,11 @@ export default function NieuwsbrievenPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Niet mailen</p>
-                  {exactEmailTargetSelected ? (
-                    <p className="text-sm text-gray-500">
-                      Niet nodig bij een exacte testdoelgroep. Alleen de opgegeven e-mailadressen kunnen meedoen.
-                    </p>
-                  ) : availableExclusionSegments.length ? (
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Niet mailen naar</p>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Deze segmenten worden van de gekozen doelgroep(en) afgehaald.
+                  </p>
+                  {availableExclusionSegments.length ? (
                     <div className="space-y-2 max-h-44 overflow-auto">
                       {availableExclusionSegments.map((segment) => {
                         const isDefault = segment.default_excluded;
@@ -1062,7 +1106,7 @@ export default function NieuwsbrievenPage() {
                 )}
                 <button
                   type="submit"
-                  disabled={busy === "campaign" || setupRequired}
+                  disabled={busy === "campaign" || setupRequired || !targetSegmentIds.length}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold text-white disabled:opacity-60"
                   style={{ backgroundColor: accent }}
                 >
@@ -1073,7 +1117,7 @@ export default function NieuwsbrievenPage() {
                   <button
                     type="button"
                     onClick={() => saveCampaign({ testAfterSave: true })}
-                    disabled={busy === "campaign" || !testEmail || setupRequired || !resendReady}
+                    disabled={busy === "campaign" || !testEmail || setupRequired || !resendReady || !targetSegmentIds.length}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-60"
                   >
                     <Mail className="w-4 h-4" />
@@ -1144,7 +1188,7 @@ export default function NieuwsbrievenPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           <p>
-                            {campaign.newsletter_segments?.name || segments.find((segment) => segment.id === campaign.segment_id)?.name || "Alle marketingcontacten"}
+                            {targetSegmentNames(campaign).join(", ") || "Geen doelgroep"}
                           </p>
                           {excludedSegmentNames(campaign).length > 0 && (
                             <p className="text-xs text-red-500 mt-1">

@@ -88,6 +88,30 @@ export async function DELETE(request) {
     }
 
     const mutableStatuses = ["draft", "tested", "failed"];
+    const { data: includedCampaigns, error: includedError } = await supabaseAdmin
+      .from("newsletter_campaigns")
+      .select("id, segment_id, included_segment_ids")
+      .eq("tenant", tenant)
+      .contains("included_segment_ids", [id])
+      .in("status", mutableStatuses);
+    if (includedError) throw new Error(includedError.message);
+
+    for (const campaign of includedCampaigns || []) {
+      const nextIncluded = (campaign.included_segment_ids || []).filter((segmentId) => segmentId !== id);
+      const { error: updateIncludedError } = await supabaseAdmin
+        .from("newsletter_campaigns")
+        .update({
+          segment_id: campaign.segment_id === id ? nextIncluded[0] || null : campaign.segment_id,
+          included_segment_ids: nextIncluded,
+          status: "draft",
+          test_sent_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("tenant", tenant)
+        .eq("id", campaign.id);
+      if (updateIncludedError) throw new Error(updateIncludedError.message);
+    }
+
     const { error: clearDirectError } = await supabaseAdmin
       .from("newsletter_campaigns")
       .update({ segment_id: null, status: "draft", test_sent_at: null, updated_at: new Date().toISOString() })

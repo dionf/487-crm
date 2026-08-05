@@ -1,31 +1,32 @@
 #!/usr/bin/env node
 /**
- * Backfill HipHot lead.last_order_at from HubSpot ecommerce deals.
+ * Backfill HipHot lead.last_order_at from WooCommerce orders.
  *
- * Default is a dry-run. Use --commit with --approved-report=<dry-run-report>
- * after reviewing the planned changes.
+ * WooCommerce is the source of truth for real HipHot purchases. Default is a
+ * dry-run. Use --commit with --approved-report=<dry-run-report> after reviewing
+ * the planned changes.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import xlsx from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 
 const TENANT = "hiphot";
 const DEFAULT_REPORT = "/tmp/hiphot-last-order-at-backfill.json";
-const ECOMMERCE_PIPELINE_IDS = new Set(["707050616", "ecommerce"]);
-const ECOMMERCE_WON_STAGE_IDS = new Set([
-  "1033277858", // Processing
-  "1033277859", // Completed
-]);
+const DEFAULT_ORDER_STATUSES = ["completed", "processing", "on-hold", "pending"];
+const PAGE_SIZE = 100;
 
 const args = process.argv.slice(2);
 const DRY = !args.includes("--commit");
-const dealsPath = argValue("--deals");
+const clearMissing = args.includes("--clear-missing");
 const reportPath = argValue("--report") || DEFAULT_REPORT;
 const approvedReportPath = argValue("--approved-report");
 const limit = Number(argValue("--limit") || 0);
+const statuses = (argValue("--statuses") || DEFAULT_ORDER_STATUSES.join(","))
+  .split(",")
+  .map((status) => status.trim())
+  .filter(Boolean);
 
 function argValue(name) {
   const match = args.find((arg) => arg.startsWith(`${name}=`));
@@ -48,79 +49,93 @@ function loadEnv() {
   }
 }
 
-function readRows(filePath) {
-  if (!filePath) throw new Error("Geef --deals=/pad/naar/hubspot-deals.xlsx mee.");
-  if (!fs.existsSync(filePath)) throw new Error(`Bestand niet gevonden: ${filePath}`);
-  const workbook = xlsx.readFile(filePath, { cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  return xlsx.utils.sheet_to_json(sheet, { defval: "", raw: false });
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} ontbreekt.`);
+  return value;
 }
 
-function normalizeKey(key) {
-  return String(key || "")
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizePostcode(value) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeCompany(value) {
+  return String(value || "")
+    .trim()
     .toLowerCase()
-    .replace(/[\uFEFF]/g, "")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function rowIndex(row) {
-  const index = new Map();
-  for (const [key, value] of Object.entries(row)) {
-    index.set(normalizeKey(key), value);
-  }
-  return index;
-}
-
-function get(row, aliases) {
-  const index = row.__index || rowIndex(row);
-  row.__index = index;
-  for (const alias of aliases) {
-    const value = index.get(normalizeKey(alias));
-    if (value !== undefined && String(value).trim() !== "") return value;
-  }
-  return "";
-}
-
-function text(value) {
-  return String(value || "").trim();
-}
-
-function lower(value) {
-  return text(value).toLowerCase();
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " en ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(bv|b\.v|vof|v\.o\.f|stichting|the|de|het)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cleanDate(value) {
   if (!value) return null;
-  const date = new Date(value);
+  const text = String(value);
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text}Z`);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function isEcommerceWonDeal(row) {
-  const pipeline = lower(get(row, ["Pipeline", "Pijplijn"]));
-  const stage = lower(get(row, ["Deal stage", "Stage", "Dealstadium", "Pipeline stage"]));
-  return ECOMMERCE_PIPELINE_IDS.has(pipeline) && ECOMMERCE_WON_STAGE_IDS.has(stage);
+function orderDate(order) {
+  return (
+    cleanDate(order.date_paid_gmt) ||
+    cleanDate(order.date_completed_gmt) ||
+    cleanDate(order.date_created_gmt) ||
+    cleanDate(order.date_paid) ||
+    cleanDate(order.date_completed) ||
+    cleanDate(order.date_created)
+  );
 }
 
-function parseDeal(row) {
-  const closeDate = cleanDate(get(row, ["Close date", "Closed date", "Sluitdatum"]));
-  const createDate = cleanDate(get(row, ["Create date", "Created date", "Aanmaakdatum"]));
-  const date = closeDate || createDate;
+function getWooConfig() {
+  const baseUrl = requireEnv("HIPHOT_WC_URL").replace(/\/$/, "");
+  const auth = Buffer.from(`${requireEnv("HIPHOT_WC_KEY")}:${requireEnv("HIPHOT_WC_SECRET")}`).toString("base64");
+  return { baseUrl, auth };
+}
+
+async function fetchWooOrdersForStatus({ baseUrl, auth }, status) {
+  const orders = [];
+  let totalPages = 1;
+  let total = 0;
+  for (let page = 1; page <= totalPages; page += 1) {
+    const url = new URL(`${baseUrl}/wp-json/wc/v3/orders`);
+    url.searchParams.set("per_page", String(PAGE_SIZE));
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("status", status);
+    url.searchParams.set("orderby", "date");
+    url.searchParams.set("order", "desc");
+    const res = await fetch(url, { headers: { Authorization: `Basic ${auth}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(`WooCommerce orders ophalen mislukt voor ${status}: ${data?.message || res.status}`);
+    }
+    totalPages = Number(res.headers.get("x-wp-totalpages") || totalPages);
+    total = Number(res.headers.get("x-wp-total") || total);
+    orders.push(...(Array.isArray(data) ? data : []));
+  }
+  return { status, total, orders };
+}
+
+async function fetchWooOrders() {
+  const config = getWooConfig();
+  const perStatus = [];
+  for (const status of statuses) {
+    perStatus.push(await fetchWooOrdersForStatus(config, status));
+  }
+  const ordersById = new Map();
+  for (const result of perStatus) {
+    for (const order of result.orders) ordersById.set(String(order.id), order);
+  }
   return {
-    deal_id: text(get(row, ["Record ID", "Deal ID", "HubSpot Deal ID", "hs_object_id"])),
-    hubspot_company_id: text(get(row, [
-      "Associated Company ID",
-      "Associated company IDs",
-      "Company ID",
-      "Primary associated company ID",
-      "Associated company record ID",
-    ])).split(/[;,]/)[0]?.trim() || "",
-    company_name: text(get(row, ["Company name", "Associated company", "Associated Company", "Bedrijf", "Organisatie"])),
-    domain: lower(get(row, ["Company domain name", "Domain", "Domein"])),
-    deal_name: text(get(row, ["Deal name", "Deal Name", "Naam", "Dealnaam"])),
-    pipeline: text(get(row, ["Pipeline", "Pijplijn"])),
-    stage: text(get(row, ["Deal stage", "Stage", "Dealstadium", "Pipeline stage"])),
-    date,
-    is_ecommerce_won: isEcommerceWonDeal(row),
+    perStatus: perStatus.map(({ status, total, orders }) => ({ status, total, fetched: orders.length })),
+    orders: [...ordersById.values()],
   };
 }
 
@@ -136,77 +151,165 @@ async function fetchAllRows(queryFactory, label) {
   return rows;
 }
 
-function buildLeadMaps(leads) {
-  const byHubspotCompanyId = new Map();
-  const byCompanyName = new Map();
-  const byDomain = new Map();
+function addUniqueMapEntry(map, key, leadId) {
+  if (!key) return;
+  if (!map.has(key)) map.set(key, new Set());
+  map.get(key).add(leadId);
+}
+
+function buildLeadMaps(leads, contacts) {
+  const byId = new Map(leads.map((lead) => [lead.id, lead]));
+  const byEmail = new Map();
+  const byCompanyPostcode = new Map();
+
   for (const lead of leads) {
-    if (lead.hubspot_company_id) byHubspotCompanyId.set(String(lead.hubspot_company_id), lead);
-    if (lead.company_name) {
-      const key = lower(lead.company_name);
-      if (!byCompanyName.has(key)) byCompanyName.set(key, []);
-      byCompanyName.get(key).push(lead);
-    }
-    if (lead.website_url) {
-      const domain = lower(String(lead.website_url).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]);
-      if (domain) byDomain.set(domain, lead);
+    addUniqueMapEntry(byEmail, normalizeEmail(lead.email), lead.id);
+    const company = normalizeCompany(lead.company_name);
+    const postcodes = [lead.billing_postal_code, lead.delivery_postal_code]
+      .map(normalizePostcode)
+      .filter(Boolean);
+    for (const postcode of postcodes) {
+      addUniqueMapEntry(byCompanyPostcode, `${company}|${postcode}`, lead.id);
     }
   }
-  return { byHubspotCompanyId, byCompanyName, byDomain };
+
+  for (const contact of contacts) {
+    addUniqueMapEntry(byEmail, normalizeEmail(contact.email), contact.lead_id);
+  }
+
+  return { byId, byEmail, byCompanyPostcode };
 }
 
-function findLeadForDeal(deal, maps) {
-  if (deal.hubspot_company_id && maps.byHubspotCompanyId.has(deal.hubspot_company_id)) {
-    return { lead: maps.byHubspotCompanyId.get(deal.hubspot_company_id), match: "hubspot_company_id" };
-  }
-  if (deal.domain && maps.byDomain.has(deal.domain)) {
-    return { lead: maps.byDomain.get(deal.domain), match: "domain" };
-  }
-  const nameMatches = maps.byCompanyName.get(lower(deal.company_name)) || [];
-  if (nameMatches.length === 1) return { lead: nameMatches[0], match: "company_name" };
-  return { lead: null, match: nameMatches.length > 1 ? "ambiguous_company_name" : "none" };
+function exactOne(map, key) {
+  const ids = map.get(key);
+  if (!ids || ids.size !== 1) return null;
+  return [...ids][0];
 }
 
-function newestPlanByLead(deals, maps) {
-  const plans = new Map();
+function findLeadForOrder(order, maps) {
+  const emails = [
+    order.billing?.email,
+    ...(Array.isArray(order.meta_data)
+      ? order.meta_data
+          .filter((item) => /email/i.test(String(item.key || "")))
+          .map((item) => item.value)
+      : []),
+  ].map(normalizeEmail).filter(Boolean);
+
+  const emailMatches = new Set();
+  for (const email of emails) {
+    const ids = maps.byEmail.get(email);
+    if (ids) for (const id of ids) emailMatches.add(id);
+  }
+  if (emailMatches.size === 1) return { lead: maps.byId.get([...emailMatches][0]), match: "email" };
+
+  const companyPostcodeKeys = [
+    [order.billing?.company, order.billing?.postcode],
+    [order.shipping?.company, order.shipping?.postcode],
+  ]
+    .map(([company, postcode]) => `${normalizeCompany(company)}|${normalizePostcode(postcode)}`)
+    .filter((key) => !key.startsWith("|") && !key.endsWith("|"));
+
+  const companyMatches = new Set();
+  for (const key of companyPostcodeKeys) {
+    const id = exactOne(maps.byCompanyPostcode, key);
+    if (id) companyMatches.add(id);
+  }
+  if (emailMatches.size > 1 && companyMatches.size === 1) {
+    const companyMatchId = [...companyMatches][0];
+    if (emailMatches.has(companyMatchId)) {
+      return { lead: maps.byId.get(companyMatchId), match: "ambiguous_email_company_postcode" };
+    }
+  }
+  if (emailMatches.size > 1) return { lead: null, match: "ambiguous_email" };
+  if (companyMatches.size === 1) return { lead: maps.byId.get([...companyMatches][0]), match: "company_postcode" };
+  if (companyMatches.size > 1) return { lead: null, match: "ambiguous_company_postcode" };
+
+  return { lead: null, match: "none" };
+}
+
+function newestPlanByLead(orders, maps) {
+  const plansByLead = new Map();
   const unmatched = [];
-  for (const deal of deals) {
-    if (!deal.is_ecommerce_won || !deal.date) continue;
-    const { lead, match } = findLeadForDeal(deal, maps);
-    if (!lead) {
-      unmatched.push({ ...deal, match });
+  const skippedWithoutDate = [];
+
+  for (const order of orders) {
+    const date = orderDate(order);
+    if (!date) {
+      skippedWithoutDate.push({ order_id: order.id, number: order.number, status: order.status });
       continue;
     }
-    const existing = plans.get(lead.id);
-    const incomingTime = new Date(deal.date).getTime();
+
+    const { lead, match } = findLeadForOrder(order, maps);
+    if (!lead) {
+      unmatched.push({
+        order_id: order.id,
+        number: order.number,
+        status: order.status,
+        date,
+        billing_email: normalizeEmail(order.billing?.email),
+        billing_company: order.billing?.company || "",
+        billing_postcode: order.billing?.postcode || "",
+        match,
+      });
+      continue;
+    }
+
+    const existing = plansByLead.get(lead.id);
+    const incomingTime = new Date(date).getTime();
     const existingPlanTime = existing ? new Date(existing.last_order_at).getTime() : 0;
     if (!existing || incomingTime > existingPlanTime) {
-      plans.set(lead.id, {
+      plansByLead.set(lead.id, {
         lead_id: lead.id,
         company_name: lead.company_name,
-        hubspot_company_id: lead.hubspot_company_id,
         previous_last_order_at: lead.last_order_at,
-        last_order_at: deal.date,
+        last_order_at: date,
         match,
-        source_deal: {
-          deal_id: deal.deal_id,
-          deal_name: deal.deal_name,
-          pipeline: deal.pipeline,
-          stage: deal.stage,
-          close_date: deal.date,
+        source_order: {
+          order_id: order.id,
+          number: order.number,
+          status: order.status,
+          date,
+          billing_email: normalizeEmail(order.billing?.email),
+          billing_company: order.billing?.company || "",
         },
       });
     }
   }
-  return { plans: [...plans.values()], unmatched };
+
+  return { plans: [...plansByLead.values()], unmatched, skippedWithoutDate };
 }
 
-function shouldUpdate(plan) {
-  if (!plan.last_order_at) return false;
-  if (!plan.previous_last_order_at) return true;
-  const previous = new Date(plan.previous_last_order_at).getTime();
-  const incoming = new Date(plan.last_order_at).getTime();
-  return !Number.isNaN(incoming) && (Number.isNaN(previous) || incoming > previous);
+function sameInstant(a, b) {
+  if (!a || !b) return false;
+  const left = new Date(a).getTime();
+  const right = new Date(b).getTime();
+  return !Number.isNaN(left) && left === right;
+}
+
+function buildOperations(leads, plans) {
+  const plannedLeadIds = new Set(plans.map((plan) => plan.lead_id));
+  const updates = plans
+    .filter((plan) => !sameInstant(plan.previous_last_order_at, plan.last_order_at))
+    .sort((a, b) => b.last_order_at.localeCompare(a.last_order_at) || a.company_name.localeCompare(b.company_name));
+
+  const clears = clearMissing
+    ? leads
+        .filter((lead) => lead.last_order_at && !plannedLeadIds.has(lead.id))
+        .map((lead) => ({
+          lead_id: lead.id,
+          company_name: lead.company_name,
+          previous_last_order_at: lead.last_order_at,
+          last_order_at: null,
+          reason: "no_matching_woocommerce_order",
+        }))
+        .sort((a, b) => String(a.company_name || "").localeCompare(String(b.company_name || "")))
+    : [];
+
+  return {
+    updates: updates.slice(0, limit > 0 ? limit : undefined),
+    clears: clears.slice(0, limit > 0 ? limit : undefined),
+  };
 }
 
 function reportSignature(report) {
@@ -214,9 +317,12 @@ function reportSignature(report) {
     .createHash("sha256")
     .update(JSON.stringify({
       tenant: report.tenant,
-      input: report.input,
+      source: report.source,
+      clear_missing: report.clear_missing,
       planned_updates: report.planned_updates,
+      planned_clears: report.planned_clears,
       updates: report.updates,
+      clears: report.clears,
     }))
     .digest("hex");
 }
@@ -232,51 +338,86 @@ function loadApprovedReport() {
   return JSON.parse(fs.readFileSync(approvedReportPath, "utf8"));
 }
 
+async function applyOperations(supabase, updates, clears) {
+  const now = new Date().toISOString();
+  for (const update of updates) {
+    const { error } = await supabase
+      .from("leads")
+      .update({ last_order_at: update.last_order_at, updated_at: now })
+      .eq("tenant", TENANT)
+      .eq("id", update.lead_id);
+    if (error) throw new Error(`${update.company_name}: ${error.message}`);
+  }
+  for (const clear of clears) {
+    const { error } = await supabase
+      .from("leads")
+      .update({ last_order_at: null, updated_at: now })
+      .eq("tenant", TENANT)
+      .eq("id", clear.lead_id);
+    if (error) throw new Error(`${clear.company_name}: ${error.message}`);
+  }
+}
+
 async function main() {
   loadEnv();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase service-role env-vars ontbreken.");
+  if (limit > 0 && clearMissing) {
+    throw new Error("--limit kan niet samen met --clear-missing; dat zou een gedeeltelijke opschoning geven.");
+  }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  const supabase = createClient(requireEnv("NEXT_PUBLIC_SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const dealRows = readRows(dealsPath);
-  const deals = dealRows.map(parseDeal);
-  const ecommerceWonDeals = deals.filter((deal) => deal.is_ecommerce_won && deal.date);
-  const leads = await fetchAllRows(
-    () => supabase
-      .from("leads")
-      .select("id, tenant, company_name, website_url, hubspot_company_id, last_order_at")
-      .eq("tenant", TENANT)
-      .order("id", { ascending: true }),
-    "HipHot leads"
-  );
-  const maps = buildLeadMaps(leads);
-  const { plans, unmatched } = newestPlanByLead(deals, maps);
-  const updates = plans
-    .filter(shouldUpdate)
-    .sort((a, b) => b.last_order_at.localeCompare(a.last_order_at) || a.company_name.localeCompare(b.company_name))
-    .slice(0, limit > 0 ? limit : undefined);
+  const [{ orders, perStatus }, leads, contacts] = await Promise.all([
+    fetchWooOrders(),
+    fetchAllRows(
+      () => supabase
+        .from("leads")
+        .select("id, tenant, company_name, email, billing_postal_code, delivery_postal_code, last_order_at")
+        .eq("tenant", TENANT)
+        .order("id", { ascending: true }),
+      "HipHot leads"
+    ),
+    fetchAllRows(
+      () => supabase
+        .from("contacts")
+        .select("id, tenant, lead_id, email")
+        .eq("tenant", TENANT)
+        .order("id", { ascending: true }),
+      "HipHot contacten"
+    ),
+  ]);
+
+  const maps = buildLeadMaps(leads, contacts);
+  const { plans, unmatched, skippedWithoutDate } = newestPlanByLead(orders, maps);
+  const { updates, clears } = buildOperations(leads, plans);
+  const recentCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const recentAfter = new Set(plans.filter((plan) => new Date(plan.last_order_at).getTime() >= recentCutoff).map((plan) => plan.lead_id));
 
   const report = {
     mode: DRY ? "dry-run" : "commit",
     tenant: TENANT,
     generated_at: new Date().toISOString(),
-    input: {
-      dealsPath,
-      dealRows: dealRows.length,
-      ecommerceWonDeals: ecommerceWonDeals.length,
-      existingLeads: leads.length,
+    source: {
+      system: "woocommerce",
+      statuses,
+      per_status: perStatus,
+      order_count: orders.length,
+      lead_count: leads.length,
+      contact_count: contacts.length,
       limit: limit || null,
     },
-    planned_updates: updates.length,
+    clear_missing: clearMissing,
     matched_companies_with_order: plans.length,
-    unmatched_ecommerce_won_deals: unmatched.length,
-    recent_order_14_days_updates: updates.filter((plan) => new Date(plan.last_order_at).getTime() >= Date.now() - 14 * 24 * 60 * 60 * 1000).length,
+    planned_updates: updates.length,
+    planned_clears: clears.length,
+    recent_order_14_days_after: recentAfter.size,
+    unmatched_orders: unmatched.length,
+    skipped_without_date: skippedWithoutDate.length,
     updates,
+    clears,
     unmatched_samples: unmatched.slice(0, 25),
+    skipped_without_date_samples: skippedWithoutDate.slice(0, 25),
   };
 
   if (!DRY) {
@@ -285,25 +426,19 @@ async function main() {
     if (!approved.approval_signature || approved.approval_signature !== expectedSignature) {
       throw new Error("Goedgekeurd rapport heeft geen geldige approval_signature.");
     }
-    if (approved.planned_updates !== updates.length) {
-      throw new Error(`Dry-run rapport verwachtte ${approved.planned_updates} updates, nu ${updates.length}. Draai eerst opnieuw dry-run.`);
+    if (approved.approval_signature !== reportSignature({ ...report, mode: "dry-run" })) {
+      throw new Error("Het huidige WooCommerce/Supabase-plan wijkt af van de dry-run. Draai eerst opnieuw dry-run.");
     }
-    for (const update of updates) {
-      const { error } = await supabase
-        .from("leads")
-        .update({ last_order_at: update.last_order_at, updated_at: new Date().toISOString() })
-        .eq("tenant", TENANT)
-        .eq("id", update.lead_id);
-      if (error) throw new Error(`${update.company_name}: ${error.message}`);
-    }
+    await applyOperations(supabase, updates, clears);
   }
 
   writeReport(report);
-  console.log(`HipHot last_order_at backfill ${report.mode}`);
-  console.log(`Deals: ${report.input.dealRows}`);
-  console.log(`Ecommerce gewonnen deals: ${report.input.ecommerceWonDeals}`);
+  console.log(`HipHot last_order_at WooCommerce backfill ${report.mode}`);
+  console.log(`WooCommerce orders: ${report.source.order_count}`);
+  console.log(`Gematchte bedrijven met order: ${report.matched_companies_with_order}`);
   console.log(`Te updaten bedrijven: ${report.planned_updates}`);
-  console.log(`Recent besteld binnen 14 dagen: ${report.recent_order_14_days_updates}`);
+  console.log(`Te wissen oude last_order_at waarden: ${report.planned_clears}`);
+  console.log(`Recent besteld binnen 14 dagen na correctie: ${report.recent_order_14_days_after}`);
   console.log(`Rapport: ${reportPath}`);
   if (DRY) console.log(`Approval signature: ${report.approval_signature}`);
 }

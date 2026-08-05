@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -145,9 +145,10 @@ export async function POST(request) {
 
     // Rate limiting: max 5 submissions per email per hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
+    const { count } = await supabaseAdmin
       .from("form_submissions")
       .select("id", { count: "exact", head: true })
+      .eq("tenant", tenant)
       .eq("email", email.toLowerCase())
       .gte("created_at", oneHourAgo);
 
@@ -162,7 +163,7 @@ export async function POST(request) {
     const fullName = `${first_name} ${last_name}`.trim();
 
     // 1. Check for existing lead by email
-    const { data: existingLead } = await supabase
+    const { data: existingLead } = await supabaseAdmin
       .from("leads")
       .select("id")
       .eq("tenant", tenant)
@@ -193,7 +194,7 @@ export async function POST(request) {
       for (const [k, v] of Object.entries(tracking)) {
         if (v !== null) leadInsert[k] = v;
       }
-      const { data: newLead } = await supabase
+      const { data: newLead } = await supabaseAdmin
         .from("leads")
         .insert(leadInsert)
         .select("id")
@@ -203,7 +204,7 @@ export async function POST(request) {
 
       // Log lead creation
       if (leadId) {
-        await supabase.from("activities").insert({
+        await supabaseAdmin.from("activities").insert({
           lead_id: leadId,
           activity_type: "lead_created",
           description: `Lead aangemaakt via contactformulier: ${fullName}`,
@@ -214,7 +215,7 @@ export async function POST(request) {
     }
 
     // 3. Insert form submission (incl. tracking-attributie van dit touchpoint)
-    const { data: submission } = await supabase
+    const { data: submission } = await supabaseAdmin
       .from("form_submissions")
       .insert({
         tenant,
@@ -234,7 +235,7 @@ export async function POST(request) {
 
     // 4. Create note on lead
     if (leadId) {
-      await supabase.from("notes").insert({
+      await supabaseAdmin.from("notes").insert({
         lead_id: leadId,
         content: `**Contactformulier**\n\n${message.trim()}\n\n---\n${fullName} — ${email}${phone ? ` — ${phone}` : ""}`,
         note_type: "formulier",
@@ -242,7 +243,7 @@ export async function POST(request) {
         created_by: "Contactformulier",
       });
 
-      await supabase.from("activities").insert({
+      await supabaseAdmin.from("activities").insert({
         lead_id: leadId,
         activity_type: "form_submission",
         description: `Contactformulier ingevuld door ${fullName}`,

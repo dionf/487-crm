@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -187,9 +187,10 @@ export async function POST(request) {
 
     // Rate limiting: max 5 submissions per e-mail per uur
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
+    const { count } = await supabaseAdmin
       .from("form_submissions")
       .select("id", { count: "exact", head: true })
+      .eq("tenant", tenant)
       .eq("email", email)
       .gte("created_at", oneHourAgo);
 
@@ -213,7 +214,7 @@ export async function POST(request) {
     });
 
     // 1. Zoek bestaande lead op e-mail
-    const { data: existingLead } = await supabase
+    const { data: existingLead } = await supabaseAdmin
       .from("leads")
       .select("id")
       .eq("tenant", tenant)
@@ -242,7 +243,7 @@ export async function POST(request) {
       for (const [k, v] of Object.entries(tracking)) {
         if (v !== null) leadInsert[k] = v;
       }
-      const { data: newLead } = await supabase
+      const { data: newLead } = await supabaseAdmin
         .from("leads")
         .insert(leadInsert)
         .select("id")
@@ -251,7 +252,7 @@ export async function POST(request) {
       leadId = newLead?.id;
 
       if (leadId) {
-        await supabase.from("activities").insert({
+        await supabaseAdmin.from("activities").insert({
           lead_id: leadId,
           activity_type: "lead_created",
           description: `Lead aangemaakt via chatbot adviesgesprek: ${fullName}`,
@@ -262,7 +263,7 @@ export async function POST(request) {
     }
 
     // 3. Insert form_submission met rijke data + tracking-attributie van dit touchpoint
-    const { data: submission } = await supabase
+    const { data: submission } = await supabaseAdmin
       .from("form_submissions")
       .insert({
         tenant,
@@ -292,7 +293,7 @@ export async function POST(request) {
       const transcriptPreview = transcript
         ? `\n\n---\n**Transcript** (volledig in inbox):\n${String(transcript).slice(0, 800)}${String(transcript).length > 800 ? "…" : ""}`
         : "";
-      await supabase.from("notes").insert({
+      await supabaseAdmin.from("notes").insert({
         lead_id: leadId,
         content: `**Chatbot adviesgesprek**\n\n${messageSummary}${transcriptPreview}`,
         note_type: "formulier",
@@ -300,7 +301,7 @@ export async function POST(request) {
         created_by: "Chatbot",
       });
 
-      await supabase.from("activities").insert({
+      await supabaseAdmin.from("activities").insert({
         lead_id: leadId,
         activity_type: "form_submission",
         description: `Chatbot adviesgesprek voltooid door ${fullName}`,

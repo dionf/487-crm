@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
@@ -26,6 +27,16 @@ const HIPHOT_MARKETING_FIELD_NAMES = [
   "hubspot_deal_origin",
   "last_order_at",
 ];
+const BLOCKED_LEAD_UPDATE_FIELDS = new Set([
+  "id",
+  "tenant",
+  "created_at",
+  "updated_at",
+  "quotes",
+  "notes",
+  "activities",
+  "form_submissions",
+]);
 
 function cleanDate(value) {
   if (!value) return null;
@@ -100,18 +111,21 @@ function removeMarketingFields(body) {
 }
 
 export async function GET(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   const [leadRes, quotesRes, notesRes, activitiesRes, chatbotRes] = await Promise.all([
-    supabase.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
-    supabase.from("quotes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase.from("notes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase.from("activities").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase
+    supabaseAdmin.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
+    supabaseAdmin.from("quotes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin.from("notes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin.from("activities").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin
       .from("form_submissions")
       .select("id")
       .eq("lead_id", id)
+      .eq("tenant", tenant)
       .eq("source", "chatbot")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -132,12 +146,14 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
   const body = await request.json();
 
   // Verify lead belongs to this tenant
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("leads").select("tenant").eq("id", id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
@@ -167,8 +183,11 @@ export async function PATCH(request, { params }) {
   const marketingPatch = cleanMarketingPatch(body, tenant);
   removeMarketingFields(body);
   Object.assign(body, marketingPatch);
+  for (const field of BLOCKED_LEAD_UPDATE_FIELDS) {
+    delete body[field];
+  }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("leads")
     .update(body)
     .eq("id", id)
@@ -184,10 +203,12 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("leads")
     .delete()
     .eq("id", id)

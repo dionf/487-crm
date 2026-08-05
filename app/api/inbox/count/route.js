@@ -1,11 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
 
-  const { count, error } = await supabase
+  const { count, error } = await supabaseAdmin
     .from("form_submissions")
     .select("id", { count: "exact", head: true })
     .eq("tenant", tenant)

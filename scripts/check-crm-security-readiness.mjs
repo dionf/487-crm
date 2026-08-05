@@ -67,6 +67,7 @@ with server_tables(table_name) as (
     ('newsletter_segments'),
     ('newsletter_campaigns'),
     ('newsletter_campaign_recipients'),
+    ('newsletter_campaign_batches'),
     ('newsletter_events'),
     ('newsletter_email_suppressions')
 ),

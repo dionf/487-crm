@@ -166,6 +166,25 @@ export async function POST(request) {
         .eq("resend_broadcast_id", resendBroadcastId)
         .maybeSingle();
       campaign = data;
+      if (!campaign) {
+        const { data: batch } = await supabaseAdmin
+          .from("newsletter_campaign_batches")
+          .select("campaign_id")
+          .eq("tenant", tenant)
+          .eq("resend_broadcast_id", resendBroadcastId)
+          .maybeSingle();
+        if (batch?.campaign_id) campaign = { id: batch.campaign_id };
+      }
+      if (!campaign) {
+        const { data: recipientMatch } = await supabaseAdmin
+          .from("newsletter_campaign_recipients")
+          .select("campaign_id")
+          .eq("tenant", tenant)
+          .eq("resend_broadcast_id", resendBroadcastId)
+          .limit(1)
+          .maybeSingle();
+        if (recipientMatch?.campaign_id) campaign = { id: recipientMatch.campaign_id };
+      }
     }
 
     let recipient = null;

@@ -11,7 +11,8 @@ export async function GET(request, { params }) {
       tenant,
       campaign.segment_id,
       campaign.excluded_segment_ids,
-      campaign.recipient_limit
+      campaign.recipient_limit,
+      campaign.included_segment_ids
     );
     return Response.json({
       count: result.recipients.length,

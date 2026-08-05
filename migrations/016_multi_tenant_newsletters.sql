@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS newsletter_campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant TEXT NOT NULL,
   segment_id UUID REFERENCES newsletter_segments(id) ON DELETE SET NULL,
+  included_segment_ids UUID[] NOT NULL DEFAULT '{}',
   excluded_segment_ids UUID[] NOT NULL DEFAULT '{}',
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
@@ -77,6 +78,14 @@ CREATE TABLE IF NOT EXISTS newsletter_campaigns (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE newsletter_campaigns
+  ADD COLUMN IF NOT EXISTS included_segment_ids UUID[] NOT NULL DEFAULT '{}';
+
+UPDATE newsletter_campaigns
+SET included_segment_ids = ARRAY[segment_id]::UUID[]
+WHERE segment_id IS NOT NULL
+  AND coalesce(array_length(included_segment_ids, 1), 0) = 0;
 
 ALTER TABLE newsletter_campaigns
   ADD COLUMN IF NOT EXISTS excluded_segment_ids UUID[] NOT NULL DEFAULT '{}';

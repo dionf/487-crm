@@ -1,9 +1,12 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quote_templates")
     .select("*")
     .eq("id", (await params).id)
@@ -15,7 +18,10 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Alleen admins" }, { status: 403 });
+  const tenant = session.tenant;
   const body = await request.json();
   const updates = {};
 
@@ -24,7 +30,7 @@ export async function PATCH(request, { params }) {
   }
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quote_templates")
     .update(updates)
     .eq("id", (await params).id)
@@ -37,9 +43,12 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Alleen admins" }, { status: 403 });
+  const tenant = session.tenant;
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("quote_templates")
     .update({ is_active: false })
     .eq("id", (await params).id)

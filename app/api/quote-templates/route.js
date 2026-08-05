@@ -1,8 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const { data, error } = await supabase
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const { data, error } = await supabaseAdmin
     .from("quote_templates")
     .select("*")
     .eq("tenant", tenant)
@@ -14,10 +17,13 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.role !== "admin") return Response.json({ error: "Alleen admins" }, { status: 403 });
+  const tenant = session.tenant;
   const body = await request.json();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quote_templates")
     .insert({
       name: body.name,

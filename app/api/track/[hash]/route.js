@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from(
@@ -10,9 +10,9 @@ export async function GET(request, { params }) {
   const hash = (await params).hash;
 
   // Look up quote
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
-    .select("id")
+    .select("id, tenant")
     .eq("public_hash", hash)
     .maybeSingle();
 
@@ -24,25 +24,26 @@ export async function GET(request, { params }) {
       "unknown";
     const ua = request.headers.get("user-agent") || "unknown";
 
-    await supabase.from("quote_views").insert({
+    await supabaseAdmin.from("quote_views").insert({
       quote_id: quote.id,
       ip_address: ip,
       user_agent: ua,
     });
 
     // Log activity for the lead
-    const { data: fullQuote } = await supabase
+    const { data: fullQuote } = await supabaseAdmin
       .from("quotes")
-      .select("lead_id, quote_number")
+      .select("lead_id, quote_number, tenant")
       .eq("id", quote.id)
       .single();
 
     if (fullQuote?.lead_id) {
-      await supabase.from("activities").insert({
+      await supabaseAdmin.from("activities").insert({
         lead_id: fullQuote.lead_id,
         activity_type: "quote_viewed",
         description: `Offerte ${fullQuote.quote_number} bekeken`,
         created_by: "Tracking",
+        tenant: fullQuote.tenant,
       });
     }
   }

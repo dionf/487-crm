@@ -1,12 +1,15 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const leadId = searchParams.get("lead_id");
   const marketingOnly = searchParams.get("marketing") === "true";
-  const tenant = request.headers.get("x-auth-tenant");
+  const tenant = session.tenant;
 
-  let q = supabase
+  let q = supabaseAdmin
     .from("contacts")
     .select("*, leads(company_name)")
     .eq("tenant", tenant)
@@ -23,7 +26,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
 
   const { lead_id, name, email, phone, role, is_primary, marketing_consent } = body;
@@ -31,7 +36,7 @@ export async function POST(request) {
     return Response.json({ error: "lead_id en name zijn verplicht" }, { status: 400 });
   }
 
-  const { data: lead } = await supabase
+  const { data: lead } = await supabaseAdmin
     .from("leads")
     .select("id")
     .eq("id", lead_id)
@@ -44,14 +49,14 @@ export async function POST(request) {
 
   // If setting as primary, unset other primaries for this lead
   if (is_primary) {
-    await supabase
+    await supabaseAdmin
       .from("contacts")
       .update({ is_primary: false })
       .eq("lead_id", lead_id)
       .eq("tenant", tenant);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("contacts")
     .insert({
       lead_id,
@@ -73,7 +78,7 @@ export async function POST(request) {
     const nameParts = name.split(" ");
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
-    await supabase
+    await supabaseAdmin
       .from("leads")
       .update({
         contact_person: name,

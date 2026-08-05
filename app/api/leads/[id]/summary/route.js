@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +55,12 @@ async function scrapeWebsite(url) {
 }
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
-  const { data: lead, error } = await supabase
+  const { data: lead, error } = await supabaseAdmin
     .from("leads")
     .select("*")
     .eq("id", id)
@@ -82,10 +85,11 @@ export async function POST(request, { params }) {
   }
 
   // Also fetch notes for extra context
-  const { data: notes } = await supabase
+  const { data: notes } = await supabaseAdmin
     .from("notes")
     .select("content, note_type")
     .eq("lead_id", id)
+    .eq("tenant", tenant)
     .order("created_at", { ascending: false })
     .limit(5);
 
@@ -177,10 +181,11 @@ ${notesContext ? `--- CRM NOTITIES ---\n${notesContext}\n--- EINDE NOTITIES ---`
     }
 
     // Save to database
-    await supabase
+    await supabaseAdmin
       .from("leads")
       .update({ ai_summary: summary })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("tenant", tenant);
 
     return Response.json({ summary });
   } catch (err) {

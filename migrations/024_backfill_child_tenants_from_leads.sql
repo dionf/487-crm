@@ -3,7 +3,9 @@
 -- Some older imports/intake paths created child rows before every child table
 -- was consistently tenant-populated. The API now filters these child rows by
 -- tenant, so backfill from the authoritative leads.tenant before relying on
--- those filters everywhere. This migration is intentionally idempotent.
+-- those filters everywhere. Migration 022 already performs the same backfill
+-- before enabling RLS; this migration is intentionally kept idempotent as a
+-- standalone safety net for environments where operators run it separately.
 
 DO $$
 BEGIN

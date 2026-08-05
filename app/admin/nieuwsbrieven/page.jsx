@@ -31,6 +31,7 @@ const SOURCE_TYPES = [
   { id: "relationship_type", label: "Relatietype is" },
   { id: "hubspot_deal_origin", label: "HubSpot-herkomst is" },
   { id: "industry", label: "Branche is" },
+  { id: "recipient_email_in", label: "Exacte ontvanger e-mails" },
   { id: "recipient_email_contains", label: "Ontvanger e-mail bevat" },
   { id: "recent_order_days", label: "Recent besteld binnen dagen" },
 ];
@@ -740,7 +741,15 @@ export default function NieuwsbrievenPage() {
                     <option key={type.id} value={type.id}>{type.label}</option>
                   ))}
                 </select>
-                {segmentForm.source_type !== "all_marketing" && (
+                {segmentForm.source_type === "recipient_email_in" ? (
+                  <textarea
+                    value={segmentForm.source_value}
+                    onChange={(e) => setSegmentForm({ ...segmentForm, source_value: e.target.value })}
+                    placeholder={"Plak e-mailadressen onder elkaar of gescheiden met komma's"}
+                    rows={4}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                  />
+                ) : segmentForm.source_type !== "all_marketing" && (
                   <input
                     value={segmentForm.source_value}
                     onChange={(e) => setSegmentForm({ ...segmentForm, source_value: e.target.value })}

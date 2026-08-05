@@ -22,16 +22,16 @@ function normalizeScheduledAt(value) {
   return date.toISOString();
 }
 
-async function validateSegments(tenant, ids) {
+async function validateSegments(tenant, ids, label = "segmenten") {
   if (!ids.length) return [];
   const { data, error } = await supabaseAdmin
     .from("newsletter_segments")
-    .select("id, source_type")
+    .select("id, source_type, source_value, default_excluded")
     .eq("tenant", tenant)
     .in("id", ids);
   if (error) throw new Error(error.message);
   if ((data || []).length !== ids.length) {
-    throw new Error("Een of meer uitsluitsegmenten horen niet bij deze tenant");
+    throw new Error(`Een of meer ${label} horen niet bij deze tenant`);
   }
   return data || [];
 }
@@ -44,12 +44,15 @@ function sameSegmentRule(a, b) {
   );
 }
 
-async function cleanExcludedSegmentIds(tenant, ids, includeSegment) {
+async function cleanExcludedSegmentIds(tenant, ids, includeSegments = []) {
   const normalized = normalizeSegmentIds(ids);
   const segments = await validateSegments(tenant, normalized);
   const allowed = new Set(
     segments
-      .filter((segment) => segment.source_type !== "all_marketing" && segment.id !== includeSegment?.id && !sameSegmentRule(segment, includeSegment))
+      .filter((segment) => (
+        segment.source_type !== "all_marketing" &&
+        !includeSegments.some((includeSegment) => segment.id === includeSegment.id || sameSegmentRule(segment, includeSegment))
+      ))
       .map((segment) => segment.id)
   );
   return normalized.filter((id) => allowed.has(id));
@@ -86,24 +89,22 @@ export async function POST(request) {
       return Response.json({ error: "Naam, onderwerp en HTML zijn verplicht" }, { status: 400 });
     }
 
-    let includeSegment = null;
-    if (body.segment_id) {
-      const { data: segment } = await supabaseAdmin
-        .from("newsletter_segments")
-        .select("id, source_type, source_value")
-        .eq("tenant", tenant)
-        .eq("id", body.segment_id)
-        .single();
-      if (!segment) return Response.json({ error: "Segment niet gevonden" }, { status: 404 });
-      includeSegment = segment;
+    const includedSegmentIds = normalizeSegmentIds(body.included_segment_ids || (body.segment_id ? [body.segment_id] : []));
+    if (!includedSegmentIds.length) {
+      return Response.json({ error: "Kies minimaal een doelgroep voor deze campagne" }, { status: 400 });
     }
-    const excludedSegmentIds = await cleanExcludedSegmentIds(tenant, body.excluded_segment_ids, includeSegment);
+    const includeSegments = await validateSegments(tenant, includedSegmentIds, "doelgroepen");
+    if (includeSegments.some((segment) => segment.default_excluded)) {
+      return Response.json({ error: "Standaard uitsluitsegmenten kunnen niet als doelgroep worden gebruikt" }, { status: 400 });
+    }
+    const excludedSegmentIds = await cleanExcludedSegmentIds(tenant, body.excluded_segment_ids, includeSegments);
 
     const { data, error } = await supabaseAdmin
       .from("newsletter_campaigns")
       .insert({
         tenant,
-        segment_id: body.segment_id || null,
+        segment_id: includedSegmentIds[0] || null,
+        included_segment_ids: includedSegmentIds,
         excluded_segment_ids: excludedSegmentIds,
         name,
         subject,

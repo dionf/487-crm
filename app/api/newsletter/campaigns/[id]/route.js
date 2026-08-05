@@ -32,16 +32,16 @@ function sameIdList(a, b) {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
-async function validateSegments(tenant, ids) {
+async function validateSegments(tenant, ids, label = "segmenten") {
   if (!ids.length) return [];
   const { data, error } = await supabaseAdmin
     .from("newsletter_segments")
-    .select("id, source_type")
+    .select("id, source_type, source_value, default_excluded")
     .eq("tenant", tenant)
     .in("id", ids);
   if (error) throw new Error(error.message);
   if ((data || []).length !== ids.length) {
-    throw new Error("Een of meer uitsluitsegmenten horen niet bij deze tenant");
+    throw new Error(`Een of meer ${label} horen niet bij deze tenant`);
   }
   return data || [];
 }
@@ -54,27 +54,18 @@ function sameSegmentRule(a, b) {
   );
 }
 
-async function cleanExcludedSegmentIds(tenant, ids, includeSegment) {
+async function cleanExcludedSegmentIds(tenant, ids, includeSegments = []) {
   const normalized = normalizeSegmentIds(ids);
   const segments = await validateSegments(tenant, normalized);
   const allowed = new Set(
     segments
-      .filter((segment) => segment.source_type !== "all_marketing" && segment.id !== includeSegment?.id && !sameSegmentRule(segment, includeSegment))
+      .filter((segment) => (
+        segment.source_type !== "all_marketing" &&
+        !includeSegments.some((includeSegment) => segment.id === includeSegment.id || sameSegmentRule(segment, includeSegment))
+      ))
       .map((segment) => segment.id)
   );
   return normalized.filter((id) => allowed.has(id));
-}
-
-async function validateSegment(tenant, id) {
-  if (!id) return null;
-  const { data, error } = await supabaseAdmin
-    .from("newsletter_segments")
-    .select("id, source_type, source_value")
-    .eq("tenant", tenant)
-    .eq("id", id)
-    .single();
-  if (error || !data) throw new Error("Segment niet gevonden");
-  return data;
 }
 
 export async function GET(request, { params }) {
@@ -99,15 +90,28 @@ export async function PATCH(request, { params }) {
     const patch = {
       updated_at: new Date().toISOString(),
     };
-    for (const field of ["name", "subject", "preview_text", "body_html", "segment_id"]) {
+    for (const field of ["name", "subject", "preview_text", "body_html"]) {
       if (field in body) patch[field] = body[field] || null;
+    }
+    let includeSegments = null;
+    if ("included_segment_ids" in body || "segment_id" in body) {
+      const includedSegmentIds = normalizeSegmentIds(body.included_segment_ids || (body.segment_id ? [body.segment_id] : []));
+      if (!includedSegmentIds.length) {
+        return Response.json({ error: "Kies minimaal een doelgroep voor deze campagne" }, { status: 400 });
+      }
+      includeSegments = await validateSegments(tenant, includedSegmentIds, "doelgroepen");
+      if (includeSegments.some((segment) => segment.default_excluded)) {
+        return Response.json({ error: "Standaard uitsluitsegmenten kunnen niet als doelgroep worden gebruikt" }, { status: 400 });
+      }
+      patch.included_segment_ids = includedSegmentIds;
+      patch.segment_id = includedSegmentIds[0] || null;
     }
     if ("recipient_limit" in body) patch.recipient_limit = normalizeRecipientLimit(body.recipient_limit);
     if ("scheduled_at" in body) patch.scheduled_at = normalizeScheduledAt(body.scheduled_at);
-    const patchedIncludeSegment = "segment_id" in patch ? await validateSegment(tenant, patch.segment_id) : null;
     if ("excluded_segment_ids" in body) {
-      const includeSegment = "segment_id" in patch ? patchedIncludeSegment : currentCampaign.newsletter_segments || null;
-      patch.excluded_segment_ids = await cleanExcludedSegmentIds(tenant, body.excluded_segment_ids, includeSegment);
+      const currentIncludedIds = normalizeSegmentIds(currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []));
+      const effectiveIncludeSegments = includeSegments || await validateSegments(tenant, currentIncludedIds, "doelgroepen");
+      patch.excluded_segment_ids = await cleanExcludedSegmentIds(tenant, body.excluded_segment_ids, effectiveIncludeSegments);
     }
     if (patch.body_html === null || patch.subject === null || patch.name === null) {
       return Response.json({ error: "Naam, onderwerp en HTML mogen niet leeg zijn" }, { status: 400 });
@@ -117,7 +121,7 @@ export async function PATCH(request, { params }) {
       ("subject" in patch && normalizeText(patch.subject) !== normalizeText(currentCampaign.subject)) ||
       ("preview_text" in patch && normalizeText(patch.preview_text) !== normalizeText(currentCampaign.preview_text)) ||
       ("body_html" in patch && normalizeText(patch.body_html) !== normalizeText(currentCampaign.body_html)) ||
-      ("segment_id" in patch && String(patch.segment_id || "") !== String(currentCampaign.segment_id || "")) ||
+      ("included_segment_ids" in patch && !sameIdList(patch.included_segment_ids, currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []))) ||
       ("recipient_limit" in patch && Number(patch.recipient_limit || 0) !== Number(currentCampaign.recipient_limit || 0)) ||
       ("excluded_segment_ids" in patch && !sameIdList(patch.excluded_segment_ids, currentCampaign.excluded_segment_ids));
 

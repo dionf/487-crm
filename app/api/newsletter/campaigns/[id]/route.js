@@ -3,6 +3,7 @@ import {
   getCampaignForTenant,
   isMissingNewsletterTable,
   missingNewsletterSetupResponse,
+  normalizeBatchSettings,
   normalizeRecipientLimit,
   requireAdmin,
 } from "@/lib/newsletters";
@@ -107,6 +108,25 @@ export async function PATCH(request, { params }) {
       patch.segment_id = includedSegmentIds[0] || null;
     }
     if ("recipient_limit" in body) patch.recipient_limit = normalizeRecipientLimit(body.recipient_limit);
+    if (
+      "batch_mode" in body ||
+      "batch_size" in body ||
+      "batch_wait_hours" in body ||
+      "max_bounce_rate" in body ||
+      "max_complaint_rate" in body ||
+      "max_failed_rate" in body ||
+      "max_unsubscribe_rate" in body
+    ) {
+      Object.assign(patch, normalizeBatchSettings({
+        batch_mode: "batch_mode" in body ? body.batch_mode : currentCampaign.batch_mode,
+        batch_size: "batch_size" in body ? body.batch_size : currentCampaign.batch_size,
+        batch_wait_hours: "batch_wait_hours" in body ? body.batch_wait_hours : currentCampaign.batch_wait_hours,
+        max_bounce_rate: "max_bounce_rate" in body ? body.max_bounce_rate : currentCampaign.max_bounce_rate,
+        max_complaint_rate: "max_complaint_rate" in body ? body.max_complaint_rate : currentCampaign.max_complaint_rate,
+        max_failed_rate: "max_failed_rate" in body ? body.max_failed_rate : currentCampaign.max_failed_rate,
+        max_unsubscribe_rate: "max_unsubscribe_rate" in body ? body.max_unsubscribe_rate : currentCampaign.max_unsubscribe_rate,
+      }));
+    }
     if ("scheduled_at" in body) patch.scheduled_at = normalizeScheduledAt(body.scheduled_at);
     if ("excluded_segment_ids" in body) {
       const currentIncludedIds = normalizeSegmentIds(currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []));
@@ -123,6 +143,9 @@ export async function PATCH(request, { params }) {
       ("body_html" in patch && normalizeText(patch.body_html) !== normalizeText(currentCampaign.body_html)) ||
       ("included_segment_ids" in patch && !sameIdList(patch.included_segment_ids, currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []))) ||
       ("recipient_limit" in patch && Number(patch.recipient_limit || 0) !== Number(currentCampaign.recipient_limit || 0)) ||
+      ("batch_mode" in patch && patch.batch_mode !== currentCampaign.batch_mode) ||
+      ("batch_size" in patch && Number(patch.batch_size || 0) !== Number(currentCampaign.batch_size || 0)) ||
+      ("batch_wait_hours" in patch && Number(patch.batch_wait_hours || 0) !== Number(currentCampaign.batch_wait_hours || 0)) ||
       ("excluded_segment_ids" in patch && !sameIdList(patch.excluded_segment_ids, currentCampaign.excluded_segment_ids));
 
     if (approvalBreakingChange) {

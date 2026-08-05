@@ -44,14 +44,16 @@ const STATUS_LABELS = {
   scheduled: "Gepland",
   sent: "Verzonden",
   failed: "Mislukt",
+  batch_waiting: "Batch wacht",
+  paused: "Gepauzeerd",
 };
 const MAX_RECIPIENT_LIMIT = 100000;
 
 function statusClass(status) {
   if (status === "sent") return "bg-green-50 text-green-700 border-green-100";
   if (status === "tested") return "bg-blue-50 text-blue-700 border-blue-100";
-  if (status === "syncing" || status === "scheduled") return "bg-amber-50 text-brand-orange border-amber-100";
-  if (status === "failed") return "bg-red-50 text-red-600 border-red-100";
+  if (status === "syncing" || status === "scheduled" || status === "batch_waiting") return "bg-amber-50 text-brand-orange border-amber-100";
+  if (status === "failed" || status === "paused") return "bg-red-50 text-red-600 border-red-100";
   return "bg-gray-50 text-gray-600 border-gray-100";
 }
 
@@ -75,6 +77,13 @@ function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
     included_segment_ids: targets,
     excluded_segment_ids: excludedSegmentIds,
     recipient_limit: "",
+    batch_mode: "automatic",
+    batch_size: "100",
+    batch_wait_hours: "4",
+    max_bounce_rate: "0.02",
+    max_complaint_rate: "0",
+    max_failed_rate: "0.03",
+    max_unsubscribe_rate: "0.05",
     scheduled_at: "",
     body_html: "",
   };
@@ -311,7 +320,7 @@ export default function NieuwsbrievenPage() {
   }
 
   function canSendCampaign(campaign) {
-    return Boolean(campaign.test_sent_at) && !["sent", "scheduled", "syncing"].includes(campaign.status) && !hasExpiredSchedule(campaign);
+    return Boolean(campaign.test_sent_at) && !["sent", "scheduled", "syncing", "batch_waiting", "paused"].includes(campaign.status) && !hasExpiredSchedule(campaign);
   }
 
   function formNeedsRetest(campaign, form) {
@@ -322,6 +331,9 @@ export default function NieuwsbrievenPage() {
       normalizeText(campaign.body_html) !== normalizeText(form.body_html) ||
       !sameIdList(campaignTargetIds(campaign), campaignTargetIds(form)) ||
       Number(campaign.recipient_limit || 0) !== Number(form.recipient_limit || 0) ||
+      String(campaign.batch_mode || "single") !== String(form.batch_mode || "single") ||
+      Number(campaign.batch_size || 0) !== Number(form.batch_size || 0) ||
+      Number(campaign.batch_wait_hours || 0) !== Number(form.batch_wait_hours || 0) ||
       !sameIdList(campaign.excluded_segment_ids, form.excluded_segment_ids)
     );
   }
@@ -344,12 +356,14 @@ export default function NieuwsbrievenPage() {
 
   function sendActionLabel(campaign) {
     if (hasExpiredSchedule(campaign)) return "Tijd verlopen";
+    if (campaign.batch_mode === "automatic") return "Start batches";
     return isFutureDateTime(campaign.scheduled_at) ? "Plannen" : "Verzenden";
   }
 
   function sendActionTitle(campaign) {
     if (!campaign.test_sent_at) return "Eerst testmail sturen";
     if (hasExpiredSchedule(campaign)) return "Kies eerst een nieuwe toekomstige verzendtijd";
+    if (campaign.batch_mode === "automatic") return "Automatische batchverzending starten";
     return isFutureDateTime(campaign.scheduled_at) ? "Definitief plannen" : "Definitief verzenden";
   }
 
@@ -371,6 +385,13 @@ export default function NieuwsbrievenPage() {
       included_segment_ids: targetIds,
       excluded_segment_ids: campaign.excluded_segment_ids || [],
       recipient_limit: campaign.recipient_limit || "",
+      batch_mode: campaign.batch_mode || "single",
+      batch_size: campaign.batch_size || "",
+      batch_wait_hours: campaign.batch_wait_hours || "4",
+      max_bounce_rate: campaign.max_bounce_rate ?? "0.02",
+      max_complaint_rate: campaign.max_complaint_rate ?? "0",
+      max_failed_rate: campaign.max_failed_rate ?? "0.03",
+      max_unsubscribe_rate: campaign.max_unsubscribe_rate ?? "0.05",
       scheduled_at: campaign.scheduled_at || "",
       body_html: campaign.body_html || "",
     });
@@ -1005,21 +1026,87 @@ export default function NieuwsbrievenPage() {
                     Meerdere doelgroepen worden samengevoegd. Dubbele e-mailadressen worden bij verzending automatisch ontdubbeld.
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase">Batchgrootte</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={MAX_RECIPIENT_LIMIT}
-                    step="1"
-                    value={campaignForm.recipient_limit}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, recipient_limit: e.target.value })}
-                    placeholder="Geen limiet"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Vul bijvoorbeeld 100 in om alleen de eerste 100 ontvangers uit de preview te versturen. Maximum: {MAX_RECIPIENT_LIMIT}.
-                  </p>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Automatische batches</p>
+                      <p className="text-xs text-gray-500">CRM verstuurt pas verder na een groene health-check.</p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={campaignForm.batch_mode === "automatic"}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, batch_mode: e.target.checked ? "automatic" : "single" })}
+                        className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                      />
+                      Aan
+                    </label>
+                  </div>
+                  {campaignForm.batch_mode === "automatic" ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs font-semibold text-gray-500">
+                        Batchgrootte
+                        <input
+                          type="number"
+                          min="1"
+                          max={MAX_RECIPIENT_LIMIT}
+                          step="1"
+                          value={campaignForm.batch_size}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, batch_size: e.target.value })}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-gray-500">
+                        Wachturen
+                        <input
+                          type="number"
+                          min="0.25"
+                          step="0.25"
+                          value={campaignForm.batch_wait_hours}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, batch_wait_hours: e.target.value })}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-gray-500">
+                        Max bounce
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.001"
+                          value={campaignForm.max_bounce_rate}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, max_bounce_rate: e.target.value })}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-gray-500">
+                        Max complaints
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.001"
+                          value={campaignForm.max_complaint_rate}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, max_complaint_rate: e.target.value })}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase">Max totaal ontvangers</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={MAX_RECIPIENT_LIMIT}
+                        step="1"
+                        value={campaignForm.recipient_limit}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, recipient_limit: e.target.value })}
+                        placeholder="Geen limiet"
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Niet mailen naar</p>
@@ -1180,10 +1267,18 @@ export default function NieuwsbrievenPage() {
                               {scheduledAtLabel(campaign)}: {formatDateTime(campaign.scheduled_at)}
                             </p>
                           )}
-                          {campaign.recipient_limit && (
+                          {campaign.batch_mode === "automatic" ? (
                             <p className="text-xs text-gray-400 mt-1">
-                              Batch: max. {campaign.recipient_limit} ontvangers
+                              Batches: {campaign.batch_current_number || 0}/{campaign.batch_total_count || "?"}
+                              {campaign.batch_next_run_at ? ` · volgende check ${formatDateTime(campaign.batch_next_run_at)}` : ""}
                             </p>
+                          ) : campaign.recipient_limit && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Max: {campaign.recipient_limit} ontvangers
+                            </p>
+                          )}
+                          {campaign.batch_pause_reason && (
+                            <p className="text-xs text-red-500 mt-1">{campaign.batch_pause_reason}</p>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
@@ -1201,7 +1296,13 @@ export default function NieuwsbrievenPage() {
                             {STATUS_LABELS[campaign.status] || campaign.status}
                           </span>
                           {campaign.recipient_count > 0 && (
-                            <span className="ml-2 text-xs text-gray-400">{campaign.recipient_count} ontvangers</span>
+                            <span className="ml-2 text-xs text-gray-400">{campaign.recipient_count} verzonden</span>
+                          )}
+                          {campaign.batch_last_health && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Laatste check: {campaign.batch_last_health.counts?.bounced || 0} bounce,
+                              {" "}{campaign.batch_last_health.counts?.complained || 0} complaint
+                            </p>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -1305,9 +1406,13 @@ export default function NieuwsbrievenPage() {
                             ? ` van ${recipients.total_count}`
                             : ""}
                         </p>
-                        {recipients.recipient_limit && (
+                        {selected.batch_mode === "automatic" ? (
                           <p className="text-xs text-gray-500">
-                            Batchlimiet: max. {recipients.recipient_limit} ontvangers
+                            Automatisch: batches van {selected.batch_size || 100}, check na {selected.batch_wait_hours || 4} uur
+                          </p>
+                        ) : recipients.recipient_limit && (
+                          <p className="text-xs text-gray-500">
+                            Limiet: max. {recipients.recipient_limit} ontvangers
                           </p>
                         )}
                         {recipients.deduplicated_count > 0 && (

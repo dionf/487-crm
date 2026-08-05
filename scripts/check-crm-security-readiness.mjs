@@ -69,8 +69,9 @@ server_table_status as (
     t.table_name,
     coalesce(c.relrowsecurity, false) as rls_enabled
   from server_tables t
-  left join pg_class c on c.relname = t.table_name
-  left join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+  left join pg_class c
+    on c.relname = t.table_name
+   and c.relnamespace = 'public'::regnamespace
 ),
 server_table_policies as (
   select count(*)::int as policy_count
@@ -86,8 +87,9 @@ view_status as (
     v.view_name,
     coalesce('security_invoker=true' = any(c.reloptions), false) as security_invoker
   from target_views v
-  left join pg_class c on c.relname = v.view_name
-  left join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+  left join pg_class c
+    on c.relname = v.view_name
+   and c.relnamespace = 'public'::regnamespace
 ),
 normalized_email_indexes as (
   select count(*)::int as index_count

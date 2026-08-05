@@ -67,31 +67,70 @@ async function verifyAgainstTenantSecrets(payload, headers) {
   return null;
 }
 
-async function updateMarketingBlock({ tenant, email, eventType, eventData, leadId }) {
-  if (!email) return;
+async function upsertEmailSuppression({ tenant, email, block, eventType, eventData, resendBroadcastId, resendEmailId, occurredAt }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !block) return;
+
+  const { error } = await supabaseAdmin
+    .from("newsletter_email_suppressions")
+    .upsert(
+      {
+        tenant,
+        email: normalizedEmail,
+        status: block.status,
+        reason: eventType,
+        source: "resend_webhook",
+        resend_broadcast_id: resendBroadcastId || null,
+        resend_email_id: resendEmailId || null,
+        payload: eventData || null,
+        suppressed_at: occurredAt || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant,email" }
+    );
+  if (error) throw new Error(error.message);
+}
+
+async function updateRecipientMarketingBlock({
+  tenant,
+  email,
+  eventType,
+  eventData,
+  recipient,
+  resendBroadcastId,
+  resendEmailId,
+  occurredAt,
+}) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return;
   const block = marketingBlockForEvent(eventType, eventData);
   if (!block) return;
 
-  const leadPatch = {
-    marketing_consent: false,
-    marketing_subscription_status: block.status,
-    marketing_hard_bounced: block.hardBounced,
-    updated_at: new Date().toISOString(),
-  };
-  if (block.unsubscribed) leadPatch.marketing_unsubscribed_at = new Date().toISOString();
+  await upsertEmailSuppression({
+    tenant,
+    email: normalizedEmail,
+    block,
+    eventType,
+    eventData,
+    resendBroadcastId,
+    resendEmailId,
+    occurredAt,
+  });
 
-  let leadQuery = supabaseAdmin
-    .from("leads")
-    .update(leadPatch)
-    .eq("tenant", tenant);
-  leadQuery = leadId ? leadQuery.eq("id", leadId) : leadQuery.eq("email", email);
-  await leadQuery;
+  if (recipient?.contact_id) {
+    await supabaseAdmin
+      .from("contacts")
+      .update({ marketing_consent: false })
+      .eq("tenant", tenant)
+      .eq("id", recipient.contact_id);
+    return;
+  }
 
   await supabaseAdmin
     .from("contacts")
     .update({ marketing_consent: false })
     .eq("tenant", tenant)
-    .eq("email", email);
+    .eq("email", normalizedEmail);
 }
 
 export async function POST(request) {
@@ -133,7 +172,7 @@ export async function POST(request) {
     if (campaign?.id && email) {
       const { data } = await supabaseAdmin
         .from("newsletter_campaign_recipients")
-        .select("id, lead_id")
+        .select("id, lead_id, contact_id")
         .eq("tenant", tenant)
         .eq("campaign_id", campaign.id)
         .eq("email", email)
@@ -167,7 +206,16 @@ export async function POST(request) {
         .eq("id", recipient.id);
     }
 
-    await updateMarketingBlock({ tenant, email, eventType, eventData, leadId: recipient?.lead_id });
+    await updateRecipientMarketingBlock({
+      tenant,
+      email,
+      eventType,
+      eventData,
+      recipient,
+      resendBroadcastId,
+      resendEmailId,
+      occurredAt,
+    });
 
     return Response.json({ received: true });
   } catch (error) {

@@ -135,7 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_newsletter_campaign_batches_tenant_campaign
 
 CREATE INDEX IF NOT EXISTS idx_newsletter_campaigns_batch_next_run
   ON newsletter_campaigns (tenant, status, batch_next_run_at)
-  WHERE status = 'batch_waiting';
+  WHERE status IN ('batch_waiting', 'scheduled');
 
 CREATE INDEX IF NOT EXISTS idx_newsletter_campaign_recipients_batch
   ON newsletter_campaign_recipients (tenant, campaign_id, batch_number);

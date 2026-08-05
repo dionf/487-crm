@@ -13,6 +13,15 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
 ];
 
+const ORIGIN_TENANTS = {
+  "https://hiphot.nl": new Set(["hiphot"]),
+  "https://www.hiphot.nl": new Set(["hiphot"]),
+  "https://48-7.nl": new Set(["48-7"]),
+  "https://www.48-7.nl": new Set(["48-7"]),
+  "http://localhost:3000": new Set(["hiphot", "48-7"]),
+  "http://localhost:3001": new Set(["hiphot", "48-7"]),
+};
+
 function corsHeaders(origin) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -20,6 +29,17 @@ function corsHeaders(origin) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+function validateOriginTenant(origin, tenant) {
+  const allowedTenants = ORIGIN_TENANTS[origin];
+  if (!allowedTenants) {
+    return "Ongeldige formulierherkomst";
+  }
+  if (!allowedTenants.has(tenant)) {
+    return "Formulierherkomst hoort niet bij deze tenant";
+  }
+  return null;
 }
 
 // Preflight
@@ -136,6 +156,10 @@ export async function POST(request) {
     const config = TENANT_CONFIG[tenant];
     if (!config) {
       return Response.json({ error: "Ongeldige tenant" }, { status: 400, headers });
+    }
+    const originError = validateOriginTenant(origin, tenant);
+    if (originError) {
+      return Response.json({ error: originError }, { status: 403, headers });
     }
 
     // Validate email format

@@ -14,6 +14,15 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
 ];
 
+const ORIGIN_TENANTS = {
+  "https://hiphot.nl": new Set(["hiphot"]),
+  "https://www.hiphot.nl": new Set(["hiphot"]),
+  "https://hiphot.eu": new Set(["hiphot"]),
+  "https://www.hiphot.eu": new Set(["hiphot"]),
+  "http://localhost:3000": new Set(["hiphot"]),
+  "http://localhost:3001": new Set(["hiphot"]),
+};
+
 function corsHeaders(origin) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -21,6 +30,17 @@ function corsHeaders(origin) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+function validateOriginTenant(origin, tenant) {
+  const allowedTenants = ORIGIN_TENANTS[origin];
+  if (!allowedTenants) {
+    return "Ongeldige chatbotherkomst";
+  }
+  if (!allowedTenants.has(tenant)) {
+    return "Chatbotherkomst hoort niet bij deze tenant";
+  }
+  return null;
 }
 
 export async function OPTIONS(request) {
@@ -164,6 +184,10 @@ export async function POST(request) {
 
     if (!tenant || !TENANT_CONFIG[tenant]) {
       return Response.json({ error: "Ongeldige tenant" }, { status: 400, headers });
+    }
+    const originError = validateOriginTenant(origin, tenant);
+    if (originError) {
+      return Response.json({ error: originError }, { status: 403, headers });
     }
 
     const config = TENANT_CONFIG[tenant];

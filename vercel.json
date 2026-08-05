@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/quote-reminder",
       "schedule": "0 7 * * 1-5"
-    },
-    {
-      "path": "/api/cron/newsletter-batches",
-      "schedule": "*/15 * * * *"
     }
   ]
 }

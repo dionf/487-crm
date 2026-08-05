@@ -48,6 +48,7 @@ ALTER TABLE newsletter_segments
       'relationship_type',
       'hubspot_deal_origin',
       'industry',
+      'recipient_email_in',
       'recipient_email_contains',
       'recent_order_days'
     )

@@ -115,8 +115,13 @@ function sameSegmentRule(a, b) {
   );
 }
 
+function isExactEmailSegment(segment) {
+  return segment?.source_type === "recipient_email_in";
+}
+
 function segmentCanExclude(segment, includeSegment) {
   if (!segment || segment.source_type === "all_marketing") return false;
+  if (isExactEmailSegment(includeSegment)) return false;
   if (segment.id === includeSegment?.id || sameSegmentRule(segment, includeSegment)) return false;
   if (includeSegment?.source_type === "recipient_email_contains" && !segment.default_excluded) {
     return segment.source_type === "recipient_email_contains";
@@ -176,6 +181,7 @@ export default function NieuwsbrievenPage() {
     () => segments.filter((segment) => segmentCanExclude(segment, selectedSegment)),
     [segments, selectedSegment]
   );
+  const exactEmailTargetSelected = isExactEmailSegment(selectedSegment);
   const availableSourceValues = segmentOptions?.options?.[segmentForm.source_type] || [];
 
   useEffect(() => {
@@ -246,10 +252,13 @@ export default function NieuwsbrievenPage() {
   }
 
   function selectCampaignSegment(segmentId) {
+    const nextSegment = segments.find((segment) => segment.id === segmentId);
     setCampaignForm((current) => ({
       ...current,
       segment_id: segmentId,
-      excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segmentId),
+      excluded_segment_ids: isExactEmailSegment(nextSegment)
+        ? []
+        : (current.excluded_segment_ids || []).filter((id) => id !== segmentId),
     }));
   }
 
@@ -318,13 +327,14 @@ export default function NieuwsbrievenPage() {
 
   function startEditCampaign(campaign) {
     if (!canMutateCampaign(campaign)) return;
+    const includeSegment = segments.find((segment) => segment.id === campaign.segment_id);
     setEditingCampaignId(campaign.id);
     setCampaignForm({
       name: campaign.name || "",
       subject: campaign.subject || "",
       preview_text: campaign.preview_text || "",
       segment_id: campaign.segment_id || "",
-      excluded_segment_ids: campaign.excluded_segment_ids || [],
+      excluded_segment_ids: isExactEmailSegment(includeSegment) ? [] : campaign.excluded_segment_ids || [],
       recipient_limit: campaign.recipient_limit || "",
       scheduled_at: campaign.scheduled_at || "",
       body_html: campaign.body_html || "",
@@ -923,22 +933,33 @@ export default function NieuwsbrievenPage() {
                     </p>
                   )}
                 </div>
-                <select
-                  value={campaignForm.segment_id}
-                  onChange={(e) => selectCampaignSegment(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
-                >
-                  <option value="">Alle marketingcontacten</option>
-                  {segments.map((segment) => (
-                    <option key={segment.id} value={segment.id}>{segment.name}</option>
-                  ))}
-                </select>
-                {selectedSegment && (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase">Doelgroep</label>
+                  <select
+                    value={campaignForm.segment_id}
+                    onChange={(e) => selectCampaignSegment(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
+                  >
+                    <option value="">Alle marketingcontacten</option>
+                    {segments.map((segment) => (
+                      <option key={segment.id} value={segment.id}>{segment.name}</option>
+                    ))}
+                  </select>
                   <p className="text-xs text-gray-500">
-                    Bron: {SOURCE_TYPES.find((type) => type.id === selectedSegment.source_type)?.label || selectedSegment.source_type}
-                    {selectedSegment.source_value ? ` (${selectedSegment.source_value})` : ""}
+                    Kies hier wie de nieuwsbrief krijgt. Een testsegment moet hier staan, niet bij uitsluitingen.
                   </p>
-                )}
+                  {selectedSegment && (
+                    <p className="text-xs text-gray-500">
+                      Type: {SOURCE_TYPES.find((type) => type.id === selectedSegment.source_type)?.label || selectedSegment.source_type}
+                      {selectedSegment.source_value && !exactEmailTargetSelected ? ` (${selectedSegment.source_value})` : ""}
+                    </p>
+                  )}
+                  {exactEmailTargetSelected && (
+                    <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">
+                      Testdoelgroep actief: er wordt alleen naar de exacte e-mailadressen in dit segment gekeken. Segmentuitsluitingen worden hierbij overgeslagen.
+                    </div>
+                  )}
+                </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase">Batchgrootte</label>
                   <input
@@ -956,8 +977,12 @@ export default function NieuwsbrievenPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Segmenten uitsluiten</p>
-                  {availableExclusionSegments.length ? (
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Niet mailen</p>
+                  {exactEmailTargetSelected ? (
+                    <p className="text-sm text-gray-500">
+                      Niet nodig bij een exacte testdoelgroep. Alleen de opgegeven e-mailadressen kunnen meedoen.
+                    </p>
+                  ) : availableExclusionSegments.length ? (
                     <div className="space-y-2 max-h-44 overflow-auto">
                       {availableExclusionSegments.map((segment) => {
                         const isDefault = segment.default_excluded;
@@ -1091,7 +1116,7 @@ export default function NieuwsbrievenPage() {
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Campagne</th>
-                      <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Segment</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Doelgroep</th>
                       <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Status</th>
                       <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Acties</th>
                     </tr>
@@ -1123,7 +1148,7 @@ export default function NieuwsbrievenPage() {
                           </p>
                           {excludedSegmentNames(campaign).length > 0 && (
                             <p className="text-xs text-red-500 mt-1">
-                              Uitgesloten: {excludedSegmentNames(campaign).join(", ")}
+                              Niet mailen: {excludedSegmentNames(campaign).join(", ")}
                             </p>
                           )}
                         </td>

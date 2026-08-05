@@ -1,7 +1,10 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
@@ -23,7 +26,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const {
     lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by,
@@ -90,6 +95,7 @@ export async function POST(request) {
     .from("quotes")
     .select("amount_excl_vat")
     .eq("lead_id", lead_id)
+    .eq("tenant", tenant)
     .not("status", "eq", "afgewezen");
 
   if (allQuotes?.length) {

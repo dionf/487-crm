@@ -1,3 +1,4 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
 import { getShippingCost } from "@/lib/hiphot-pricing";
@@ -7,9 +8,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
-  const userId = request.headers.get("x-auth-user-id");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "";
+  const userId = session.user_id;
 
   if (tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
@@ -120,6 +123,7 @@ export async function POST(request) {
     const { data: articles } = await supabaseAdmin
       .from("hiphot_articles")
       .select("id, sku, name, category, wc_product_id, inkoop_price")
+      .eq("tenant", tenant)
       .in("sku", skus);
     articlesBySku = Object.fromEntries((articles || []).map((a) => [a.sku, a]));
   }
@@ -250,6 +254,7 @@ export async function POST(request) {
     .from("quotes")
     .select("amount_excl_vat")
     .eq("lead_id", lead_id)
+    .eq("tenant", tenant)
     .not("status", "eq", "afgewezen");
   if (allQuotes?.length) {
     const totalValue = allQuotes.reduce((s, q) => s + (Number(q.amount_excl_vat) || 0), 0);
@@ -308,6 +313,7 @@ export async function POST(request) {
           .from("form_submissions")
           .select("conversation_data")
           .eq("id", form_submission_id)
+          .eq("tenant", tenant)
           .maybeSingle();
         conversationData = fs?.conversation_data || null;
       }
@@ -363,7 +369,8 @@ export async function POST(request) {
                 priority: Math.min(10, (existing.priority || 5) + 1),
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", existing.id);
+              .eq("id", existing.id)
+              .eq("tenant", tenant);
             lessonsSkipped++;
           } else {
             const { error: insErr } = await supabaseAdmin.from("ai_quote_lessons").insert({

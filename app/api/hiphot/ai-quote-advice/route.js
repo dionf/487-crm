@@ -1,3 +1,4 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateOrRefine } from "@/lib/ai-quote-advisor";
 
@@ -5,7 +6,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   if (tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
@@ -64,6 +67,7 @@ export async function POST(request) {
           .select("id, created_at, note_type, content, created_by")
           .in("id", noteIds)
           .eq("lead_id", resolvedLeadId)
+          .eq("tenant", tenant)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     subIds.length > 0
@@ -72,6 +76,7 @@ export async function POST(request) {
           .select("id, created_at, source, message, conversation_data, first_name, last_name")
           .in("id", subIds)
           .eq("lead_id", resolvedLeadId)
+          .eq("tenant", tenant)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);

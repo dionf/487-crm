@@ -1,3 +1,4 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -5,8 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userId = session.user_id;
   const { id } = await params;
 
   // Fetch sender info for signature
@@ -48,6 +51,7 @@ export async function POST(request, { params }) {
     .from("notes")
     .select("content, note_type")
     .eq("lead_id", quote.lead_id)
+    .eq("tenant", tenant)
     .in("note_type", ["gesprek", "intern"])
     .order("created_at", { ascending: false })
     .limit(5);

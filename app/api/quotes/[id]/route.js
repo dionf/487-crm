@@ -1,7 +1,10 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   const { data, error } = await supabaseAdmin
@@ -18,7 +21,9 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
   const body = await request.json();
 
@@ -72,7 +77,9 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   // Verify quote belongs to tenant
@@ -99,6 +106,7 @@ async function updateLeadValue(leadId, tenant) {
     .from("quotes")
     .select("amount_excl_vat")
     .eq("lead_id", leadId)
+    .eq("tenant", tenant)
     .not("status", "eq", "afgewezen");
 
   const totalValue = (allQuotes || []).reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);

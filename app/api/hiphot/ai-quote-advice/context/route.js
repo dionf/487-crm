@@ -1,3 +1,4 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,9 @@ export const dynamic = "force-dynamic";
  *   - form_submissions (chatbot/formulier/email) van ná de laatste offerte zijn altijd standaard aangevinkt
  */
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   if (tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
@@ -39,17 +42,20 @@ export async function GET(request) {
       .from("quotes")
       .select("id, created_at, quote_number, status, amount_excl_vat")
       .eq("lead_id", leadId)
+      .eq("tenant", tenant)
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("notes")
       .select("id, created_at, note_type, content, created_by")
       .eq("lead_id", leadId)
+      .eq("tenant", tenant)
       .in("note_type", ["gesprek", "intern", "formulier", "email", "todo"])
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("form_submissions")
       .select("id, created_at, source, message, conversation_data, first_name, last_name")
       .eq("lead_id", leadId)
+      .eq("tenant", tenant)
       .order("created_at", { ascending: false }),
   ]);
 

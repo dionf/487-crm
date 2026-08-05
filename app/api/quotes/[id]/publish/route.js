@@ -1,10 +1,13 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { randomBytes } from "crypto";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json().catch(() => ({}));
   const { id } = await params;
 

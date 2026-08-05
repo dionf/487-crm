@@ -1,8 +1,11 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "";
   const { id } = await params;
 
   // Bron-quote ophalen + verificatie

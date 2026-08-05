@@ -1,3 +1,4 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -5,11 +6,12 @@ export const dynamic = "force-dynamic";
 // POST /api/ai-lessons/[id]/flag — elke user mag één flag zetten per lesson
 // Bij 2e unieke user-flag: lesson wordt automatisch gedeactiveerd (soft-rollback)
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
-  if (!tenant || !userId) {
+  const session = getVerifiedSession(request);
+  if (!session?.user_id) {
     return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   }
+  const tenant = session.tenant;
+  const userId = session.user_id;
 
   const { id } = await params;
 
@@ -71,11 +73,12 @@ export async function POST(request, { params }) {
 
 // DELETE — verwijder je eigen flag (tel naar beneden)
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
-  if (!tenant || !userId) {
+  const session = getVerifiedSession(request);
+  if (!session?.user_id) {
     return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   }
+  const tenant = session.tenant;
+  const userId = session.user_id;
 
   const { id } = await params;
 

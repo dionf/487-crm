@@ -1,11 +1,14 @@
+import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createWooOrder, getWooOrderUrl } from "@/lib/woocommerce";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "";
   const { id } = await params;
 
   if (tenant !== "hiphot") {
@@ -184,7 +187,8 @@ export async function POST(request, { params }) {
       external_order_created_at: new Date().toISOString(),
       order_customer_reference: ref || null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant", tenant);
 
   // Activity log
   await supabaseAdmin.from("activities").insert({

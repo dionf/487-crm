@@ -23,11 +23,13 @@ async function authorize(request) {
 async function handler(request) {
   try {
     const auth = await authorize(request);
+    const now = new Date().toISOString();
     let query = supabaseAdmin
       .from("newsletter_campaigns")
       .select("*")
-      .eq("status", "batch_waiting")
-      .lte("batch_next_run_at", new Date().toISOString())
+      .eq("batch_mode", "automatic")
+      .in("status", ["batch_waiting", "scheduled"])
+      .lte("batch_next_run_at", now)
       .order("batch_next_run_at", { ascending: true })
       .limit(10);
     if (!auth.cron) query = query.eq("tenant", auth.tenant);

@@ -221,9 +221,9 @@ export async function POST(request) {
       return reject("klant.naam en klant.email zijn verplicht", 400);
     }
 
-    // Klanten geven regelmatig twee adressen op ("graag naar beide"). Het
-    // eerste geldige adres wordt het lead-adres, de rest bewaren we erbij.
-    const { primary: email, extra: extraEmails, all: allEmails } = parseEmailList(emailRaw);
+    // Klanten geven soms twee adressen op ("graag naar beide"). Het eerste
+    // geldige adres wordt het lead-adres, de rest bewaren we erbij.
+    const { primary: email, extra: extraEmails } = parseEmailList(emailRaw);
     if (!email) {
       return reject("Ongeldig e-mailadres", 400);
     }
@@ -254,22 +254,17 @@ export async function POST(request) {
       extraEmails,
     });
 
-    // 1. Zoek bestaande lead op e-mail — ook op de extra adressen, anders
-    //    krijgt dezelfde klant een dubbele lead als hij een tweede adres noemt.
-    let leadId = null;
-    for (const candidate of allEmails) {
-      const { data: existingLead } = await supabaseAdmin
-        .from("leads")
-        .select("id")
-        .eq("tenant", tenant)
-        .ilike("email", candidate)
-        .limit(1)
-        .maybeSingle();
-      if (existingLead?.id) {
-        leadId = existingLead.id;
-        break;
-      }
-    }
+    // 1. Zoek bestaande lead op e-mail. Bewust alleen op het eerste adres:
+    //    een tweede adres komt zelden voor en staat in de notitie.
+    const { data: existingLead } = await supabaseAdmin
+      .from("leads")
+      .select("id")
+      .eq("tenant", tenant)
+      .ilike("email", email)
+      .limit(1)
+      .maybeSingle();
+
+    let leadId = existingLead?.id;
 
     // 2. Maak nieuwe lead als niet gevonden
     if (!leadId) {

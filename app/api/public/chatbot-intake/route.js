@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
+import { parseEmailList, logRejectedIntake } from "@/lib/public-intake";
 
 export const dynamic = "force-dynamic";
 
@@ -101,9 +102,10 @@ const TRANSLATIONS = {
 };
 
 // Bouwt een beknopte "message" samenvatting voor in de inbox-lijst
-function buildMessageSummary({ company, situatie, opmerkingen }) {
+function buildMessageSummary({ company, situatie, opmerkingen, extraEmails }) {
   const lines = ["[Chatbot adviesgesprek]"];
   if (company) lines.push(`Bedrijf: ${company}`);
+  if (extraEmails?.length) lines.push(`Extra e-mailadressen: ${extraEmails.join(", ")}`);
   if (situatie) {
     const sitParts = [];
     if (situatie.branche) sitParts.push(situatie.branche);
@@ -182,32 +184,49 @@ export async function POST(request) {
       lead_type: "chatbot",
     };
 
-    if (!tenant || !TENANT_CONFIG[tenant]) {
-      return Response.json({ error: "Ongeldige tenant" }, { status: 400, headers });
-    }
-    const originError = validateOriginTenant(origin, tenant);
-    if (originError) {
-      return Response.json({ error: originError }, { status: 403, headers });
-    }
-
-    const config = TENANT_CONFIG[tenant];
     const naam = (klant?.naam || "").trim();
     const emailRaw = (klant?.email || "").trim();
     const telefoon = (klant?.telefoon || "").trim();
     const bedrijf = (klant?.bedrijf || "").trim();
 
+    // Elke afwijzing vastleggen, zodat een mislukte intake niet meer stil
+    // verdwijnt. Alleen bij aanvragen die op een echte bezoeker lijken —
+    // anders vult elke bot die het endpoint probeert de log.
+    const looksHuman = Boolean(naam || emailRaw);
+    const reject = async (reason, status) => {
+      if (looksHuman) {
+        await logRejectedIntake({
+          tenant,
+          kind: "Chatbot-intake",
+          reason,
+          email: emailRaw,
+          name: bedrijf || naam,
+          sourceUrl: source_url,
+        });
+      }
+      return Response.json({ error: reason }, { status, headers });
+    };
+
+    if (!tenant || !TENANT_CONFIG[tenant]) {
+      return reject("Ongeldige tenant", 400);
+    }
+    const originError = validateOriginTenant(origin, tenant);
+    if (originError) {
+      return reject(originError, 403);
+    }
+
+    const config = TENANT_CONFIG[tenant];
+
     if (!naam || !emailRaw) {
-      return Response.json(
-        { error: "klant.naam en klant.email zijn verplicht" },
-        { status: 400, headers }
-      );
+      return reject("klant.naam en klant.email zijn verplicht", 400);
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
-      return Response.json({ error: "Ongeldig e-mailadres" }, { status: 400, headers });
+    // Klanten geven soms twee adressen op ("graag naar beide"). Het eerste
+    // geldige adres wordt het lead-adres, de rest bewaren we erbij.
+    const { primary: email, extra: extraEmails } = parseEmailList(emailRaw);
+    if (!email) {
+      return reject("Ongeldig e-mailadres", 400);
     }
-
-    const email = emailRaw.toLowerCase();
 
     // Rate limiting: max 5 submissions per e-mail per uur
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -219,10 +238,7 @@ export async function POST(request) {
       .gte("created_at", oneHourAgo);
 
     if (count >= 5) {
-      return Response.json(
-        { error: "Te veel aanvragen. Probeer het later opnieuw." },
-        { status: 429, headers }
-      );
+      return reject("Te veel aanvragen. Probeer het later opnieuw.", 429);
     }
 
     const lang = language || "nl";
@@ -235,9 +251,11 @@ export async function POST(request) {
       company: bedrijf,
       situatie,
       opmerkingen: situatie?.opmerkingen || null,
+      extraEmails,
     });
 
-    // 1. Zoek bestaande lead op e-mail
+    // 1. Zoek bestaande lead op e-mail. Bewust alleen op het eerste adres:
+    //    een tweede adres komt zelden voor en staat in de notitie.
     const { data: existingLead } = await supabaseAdmin
       .from("leads")
       .select("id")
@@ -267,13 +285,25 @@ export async function POST(request) {
       for (const [k, v] of Object.entries(tracking)) {
         if (v !== null) leadInsert[k] = v;
       }
-      const { data: newLead } = await supabaseAdmin
+      const { data: newLead, error: leadErr } = await supabaseAdmin
         .from("leads")
         .insert(leadInsert)
         .select("id")
         .single();
 
       leadId = newLead?.id;
+
+      if (leadErr) {
+        console.error("Chatbot intake: lead-insert mislukt:", leadErr);
+        await logRejectedIntake({
+          tenant,
+          kind: "Chatbot-intake",
+          reason: `Lead-insert mislukt: ${leadErr.message || leadErr.code || "onbekende fout"}`,
+          email,
+          name: bedrijf || fullName,
+          sourceUrl: source_url,
+        });
+      }
 
       if (leadId) {
         await supabaseAdmin.from("activities").insert({
@@ -317,13 +347,25 @@ export async function POST(request) {
       const transcriptPreview = transcript
         ? `\n\n---\n**Transcript** (volledig in inbox):\n${String(transcript).slice(0, 800)}${String(transcript).length > 800 ? "…" : ""}`
         : "";
-      await supabaseAdmin.from("notes").insert({
+      const { error: noteErr } = await supabaseAdmin.from("notes").insert({
         lead_id: leadId,
         content: `**Chatbot adviesgesprek**\n\n${messageSummary}${transcriptPreview}`,
         note_type: "formulier",
         tenant,
         created_by: "Chatbot",
       });
+
+      if (noteErr) {
+        console.error("Chatbot intake: notitie-insert mislukt:", noteErr);
+        await logRejectedIntake({
+          tenant,
+          kind: "Chatbot-intake",
+          reason: `Notitie-insert mislukt: ${noteErr.message || noteErr.code || "onbekende fout"}`,
+          email,
+          name: bedrijf || fullName,
+          sourceUrl: source_url,
+        });
+      }
 
       await supabaseAdmin.from("activities").insert({
         lead_id: leadId,
@@ -380,6 +422,10 @@ export async function POST(request) {
               <td style="padding:8px 0; color:#6b7280; vertical-align:top;">E-mail</td>
               <td style="padding:8px 0;"><a href="mailto:${email}" style="color:#d97706;">${email}</a></td>
             </tr>
+            ${extraEmails.length ? `<tr>
+              <td style="padding:8px 0; color:#6b7280; vertical-align:top;">Ook opgegeven</td>
+              <td style="padding:8px 0;">${extraEmails.map((e) => `<a href="mailto:${e}" style="color:#d97706;">${e}</a>`).join(", ")}</td>
+            </tr>` : ""}
             ${telefoon ? `<tr>
               <td style="padding:8px 0; color:#6b7280; vertical-align:top;">Telefoon</td>
               <td style="padding:8px 0;"><a href="tel:${telefoon}" style="color:#d97706;">${telefoon}</a></td>
@@ -420,6 +466,11 @@ export async function POST(request) {
     );
   } catch (err) {
     console.error("Chatbot intake error:", err);
+    await logRejectedIntake({
+      tenant: "onbekend",
+      kind: "Chatbot-intake",
+      reason: `Onverwachte fout: ${err?.message || err}`,
+    });
     return Response.json(
       { error: "Er ging iets mis" },
       { status: 500, headers: corsHeaders(origin) }

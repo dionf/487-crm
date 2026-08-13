@@ -25,7 +25,7 @@ export async function GET(request) {
   // Verify lead bestaat en hoort bij tenant
   const { data: lead, error: leadErr } = await supabase
     .from("leads")
-    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone, language")
     .eq("id", leadId)
     .single();
 
@@ -48,7 +48,7 @@ export async function GET(request) {
       .order("created_at", { ascending: false }),
     supabase
       .from("form_submissions")
-      .select("id, created_at, source, message, conversation_data, first_name, last_name")
+      .select("id, created_at, source, message, conversation_data, conversation_transcript, first_name, last_name")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: false }),
   ]);
@@ -92,6 +92,7 @@ export async function GET(request) {
       country: lead.delivery_country || lead.billing_country || "NL",
       email: lead.email,
       phone: lead.phone,
+      language: lead.language || "nl",
     },
     notes: notes.map((n) => ({
       id: n.id,
@@ -108,6 +109,8 @@ export async function GET(request) {
       message: s.message,
       message_preview: (s.message || "").slice(0, 200),
       has_structured_data: !!s.conversation_data,
+      has_transcript: !!s.conversation_transcript,
+      transcript_preview: (s.conversation_transcript || "").slice(0, 200),
       contact: [s.first_name, s.last_name].filter(Boolean).join(" "),
     })),
     last_quote_at: lastQuoteAt,

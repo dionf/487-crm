@@ -64,7 +64,12 @@ export async function POST(request, { params }) {
 
   const companyName = tenant === "hiphot" ? "HipHot B.V." : "48-7 AI Professionals";
   const companyShort = tenant === "hiphot" ? "HipHot" : "48-7 AI Professionals";
-  const companyClosing = tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
+  const companyClosing =
+    lang === "de"
+      ? tenant === "hiphot" ? "Mit sonnigen Grüßen," : "Mit freundlichen Grüßen,"
+      : lang === "en"
+        ? tenant === "hiphot" ? "With sunny regards," : "Kind regards,"
+        : tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
   const companyPhone = tenant === "hiphot" ? "+31 (0)85-505 56 64" : "+31 (0)85-06 01 487";
   const senderName = sender?.name?.trim();
   const senderPhone = sender?.phone?.trim();
@@ -127,6 +132,7 @@ Geef ALLEEN de e-mailtekst in HTML format terug (geen subject, geen uitleg, GEEN
       /<p[^>]*>\s*Met\s+(zonnige|vriendelijke|hartelijke)\s+groet[\s\S]*$/i,
       /<p[^>]*>\s*(Met\s+)?vriendelijke\s+groet[\s\S]*$/i,
       /<p[^>]*>\s*Kind\s+regards[\s\S]*$/i,
+      /<p[^>]*>\s*(Mit\s+)?(sonnigen|freundlichen)\s+Grüßen[\s\S]*$/i,
     ];
     for (const pat of strippablePatterns) {
       html = html.replace(pat, "");

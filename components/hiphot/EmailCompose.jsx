@@ -17,8 +17,13 @@ function replacePlaceholders(text, vars) {
     .replace(/\{\{handtekening\}\}/g, vars.handtekening || "");
 }
 
-function buildSignatureHtml(user, tenant) {
-  const closing = tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
+function buildSignatureHtml(user, tenant, language = "nl") {
+  const closing =
+    language === "de"
+      ? tenant === "hiphot" ? "Mit sonnigen Grüßen," : "Mit freundlichen Grüßen,"
+      : language === "en"
+        ? tenant === "hiphot" ? "With sunny regards," : "Kind regards,"
+        : tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
   const companyShort = tenant === "hiphot" ? "HipHot" : "48-7 AI Professionals";
   const companyPhone = tenant === "hiphot" ? "+31 (0)85-505 56 64" : "+31 (0)85-06 01 487";
   const userName = user?.name?.trim();
@@ -60,6 +65,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
   // Reminder
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderDays, setReminderDays] = useState(3);
+  const language = quoteData?.language || lead?.language || "nl";
 
   // Load templates + attachments on open
   useEffect(() => {
@@ -68,8 +74,9 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
     setCc("");
     setSubject("");
     const firstName = lead?.contact_first_name || lead?.contact_person?.split(" ")[0] || "";
-    const signature = buildSignatureHtml(user, tenant);
-    setBodyHtml(`<p>Hallo ${firstName},</p><p><br></p><p><br></p>${signature}`);
+    const signature = buildSignatureHtml(user, tenant, language);
+    const greeting = language === "en" ? "Hi" : "Hallo";
+    setBodyHtml(`<p>${greeting} ${firstName},</p><p><br></p><p><br></p>${signature}`);
     setError("");
     setSent(false);
     setSelectedTemplate("");
@@ -87,7 +94,9 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
       .then((d) => setStdAttachments(d.attachments || []))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultTo, user?.id, tenant, lead?.id]);
+  }, [open, defaultTo, user?.id, tenant, lead?.id, language]);
+
+  const languageTemplates = templates.filter((t) => (t.language || "nl") === language);
 
   // Build placeholder variables from lead + quote data
   const placeholderVars = {
@@ -98,16 +107,16 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
       ? `${typeof window !== "undefined" ? window.location.origin : "https://crm.48-7.nl"}/offerte/${quoteData.public_hash}`
       : "",
     bedrag: quoteData?.amount_excl_vat
-      ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(quoteData.amount_excl_vat)
+      ? new Intl.NumberFormat(language === "de" ? "de-DE" : language === "en" ? "en-GB" : "nl-NL", { style: "currency", currency: "EUR" }).format(quoteData.amount_excl_vat)
       : "",
     afzender: user?.name || "",
-    handtekening: buildSignatureHtml(user, tenant),
+    handtekening: buildSignatureHtml(user, tenant, language),
   };
 
   function handleTemplateSelect(templateId) {
     setSelectedTemplate(templateId);
     if (!templateId) return;
-    const tmpl = templates.find((t) => t.id === templateId);
+    const tmpl = languageTemplates.find((t) => t.id === templateId);
     if (!tmpl) return;
     setSubject(replacePlaceholders(tmpl.subject, placeholderVars));
     setBodyHtml(replacePlaceholders(tmpl.body_html, placeholderVars));
@@ -214,7 +223,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
             )}
 
             {/* Template selector */}
-            {templates.length > 0 && (
+            {languageTemplates.length > 0 && (
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Template</label>
                 <div className="relative mt-1">
@@ -224,7 +233,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber appearance-none bg-white pr-8"
                   >
                     <option value="">— Kies een template of gebruik AI —</option>
-                    {templates.map((t) => (
+                    {languageTemplates.map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>

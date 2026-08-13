@@ -34,3 +34,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code — lokale worktrees (honderden MB's) en settings met secrets
+.claude/worktrees/
+.claude/settings.local.json
+
+# lokale kopie van .mcp.json; bevat sleutels, hoort niet in git
+.mcp.json.disabled
+
+# data-exports met persoonsgegevens horen niet in de repo
+/*.csv

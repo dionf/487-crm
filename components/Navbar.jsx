@@ -20,6 +20,7 @@ import {
   FileText,
   Paperclip,
   Sparkles,
+  MessageSquareText,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -198,7 +199,10 @@ export default function Navbar() {
               ...baseNavItems,
               // HipHot-only voor iedereen (agents + admins)
               ...(tenant === "hiphot"
-                ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
+                ? [
+                    { href: "/hiphot/chats", label: "Chats", icon: MessageSquareText },
+                    { href: "/ai-regels", label: "AI-regels", icon: Sparkles },
+                  ]
                 : []),
               ...(isAdmin
                 ? [

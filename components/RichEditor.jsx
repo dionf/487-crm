@@ -73,7 +73,14 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = "
   // Sync external value changes (e.g. language switch)
   useEffect(() => {
     if (!editor) return;
-    if (showSource) return; // bron-modus: editor blijft uit sync staan tot we terug schakelen
+    if (showSource) {
+      // De textarea schrijft in bron-modus zelf naar value, dus die twee lopen
+      // alleen uiteen als er van buitenaf nieuwe inhoud is geladen (andere taal,
+      // gekozen template). Dan moet de buffer mee: anders schrijven we bij het
+      // terugschakelen de oude HTML over die nieuwe inhoud heen.
+      setSourceValue((current) => ((value || "") === current ? current : value || ""));
+      return;
+    }
     const current = editor.getHTML();
     const normalized = current === "<p></p>" ? "" : current;
     if (normalized !== (value || "")) {

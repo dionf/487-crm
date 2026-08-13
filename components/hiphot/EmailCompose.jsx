@@ -5,6 +5,7 @@ import { X, Sparkles, Send, Loader2, Paperclip, FileText, ChevronDown, Bell } fr
 import { apiFetch } from "@/lib/api";
 import RichEditor from "@/components/RichEditor";
 import { useOrg } from "@/lib/org-context";
+import { emailClosing, emailGreeting, emailNumberLocale } from "@/lib/email-closings";
 
 function replacePlaceholders(text, vars) {
   return text
@@ -18,12 +19,7 @@ function replacePlaceholders(text, vars) {
 }
 
 function buildSignatureHtml(user, tenant, language = "nl") {
-  const closing =
-    language === "de"
-      ? tenant === "hiphot" ? "Mit sonnigen Grüßen," : "Mit freundlichen Grüßen,"
-      : language === "en"
-        ? tenant === "hiphot" ? "With sunny regards," : "Kind regards,"
-        : tenant === "hiphot" ? "Met zonnige groet," : "Met vriendelijke groet,";
+  const closing = emailClosing(language, tenant);
   const companyShort = tenant === "hiphot" ? "HipHot" : "48-7 AI Professionals";
   const companyPhone = tenant === "hiphot" ? "+31 (0)85-505 56 64" : "+31 (0)85-06 01 487";
   const userName = user?.name?.trim();
@@ -75,8 +71,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
     setSubject("");
     const firstName = lead?.contact_first_name || lead?.contact_person?.split(" ")[0] || "";
     const signature = buildSignatureHtml(user, tenant, language);
-    const greeting = language === "en" ? "Hi" : "Hallo";
-    setBodyHtml(`<p>${greeting} ${firstName},</p><p><br></p><p><br></p>${signature}`);
+    setBodyHtml(`<p>${emailGreeting(language)} ${firstName},</p><p><br></p><p><br></p>${signature}`);
     setError("");
     setSent(false);
     setSelectedTemplate("");
@@ -107,7 +102,7 @@ export default function EmailCompose({ open, onClose, quoteId, defaultTo, onSent
       ? `${typeof window !== "undefined" ? window.location.origin : "https://crm.48-7.nl"}/offerte/${quoteData.public_hash}`
       : "",
     bedrag: quoteData?.amount_excl_vat
-      ? new Intl.NumberFormat(language === "de" ? "de-DE" : language === "en" ? "en-GB" : "nl-NL", { style: "currency", currency: "EUR" }).format(quoteData.amount_excl_vat)
+      ? new Intl.NumberFormat(emailNumberLocale(language), { style: "currency", currency: "EUR" }).format(quoteData.amount_excl_vat)
       : "",
     afzender: user?.name || "",
     handtekening: buildSignatureHtml(user, tenant, language),

@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // GET /api/auth/users?org_id=xxx — list users for an organization
 export async function GET(request) {
@@ -9,7 +9,7 @@ export async function GET(request) {
     return Response.json({ error: "org_id is required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .select("id, name, role")
     .eq("organization_id", orgId)

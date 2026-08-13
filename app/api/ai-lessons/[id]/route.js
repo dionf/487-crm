@@ -1,13 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 // PATCH /api/ai-lessons/[id] — wijzig lesson (alleen admin)
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
-  if (role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  if (session.role !== "admin") {
     return Response.json({ error: "Alleen admins kunnen regels bewerken" }, { status: 403 });
   }
 
@@ -30,7 +31,7 @@ export async function PATCH(request, { params }) {
   }
   update.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("ai_quote_lessons")
     .update(update)
     .eq("id", id)
@@ -44,15 +45,15 @@ export async function PATCH(request, { params }) {
 
 // DELETE /api/ai-lessons/[id] — alleen admin
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-  if (!tenant) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
-  if (role !== "admin") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  if (session.role !== "admin") {
     return Response.json({ error: "Alleen admins" }, { status: 403 });
   }
 
   const { id } = await params;
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("ai_quote_lessons")
     .delete()
     .eq("id", id)

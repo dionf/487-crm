@@ -1,11 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("activities")
     .select("*")
     .eq("tenant", tenant)

@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
+import { parseEmailList, logRejectedIntake } from "@/lib/public-intake";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,15 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3001",
 ];
 
+const ORIGIN_TENANTS = {
+  "https://hiphot.nl": new Set(["hiphot"]),
+  "https://www.hiphot.nl": new Set(["hiphot"]),
+  "https://48-7.nl": new Set(["48-7"]),
+  "https://www.48-7.nl": new Set(["48-7"]),
+  "http://localhost:3000": new Set(["hiphot", "48-7"]),
+  "http://localhost:3001": new Set(["hiphot", "48-7"]),
+};
+
 function corsHeaders(origin) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -20,6 +30,17 @@ function corsHeaders(origin) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
+}
+
+function validateOriginTenant(origin, tenant) {
+  const allowedTenants = ORIGIN_TENANTS[origin];
+  if (!allowedTenants) {
+    return "Ongeldige formulierherkomst";
+  }
+  if (!allowedTenants.has(tenant)) {
+    return "Formulierherkomst hoort niet bij deze tenant";
+  }
+  return null;
 }
 
 // Preflight
@@ -124,49 +145,66 @@ export async function POST(request) {
       lead_type: cleanTrack(lead_type) || "contact",
     };
 
+    // Elke afwijzing vastleggen, zodat een mislukte inzending niet stil
+    // verdwijnt. Alleen bij inzendingen die op een echte bezoeker lijken.
+    const looksHuman = Boolean(first_name || last_name || email);
+    const reject = async (reason, status) => {
+      if (looksHuman) {
+        await logRejectedIntake({
+          tenant,
+          kind: "Formulier-intake",
+          reason,
+          email,
+          name: `${first_name || ""} ${last_name || ""}`.trim(),
+          sourceUrl: source_url,
+        });
+      }
+      return Response.json({ error: reason }, { status, headers });
+    };
+
     // Validate required fields
     if (!tenant || !first_name || !last_name || !email || !message) {
-      return Response.json(
-        { error: "Alle verplichte velden moeten ingevuld zijn" },
-        { status: 400, headers }
-      );
+      return reject("Alle verplichte velden moeten ingevuld zijn", 400);
     }
 
     // Validate tenant
     const config = TENANT_CONFIG[tenant];
     if (!config) {
-      return Response.json({ error: "Ongeldige tenant" }, { status: 400, headers });
+      return reject("Ongeldige tenant", 400);
+    }
+    const originError = validateOriginTenant(origin, tenant);
+    if (originError) {
+      return reject(originError, 403);
     }
 
-    // Validate email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return Response.json({ error: "Ongeldig e-mailadres" }, { status: 400, headers });
+    // Meerdere adressen in één veld: eerste geldige wordt het lead-adres.
+    const { primary: cleanEmail, extra: extraEmails } = parseEmailList(email);
+    if (!cleanEmail) {
+      return reject("Ongeldig e-mailadres", 400);
     }
 
     // Rate limiting: max 5 submissions per email per hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
+    const { count } = await supabaseAdmin
       .from("form_submissions")
       .select("id", { count: "exact", head: true })
-      .eq("email", email.toLowerCase())
+      .eq("tenant", tenant)
+      .eq("email", cleanEmail)
       .gte("created_at", oneHourAgo);
 
     if (count >= 5) {
-      return Response.json(
-        { error: "Te veel aanvragen. Probeer het later opnieuw." },
-        { status: 429, headers }
-      );
+      return reject("Te veel aanvragen. Probeer het later opnieuw.", 429);
     }
 
     const lang = language || "nl";
     const fullName = `${first_name} ${last_name}`.trim();
 
     // 1. Check for existing lead by email
-    const { data: existingLead } = await supabase
+    const { data: existingLead } = await supabaseAdmin
       .from("leads")
       .select("id")
       .eq("tenant", tenant)
-      .ilike("email", email.trim())
+      .ilike("email", cleanEmail)
       .limit(1)
       .maybeSingle();
 
@@ -180,7 +218,7 @@ export async function POST(request) {
         contact_person: fullName,
         contact_first_name: first_name.trim(),
         contact_last_name: last_name.trim(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         phone: phone || null,
         source: "website",
         status: defaultStatus,
@@ -193,7 +231,7 @@ export async function POST(request) {
       for (const [k, v] of Object.entries(tracking)) {
         if (v !== null) leadInsert[k] = v;
       }
-      const { data: newLead } = await supabase
+      const { data: newLead, error: leadErr } = await supabaseAdmin
         .from("leads")
         .insert(leadInsert)
         .select("id")
@@ -201,9 +239,21 @@ export async function POST(request) {
 
       leadId = newLead?.id;
 
+      if (leadErr) {
+        console.error("Form submit: lead-insert mislukt:", leadErr);
+        await logRejectedIntake({
+          tenant,
+          kind: "Formulier-intake",
+          reason: `Lead-insert mislukt: ${leadErr.message || leadErr.code || "onbekende fout"}`,
+          email: cleanEmail,
+          name: fullName,
+          sourceUrl: source_url,
+        });
+      }
+
       // Log lead creation
       if (leadId) {
-        await supabase.from("activities").insert({
+        await supabaseAdmin.from("activities").insert({
           lead_id: leadId,
           activity_type: "lead_created",
           description: `Lead aangemaakt via contactformulier: ${fullName}`,
@@ -214,13 +264,13 @@ export async function POST(request) {
     }
 
     // 3. Insert form submission (incl. tracking-attributie van dit touchpoint)
-    const { data: submission } = await supabase
+    const { data: submission } = await supabaseAdmin
       .from("form_submissions")
       .insert({
         tenant,
         first_name: first_name.trim(),
         last_name: last_name.trim(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         phone: phone || null,
         message: message.trim(),
         language: lang,
@@ -234,15 +284,27 @@ export async function POST(request) {
 
     // 4. Create note on lead
     if (leadId) {
-      await supabase.from("notes").insert({
+      const { error: noteErr } = await supabaseAdmin.from("notes").insert({
         lead_id: leadId,
-        content: `**Contactformulier**\n\n${message.trim()}\n\n---\n${fullName} — ${email}${phone ? ` — ${phone}` : ""}`,
+        content: `**Contactformulier**\n\n${message.trim()}\n\n---\n${fullName} — ${cleanEmail}${extraEmails.length ? ` (ook: ${extraEmails.join(", ")})` : ""}${phone ? ` — ${phone}` : ""}`,
         note_type: "formulier",
         tenant,
         created_by: "Contactformulier",
       });
 
-      await supabase.from("activities").insert({
+      if (noteErr) {
+        console.error("Form submit: notitie-insert mislukt:", noteErr);
+        await logRejectedIntake({
+          tenant,
+          kind: "Formulier-intake",
+          reason: `Notitie-insert mislukt: ${noteErr.message || noteErr.code || "onbekende fout"}`,
+          email: cleanEmail,
+          name: fullName,
+          sourceUrl: source_url,
+        });
+      }
+
+      await supabaseAdmin.from("activities").insert({
         lead_id: leadId,
         activity_type: "form_submission",
         description: `Contactformulier ingevuld door ${fullName}`,
@@ -259,7 +321,7 @@ export async function POST(request) {
     try {
       await resend.emails.send({
         from: `${config.fromName} <${config.fromEmail}>`,
-        to: [email.trim().toLowerCase()],
+        to: [cleanEmail],
         subject: t.confirmSubject,
         html: wrapEmailHtml(t.confirmBody(first_name.trim(), tenant), { tenant }),
       });
@@ -285,8 +347,12 @@ export async function POST(request) {
             </tr>
             <tr>
               <td style="padding:8px 0; color:#6b7280; vertical-align:top;">E-mail</td>
-              <td style="padding:8px 0;"><a href="mailto:${email}" style="color:#d97706;">${email}</a></td>
+              <td style="padding:8px 0;"><a href="mailto:${cleanEmail}" style="color:#d97706;">${cleanEmail}</a></td>
             </tr>
+            ${extraEmails.length ? `<tr>
+              <td style="padding:8px 0; color:#6b7280; vertical-align:top;">Ook opgegeven</td>
+              <td style="padding:8px 0;">${extraEmails.map((e) => `<a href="mailto:${e}" style="color:#d97706;">${e}</a>`).join(", ")}</td>
+            </tr>` : ""}
             ${phone ? `<tr>
               <td style="padding:8px 0; color:#6b7280; vertical-align:top;">Telefoon</td>
               <td style="padding:8px 0;"><a href="tel:${phone}" style="color:#d97706;">${phone}</a></td>
@@ -317,6 +383,11 @@ export async function POST(request) {
     return Response.json({ success: true }, { headers });
   } catch (err) {
     console.error("Form submission error:", err);
+    await logRejectedIntake({
+      tenant: "onbekend",
+      kind: "Formulier-intake",
+      reason: `Onverwachte fout: ${err?.message || err}`,
+    });
     return Response.json(
       { error: "Er ging iets mis" },
       { status: 500, headers: corsHeaders(origin) }

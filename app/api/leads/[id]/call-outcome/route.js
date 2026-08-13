@@ -1,8 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // POST /api/leads/:id/call-outcome — register a call outcome
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const { outcome, note, user_id, user_name, follow_up_user_id, follow_up_user_name } = body;
 
@@ -26,7 +29,7 @@ export async function POST(request, { params }) {
   const leadId = (await params).id;
 
   // Verify lead belongs to tenant
-  const { data: lead } = await supabase
+  const { data: lead } = await supabaseAdmin
     .from("leads").select("tenant").eq("id", leadId).single();
   if (!lead || lead.tenant !== tenant) {
     return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
@@ -52,7 +55,7 @@ export async function POST(request, { params }) {
     leadUpdate.assigned_to = follow_up_user_id || null;
   }
 
-  await supabase.from("leads").update(leadUpdate).eq("id", leadId);
+  await supabaseAdmin.from("leads").update(leadUpdate).eq("id", leadId).eq("tenant", tenant);
 
   // Add note
   const outcomeLabels = {
@@ -69,7 +72,7 @@ export async function POST(request, { params }) {
   }
   if (note) noteContent += `\n\n${note}`;
 
-  await supabase.from("notes").insert({
+  await supabaseAdmin.from("notes").insert({
     lead_id: leadId,
     content: noteContent,
     note_type: "gesprek",
@@ -79,7 +82,7 @@ export async function POST(request, { params }) {
 
   // Create follow-up tasks
   if (outcome === "terugbellen_5_dagen") {
-    await supabase.from("follow_up_tasks").insert({
+    await supabaseAdmin.from("follow_up_tasks").insert({
       lead_id: leadId,
       task_type: "check_in",
       description: "Terugbellen",
@@ -88,7 +91,7 @@ export async function POST(request, { params }) {
       tenant,
     });
   } else if (outcome === "geen_gehoor_terugbellen") {
-    await supabase.from("follow_up_tasks").insert({
+    await supabaseAdmin.from("follow_up_tasks").insert({
       lead_id: leadId,
       task_type: "check_in",
       description: "Terugbellen (geen gehoor vorige keer)",
@@ -97,7 +100,7 @@ export async function POST(request, { params }) {
       tenant,
     });
   } else if (outcome === "vraag_opvolgen_collega" && follow_up_user_id) {
-    const { error: taskErr } = await supabase.from("follow_up_tasks").insert({
+    const { error: taskErr } = await supabaseAdmin.from("follow_up_tasks").insert({
       lead_id: leadId,
       task_type: "internal_followup",
       description: `Lead opvolgen — doorgegeven door ${user_name || "collega"}`,
@@ -115,7 +118,7 @@ export async function POST(request, { params }) {
   }
 
   // Activity log
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id: leadId,
     activity_type: "call_outcome",
     description: `Bel-uitkomst: ${outcomeLabels[outcome]}`,

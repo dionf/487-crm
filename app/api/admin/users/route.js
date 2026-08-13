@@ -1,12 +1,15 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createHash } from "crypto";
 
 // GET /api/admin/users — list users for current tenant's org
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
 
   // Find org by slug
-  const { data: org } = await supabase
+  const { data: org } = await supabaseAdmin
     .from("organizations")
     .select("id")
     .eq("slug", tenant)
@@ -14,7 +17,7 @@ export async function GET(request) {
 
   if (!org) return Response.json({ error: "Org niet gevonden" }, { status: 404 });
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .select("id, name, email, phone, role, is_active, created_at")
     .eq("organization_id", org.id)
@@ -27,8 +30,10 @@ export async function GET(request) {
 
 // POST /api/admin/users — create a new user
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const role = session.role;
 
   // Admin only
   if (role !== "admin") {
@@ -42,7 +47,7 @@ export async function POST(request) {
     return Response.json({ error: "name, email en pin zijn verplicht" }, { status: 400 });
   }
 
-  const { data: org } = await supabase
+  const { data: org } = await supabaseAdmin
     .from("organizations")
     .select("id")
     .eq("slug", tenant)
@@ -52,7 +57,7 @@ export async function POST(request) {
 
   const pinHash = createHash("sha256").update(pin).digest("hex");
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .insert({
       organization_id: org.id,

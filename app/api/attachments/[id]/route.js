@@ -1,11 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   // Get attachment record and verify tenant via lead
-  const { data: attachment, error } = await supabase
+  const { data: attachment, error } = await supabaseAdmin
     .from("attachments")
     .select("*, leads!inner(tenant)")
     .eq("id", id)
@@ -16,7 +19,7 @@ export async function GET(request, { params }) {
   }
 
   // Verify file exists in storage
-  const { data: fileData, error: fileError } = await supabase.storage
+  const { data: fileData, error: fileError } = await supabaseAdmin.storage
     .from("attachments")
     .list(attachment.storage_path.split("/").slice(0, -1).join("/"), {
       search: attachment.storage_path.split("/").pop(),
@@ -30,7 +33,7 @@ export async function GET(request, { params }) {
   }
 
   // Generate signed URL (valid for 1 hour)
-  const { data: signedData, error: signError } = await supabase.storage
+  const { data: signedData, error: signError } = await supabaseAdmin.storage
     .from("attachments")
     .createSignedUrl(attachment.storage_path, 3600);
 
@@ -45,11 +48,13 @@ export async function GET(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   // Get attachment and verify tenant via lead
-  const { data: attachment } = await supabase
+  const { data: attachment } = await supabaseAdmin
     .from("attachments")
     .select("*, leads!inner(tenant)")
     .eq("id", id)
@@ -60,12 +65,12 @@ export async function DELETE(request, { params }) {
   }
 
   // Delete from storage
-  await supabase.storage
+  await supabaseAdmin.storage
     .from("attachments")
     .remove([attachment.storage_path]);
 
   // Delete record
-  const { error } = await supabase.from("attachments").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("attachments").delete().eq("id", id);
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });

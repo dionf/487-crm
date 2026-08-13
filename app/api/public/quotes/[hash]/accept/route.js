@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -38,7 +38,7 @@ export async function POST(request, { params }) {
   }
 
   // Find quote by hash (include lead + tenant info)
-  const { data: quote, error: findError } = await supabase
+  const { data: quote, error: findError } = await supabaseAdmin
     .from("quotes")
     .select("id, lead_id, quote_number, status, valid_until, accepted_at, amount_excl_vat, tenant, leads(id, company_name, contact_person, email, tenant)")
     .eq("public_hash", hash)
@@ -76,13 +76,14 @@ export async function POST(request, { params }) {
   }
 
   // Accept the quote
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from("quotes")
     .update({
       accepted_at: new Date().toISOString(),
       status: "geaccepteerd",
     })
-    .eq("id", quote.id);
+    .eq("id", quote.id)
+    .eq("tenant", quote.tenant);
 
   if (updateError) {
     return Response.json(
@@ -138,17 +139,18 @@ export async function POST(request, { params }) {
       }, {});
     }
 
-    await supabase
+    await supabaseAdmin
       .from("leads")
       .update(leadUpdate)
-      .eq("id", quote.lead_id);
+      .eq("id", quote.lead_id)
+      .eq("tenant", tenant);
 
     // Log activity
     const baseDescription = `Offerte ${quote.quote_number} geaccepteerd door klant via publieke link`;
     const description = customerInput
       ? `${baseDescription} — klant heeft NAW-gegevens bevestigd/aangevuld`
       : baseDescription;
-    await supabase.from("activities").insert({
+    await supabaseAdmin.from("activities").insert({
       lead_id: quote.lead_id,
       activity_type: "quote_accepted",
       description,

@@ -1,11 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const lead_id = searchParams.get("lead_id");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("notes")
     .select("*")
     .eq("tenant", tenant)
@@ -23,7 +26,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const body = await request.json();
   const { lead_id, content, note_type, created_by, due_date } = body;
 
@@ -34,7 +39,16 @@ export async function POST(request) {
     );
   }
 
-  const { data, error } = await supabase
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("id, tenant")
+    .eq("id", lead_id)
+    .single();
+  if (!lead || lead.tenant !== tenant) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("notes")
     .insert({
       lead_id,
@@ -52,7 +66,7 @@ export async function POST(request) {
   }
 
   // Log activity
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id,
     activity_type: "note_added",
     description: `Notitie toegevoegd (${note_type || "intern"})`,

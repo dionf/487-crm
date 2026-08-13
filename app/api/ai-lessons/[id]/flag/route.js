@@ -1,15 +1,17 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 // POST /api/ai-lessons/[id]/flag — elke user mag één flag zetten per lesson
 // Bij 2e unieke user-flag: lesson wordt automatisch gedeactiveerd (soft-rollback)
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
-  if (!tenant || !userId) {
+  const session = getVerifiedSession(request);
+  if (!session?.user_id) {
     return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   }
+  const tenant = session.tenant;
+  const userId = session.user_id;
 
   const { id } = await params;
 
@@ -21,7 +23,7 @@ export async function POST(request, { params }) {
   }
 
   // Verify lesson bestaat en hoort bij deze tenant
-  const { data: lesson } = await supabase
+  const { data: lesson } = await supabaseAdmin
     .from("ai_quote_lessons")
     .select("id, tenant, flag_count")
     .eq("id", id)
@@ -32,7 +34,7 @@ export async function POST(request, { params }) {
   }
 
   // Insert flag (PK enforced — dezelfde user kan niet 2x flaggen)
-  const { error: flagErr } = await supabase
+  const { error: flagErr } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .insert({
       lesson_id: id,
@@ -49,7 +51,7 @@ export async function POST(request, { params }) {
   }
 
   // Tel alle flags voor deze lesson
-  const { count } = await supabase
+  const { count } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .select("lesson_id", { count: "exact", head: true })
     .eq("lesson_id", id);
@@ -60,7 +62,7 @@ export async function POST(request, { params }) {
   const update = { flag_count: newFlagCount, updated_at: new Date().toISOString() };
   if (newFlagCount >= 2) update.is_active = false;
 
-  await supabase.from("ai_quote_lessons").update(update).eq("id", id);
+  await supabaseAdmin.from("ai_quote_lessons").update(update).eq("id", id).eq("tenant", tenant);
 
   return Response.json({
     success: true,
@@ -71,26 +73,37 @@ export async function POST(request, { params }) {
 
 // DELETE — verwijder je eigen flag (tel naar beneden)
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
-  if (!tenant || !userId) {
+  const session = getVerifiedSession(request);
+  if (!session?.user_id) {
     return Response.json({ error: "Niet ingelogd" }, { status: 401 });
   }
+  const tenant = session.tenant;
+  const userId = session.user_id;
 
   const { id } = await params;
 
-  await supabase
+  const { data: lesson } = await supabaseAdmin
+    .from("ai_quote_lessons")
+    .select("id, tenant")
+    .eq("id", id)
+    .single();
+
+  if (!lesson || lesson.tenant !== tenant) {
+    return Response.json({ error: "Regel niet gevonden" }, { status: 404 });
+  }
+
+  await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .delete()
     .eq("lesson_id", id)
     .eq("user_id", userId);
 
-  const { count } = await supabase
+  const { count } = await supabaseAdmin
     .from("ai_quote_lesson_flags")
     .select("lesson_id", { count: "exact", head: true })
     .eq("lesson_id", id);
 
-  await supabase
+  await supabaseAdmin
     .from("ai_quote_lessons")
     .update({ flag_count: count || 0, updated_at: new Date().toISOString() })
     .eq("id", id)

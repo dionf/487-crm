@@ -1,11 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createWooOrder, getWooOrderUrl } from "@/lib/woocommerce";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "";
   const { id } = await params;
 
   if (tenant !== "hiphot") {
@@ -20,7 +23,7 @@ export async function POST(request, { params }) {
   }
 
   // Fetch quote + lead + line items
-  const { data: quote, error: quoteErr } = await supabase
+  const { data: quote, error: quoteErr } = await supabaseAdmin
     .from("quotes")
     .select("*, leads(*)")
     .eq("id", id)
@@ -42,7 +45,7 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Offerte moet status 'geaccepteerd' hebben om om te zetten" }, { status: 409 });
   }
 
-  const { data: lineItems, error: lineErr } = await supabase
+  const { data: lineItems, error: lineErr } = await supabaseAdmin
     .from("quote_line_items")
     .select("*")
     .eq("quote_id", id)
@@ -175,7 +178,7 @@ export async function POST(request, { params }) {
   const orderUrl = getWooOrderUrl(wcOrder.id);
 
   // Update quote met order-koppeling
-  await supabase
+  await supabaseAdmin
     .from("quotes")
     .update({
       external_order_id: String(wcOrder.id),
@@ -184,10 +187,11 @@ export async function POST(request, { params }) {
       external_order_created_at: new Date().toISOString(),
       order_customer_reference: ref || null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant", tenant);
 
   // Activity log
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id: quote.lead_id,
     activity_type: "quote_converted_to_order",
     description: `Offerte ${quote.quote_number} omgezet naar WC order #${wcOrder.id}`,

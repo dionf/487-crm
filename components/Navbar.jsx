@@ -21,6 +21,7 @@ import {
   Paperclip,
   Sparkles,
   MessageSquareText,
+  Megaphone,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -209,6 +210,7 @@ export default function Navbar() {
                     { href: "/admin/users", label: "Users", icon: Settings },
                     { href: "/admin/import", label: "Import", icon: Upload },
                     { href: "/admin/email-bijlagen", label: "Bijlagen", icon: Paperclip },
+                    { href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone },
                     ...(tenant === "hiphot"
                       ? [{ href: "/admin/hiphot-teksten", label: "Teksten", icon: FileText }]
                       : []),

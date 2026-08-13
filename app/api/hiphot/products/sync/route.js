@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const WC_URL = process.env.HIPHOT_WC_URL;
 const WC_KEY = process.env.HIPHOT_WC_KEY;
@@ -63,13 +64,12 @@ function getInkoopPrice(wcProduct) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
-  if (role !== "admin") {
+  if (session.role !== "admin") {
     return Response.json({ error: "Admin-only functie" }, { status: 403 });
   }
 
@@ -101,7 +101,7 @@ export async function POST(request) {
         synced_at: now,
       };
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("hiphot_articles")
         .upsert(article, { onConflict: "wc_product_id" });
 

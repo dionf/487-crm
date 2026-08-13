@@ -1,0 +1,26 @@
+name: Newsletter batch checks
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger CRM newsletter batch check
+        env:
+          CRM_NEWSLETTER_BATCHES_URL: ${{ vars.CRM_NEWSLETTER_BATCHES_URL || 'https://crm.48-7.nl/api/cron/newsletter-batches' }}
+          CRM_CRON_SECRET: ${{ secrets.CRM_CRON_SECRET || secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRM_CRON_SECRET" ]; then
+            echo "CRM_CRON_SECRET or CRON_SECRET is missing"
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Authorization: Bearer $CRM_CRON_SECRET" \
+            "$CRM_NEWSLETTER_BATCHES_URL"

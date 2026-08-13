@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -11,12 +12,14 @@ function getResendKey(tenant) {
 }
 
 export async function POST(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "CRM");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "CRM";
   const { id } = await params;
 
   // Get submission
-  const { data: submission } = await supabase
+  const { data: submission } = await supabaseAdmin
     .from("form_submissions")
     .select("*")
     .eq("id", id)
@@ -52,7 +55,7 @@ export async function POST(request, { params }) {
     }
 
     // Update submission status
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from("form_submissions")
       .update({
         status: "beantwoord",
@@ -61,7 +64,8 @@ export async function POST(request, { params }) {
         reply_body_html: body_html,
         replied_by: userName,
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("tenant", tenant);
 
     if (updateError) {
       console.error("Failed to update form_submission status:", updateError);
@@ -69,7 +73,7 @@ export async function POST(request, { params }) {
 
     // Log activity on linked lead
     if (submission.lead_id) {
-      await supabase.from("activities").insert({
+      await supabaseAdmin.from("activities").insert({
         lead_id: submission.lead_id,
         activity_type: "form_reply",
         description: `Antwoord op contactformulier verstuurd naar ${submission.email}`,

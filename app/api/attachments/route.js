@@ -1,12 +1,15 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const quote_id = searchParams.get("quote_id");
   const lead_id = searchParams.get("lead_id");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("attachments")
     .select("*, leads!inner(tenant)")
     .eq("leads.tenant", tenant)
@@ -25,8 +28,10 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const userName = decodeURIComponent(request.headers.get("x-auth-name") || "");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userName = session.name || "";
   const formData = await request.formData();
   const file = formData.get("file");
   const quote_id = formData.get("quote_id");
@@ -41,7 +46,7 @@ export async function POST(request) {
   }
 
   // Verify lead belongs to tenant
-  const { data: lead } = await supabase
+  const { data: lead } = await supabaseAdmin
     .from("leads").select("tenant").eq("id", lead_id).single();
   if (!lead || lead.tenant !== tenant) {
     return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
@@ -54,7 +59,7 @@ export async function POST(request) {
 
   // Upload to Supabase Storage
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
     .from("attachments")
     .upload(storagePath, buffer, {
       contentType: file.type,
@@ -66,7 +71,7 @@ export async function POST(request) {
   }
 
   // Save record in attachments table
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("attachments")
     .insert({
       quote_id: quote_id || null,
@@ -85,7 +90,7 @@ export async function POST(request) {
   }
 
   // Log activity
-  await supabase.from("activities").insert({
+  await supabaseAdmin.from("activities").insert({
     lead_id,
     activity_type: "attachment_added",
     description: `Bijlage toegevoegd: ${file.name}${quote_id ? " (bij offerte)" : ""}`,

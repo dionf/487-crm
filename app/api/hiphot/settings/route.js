@@ -1,12 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("hiphot_settings")
     .select("*")
     .eq("tenant", "hiphot")
@@ -20,13 +22,12 @@ export async function GET(request) {
 }
 
 export async function PATCH(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
-
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
-  if (role !== "admin") {
+  if (session.role !== "admin") {
     return Response.json({ error: "Admin-only functie" }, { status: 403 });
   }
 
@@ -42,7 +43,7 @@ export async function PATCH(request) {
     if (body[key] !== undefined) updates[key] = body[key];
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("hiphot_settings")
     .update(updates)
     .eq("tenant", "hiphot")

@@ -1,9 +1,11 @@
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
 
@@ -11,7 +13,7 @@ export async function POST(request) {
   const { lead, items, totals, branchText, language, remarksHtml, contactName, contactEmail, contactPhone } = body;
 
   // Pull intro/terms from settings for preview
-  const { data: settings } = await supabase
+  const { data: settings } = await supabaseAdmin
     .from("hiphot_settings")
     .select("*")
     .eq("tenant", "hiphot")

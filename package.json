@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "export:hubspot:hiphot": "node scripts/export-hubspot-hiphot-api.mjs",
+    "readiness:hubspot:hiphot": "node scripts/check-hubspot-hiphot-readiness.mjs",
+    "check:crm:security": "node scripts/check-crm-security-readiness.mjs",
+    "check:newsletter:dedup": "node scripts/check-newsletter-recipient-dedup.mjs",
+    "backfill:hiphot:last-order": "node scripts/backfill-hiphot-last-order-at.mjs",
+    "import:hubspot:hiphot": "node scripts/import-hubspot-hiphot.mjs",
+    "verify:hubspot:hiphot": "node scripts/verify-hubspot-hiphot-import.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",

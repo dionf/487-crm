@@ -1,18 +1,21 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const tenant = request.headers.get("x-auth-tenant");
-  const userId = request.headers.get("x-auth-user-id");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
+  const userId = session.user_id;
   const { id } = await params;
 
   // Fetch sender info for signature
   let sender = null;
   if (userId) {
-    const { data } = await supabase
+    const { data } = await supabaseAdmin
       .from("users")
       .select("name, email, phone")
       .eq("id", userId)
@@ -21,7 +24,7 @@ export async function POST(request, { params }) {
   }
 
   // Verify quote
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
     .select("*, leads(company_name, contact_person, contact_first_name, contact_last_name, contact_function, email, industry, language, tenant)")
     .eq("id", id)
@@ -32,7 +35,7 @@ export async function POST(request, { params }) {
   }
 
   // Get line items for context
-  const { data: lineItems } = await supabase
+  const { data: lineItems } = await supabaseAdmin
     .from("quote_line_items")
     .select("name, quantity, unit_price, line_total")
     .eq("quote_id", id)
@@ -44,10 +47,11 @@ export async function POST(request, { params }) {
   const quoteUrl = quote.public_hash ? `${baseUrl}/offerte/${quote.public_hash}` : null;
 
   // Get notes for context
-  const { data: notes } = await supabase
+  const { data: notes } = await supabaseAdmin
     .from("notes")
     .select("content, note_type")
     .eq("lead_id", quote.lead_id)
+    .eq("tenant", tenant)
     .in("note_type", ["gesprek", "intern"])
     .order("created_at", { ascending: false })
     .limit(5);

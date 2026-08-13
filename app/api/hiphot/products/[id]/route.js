@@ -1,9 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
+  }
+  if (session.role !== "admin") {
+    return Response.json({ error: "Admin-only functie" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -23,7 +28,7 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: "Geen velden om te updaten" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("hiphot_articles")
     .update(updates)
     .eq("id", id)

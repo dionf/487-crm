@@ -1,8 +1,10 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
 
@@ -10,7 +12,7 @@ export async function GET(request) {
   const branch_key = searchParams.get("branch_key");
   const language = searchParams.get("language");
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("quote_branch_texts")
     .select("*")
     .eq("tenant", "hiphot")
@@ -30,9 +32,13 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
+  }
+  if (session.role !== "admin") {
+    return Response.json({ error: "Admin-only functie" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -45,7 +51,7 @@ export async function POST(request) {
     );
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("quote_branch_texts")
     .insert({
       tenant: "hiphot",

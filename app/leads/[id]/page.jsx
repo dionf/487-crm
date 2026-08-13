@@ -17,6 +17,7 @@ import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, INDUSTRIES, SOURCES } from "@/lib/constants";
+import { marketingSegmentLabels, marketingStatusLabel } from "@/lib/hiphot-marketing";
 import { useOrg } from "@/lib/org-context";
 import {
   ArrowLeft,
@@ -595,6 +596,78 @@ export default function LeadDetailPage() {
               </div>
             )}
           </div>
+
+          {isHipHot && (
+            <div className="bg-white border border-gray-100 rounded-card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <Megaphone className="w-3.5 h-3.5 text-brand-orange" />
+                  Marketing bedrijf
+                </h3>
+                <button
+                  onClick={() => setShowLeadForm(true)}
+                  className="text-xs font-semibold text-brand-amber hover:underline"
+                >
+                  Bewerken
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-pill ${
+                    lead.marketing_consent
+                      ? "bg-green-50 text-green-700 border border-green-100"
+                      : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {lead.marketing_consent ? "Nieuwsbrief toegestaan" : "Geen nieuwsbrief"}
+                  </span>
+                  <span className="text-xs font-semibold px-2 py-1 rounded-pill bg-gray-100 text-gray-600">
+                    {marketingStatusLabel(lead.marketing_subscription_status)}
+                  </span>
+                  {lead.marketing_hard_bounced && (
+                    <span className="text-xs font-semibold px-2 py-1 rounded-pill bg-red-50 text-red-700 border border-red-100">
+                      Hard bounce
+                    </span>
+                  )}
+                </div>
+
+                {marketingSegmentLabels(lead.marketing_segments).length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {marketingSegmentLabels(lead.marketing_segments).map((label) => (
+                      <span key={label} className="text-xs font-semibold px-2 py-1 rounded-pill bg-amber-50 text-brand-orange border border-amber-100">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Geen marketingsegmenten</p>
+                )}
+
+                {(lead.marketing_consent_source || lead.marketing_consent_date || lead.marketing_unsubscribed_at) && (
+                  <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    {lead.marketing_consent_source && (
+                      <div>
+                        <dt className="font-semibold text-gray-400 uppercase">Bron</dt>
+                        <dd className="text-gray-600">{lead.marketing_consent_source}</dd>
+                      </div>
+                    )}
+                    {lead.marketing_consent_date && (
+                      <div>
+                        <dt className="font-semibold text-gray-400 uppercase">Toestemming</dt>
+                        <dd className="text-gray-600">{formatDate(lead.marketing_consent_date)}</dd>
+                      </div>
+                    )}
+                    {lead.marketing_unsubscribed_at && (
+                      <div>
+                        <dt className="font-semibold text-gray-400 uppercase">Uitgeschreven</dt>
+                        <dd className="text-gray-600">{formatDate(lead.marketing_unsubscribed_at)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Addresses & facturatie */}
           <div className="bg-white border border-gray-100 rounded-card p-5">

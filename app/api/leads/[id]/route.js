@@ -1,18 +1,131 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  HIPHOT_HUBSPOT_DEAL_ORIGINS,
+  HIPHOT_MARKETING_SEGMENTS,
+  HIPHOT_MARKETING_STATUSES,
+  HIPHOT_RELATION_TYPES,
+} from "@/lib/hiphot-marketing";
+
+const HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS = new Set(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((s) => s.id));
+const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
+const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
+const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
+const HIPHOT_MARKETING_FIELD_NAMES = [
+  "marketing_consent",
+  "marketing_segments",
+  "marketing_subscription_status",
+  "marketing_consent_source",
+  "marketing_consent_date",
+  "marketing_unsubscribed_at",
+  "marketing_hard_bounced",
+  "hubspot_company_id",
+  "hubspot_contact_ids",
+  "hubspot_subscription_status",
+  "hubspot_imported_at",
+  "relationship_type",
+  "hubspot_deal_origin",
+  "last_order_at",
+];
+const BLOCKED_LEAD_UPDATE_FIELDS = new Set([
+  "id",
+  "tenant",
+  "created_at",
+  "updated_at",
+  "quotes",
+  "notes",
+  "activities",
+  "form_submissions",
+]);
+
+function cleanDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function cleanHubSpotIds(value) {
+  return Array.isArray(value)
+    ? value.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+}
+
+function cleanMarketingPatch(body, tenant) {
+  const patch = {};
+
+  if ("marketing_segments" in body) {
+    patch.marketing_segments = Array.isArray(body.marketing_segments)
+      ? body.marketing_segments
+          .map((id) => String(id).trim())
+          .filter((id) => tenant === "hiphot" ? HIPHOT_MARKETING_SEGMENT_IDS.has(id) : Boolean(id))
+      : [];
+  }
+  if ("marketing_subscription_status" in body) {
+    patch.marketing_subscription_status = HIPHOT_MARKETING_STATUS_IDS.has(body.marketing_subscription_status)
+      ? body.marketing_subscription_status
+      : "unknown";
+  }
+  if ("marketing_consent" in body) patch.marketing_consent = body.marketing_consent === true;
+  if ("marketing_consent_source" in body) patch.marketing_consent_source = body.marketing_consent_source || null;
+  if ("marketing_consent_date" in body) patch.marketing_consent_date = cleanDate(body.marketing_consent_date);
+  if ("marketing_unsubscribed_at" in body) patch.marketing_unsubscribed_at = cleanDate(body.marketing_unsubscribed_at);
+  if ("marketing_hard_bounced" in body) patch.marketing_hard_bounced = body.marketing_hard_bounced === true;
+  if (tenant === "hiphot") {
+    if ("hubspot_company_id" in body) patch.hubspot_company_id = body.hubspot_company_id || null;
+    if ("hubspot_contact_ids" in body) patch.hubspot_contact_ids = cleanHubSpotIds(body.hubspot_contact_ids);
+    if ("hubspot_subscription_status" in body) patch.hubspot_subscription_status = body.hubspot_subscription_status || null;
+    if ("hubspot_imported_at" in body) patch.hubspot_imported_at = cleanDate(body.hubspot_imported_at);
+    if ("relationship_type" in body) {
+      patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
+        ? body.relationship_type
+        : null;
+    }
+    if ("hubspot_deal_origin" in body) {
+      patch.hubspot_deal_origin = HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
+        ? body.hubspot_deal_origin
+        : null;
+    }
+    if ("last_order_at" in body) patch.last_order_at = cleanDate(body.last_order_at);
+  }
+
+  const status = patch.marketing_subscription_status;
+  if (patch.marketing_consent === true && !status) {
+    patch.marketing_subscription_status = "subscribed";
+  }
+  if (patch.marketing_consent === false && status === "subscribed") {
+    patch.marketing_subscription_status = "non_marketing";
+  }
+  const hardBounced = patch.marketing_hard_bounced === true || status === "hard_bounce";
+  if (hardBounced) patch.marketing_hard_bounced = true;
+  if (hardBounced || status === "unsubscribed" || status === "non_marketing") {
+    patch.marketing_consent = false;
+  }
+
+  return patch;
+}
+
+function removeMarketingFields(body) {
+  for (const field of HIPHOT_MARKETING_FIELD_NAMES) {
+    delete body[field];
+  }
+}
 
 export async function GET(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
   const [leadRes, quotesRes, notesRes, activitiesRes, chatbotRes] = await Promise.all([
-    supabase.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
-    supabase.from("quotes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase.from("notes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase.from("activities").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-    supabase
+    supabaseAdmin.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
+    supabaseAdmin.from("quotes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin.from("notes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin.from("activities").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
+    supabaseAdmin
       .from("form_submissions")
       .select("id")
       .eq("lead_id", id)
+      .eq("tenant", tenant)
       .eq("source", "chatbot")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -33,12 +146,14 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
   const body = await request.json();
 
   // Verify lead belongs to this tenant
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from("leads").select("tenant").eq("id", id).single();
   if (!existing || existing.tenant !== tenant) {
     return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
@@ -65,7 +180,14 @@ export async function PATCH(request, { params }) {
     if (body.billing_country !== undefined) body.delivery_country = body.billing_country;
   }
 
-  const { data, error } = await supabase
+  const marketingPatch = cleanMarketingPatch(body, tenant);
+  removeMarketingFields(body);
+  Object.assign(body, marketingPatch);
+  for (const field of BLOCKED_LEAD_UPDATE_FIELDS) {
+    delete body[field];
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("leads")
     .update(body)
     .eq("id", id)
@@ -81,10 +203,12 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const tenant = request.headers.get("x-auth-tenant");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
   const { id } = await params;
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("leads")
     .delete()
     .eq("id", id)

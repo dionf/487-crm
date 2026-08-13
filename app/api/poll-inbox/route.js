@@ -1,6 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthCookie, verifyToken } from "@/lib/auth";
 
 // Protect endpoint: callable via cron secret OR by an authenticated user (manual trigger)
@@ -140,7 +140,7 @@ async function pollMailbox(mailbox) {
         try {
           // Dedup
           if (logEntry.message_id) {
-            const { data: existing } = await supabase
+            const { data: existing } = await supabaseAdmin
               .from("leads")
               .select("id")
               .eq("source_email_id", logEntry.message_id)
@@ -178,7 +178,7 @@ async function pollMailbox(mailbox) {
           let existingLead = null;
 
           for (const checkEmail of allEmails) {
-            const { data } = await supabase
+            const { data } = await supabaseAdmin
               .from("leads")
               .select("id, company_name, contact_person, email")
               .ilike("email", checkEmail)
@@ -192,18 +192,20 @@ async function pollMailbox(mailbox) {
           }
 
           if (existingLead) {
-            await supabase.from("notes").insert({
+            await supabaseAdmin.from("notes").insert({
               lead_id: existingLead.id,
               content: `Van: ${fromName} <${fromEmail}>\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,
               note_type: "email",
               created_by: "Inbox",
+              tenant: mailbox.tenant,
             });
 
-            await supabase.from("activities").insert({
+            await supabaseAdmin.from("activities").insert({
               lead_id: existingLead.id,
               activity_type: "email_received",
               description: `Email ontvangen: ${logEntry.email_subject}`,
               created_by: "Inbox",
+              tenant: mailbox.tenant,
             });
 
             // Inbox-entry zodat e-mail ook in /inbox verschijnt
@@ -243,7 +245,7 @@ async function pollMailbox(mailbox) {
           const inboxFirstName = nameParts[0] || "";
           const inboxLastName = nameParts.slice(1).join(" ") || "";
 
-          const { data: lead, error: leadError } = await supabase
+          const { data: lead, error: leadError } = await supabaseAdmin
             .from("leads")
             .insert({
               tenant: mailbox.tenant,
@@ -265,36 +267,40 @@ async function pollMailbox(mailbox) {
 
           if (leadError) throw new Error(`Lead insert failed: ${leadError.message}`);
 
-          await supabase.from("notes").insert({
+          await supabaseAdmin.from("notes").insert({
             lead_id: lead.id,
             content: `Van: ${fromName} <${fromEmail}>\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,
             note_type: "email",
             created_by: "Inbox",
+            tenant: mailbox.tenant,
           });
 
           if (leadData.summary) {
-            await supabase.from("notes").insert({
+            await supabaseAdmin.from("notes").insert({
               lead_id: lead.id,
               content: `AI Samenvatting: ${leadData.summary}`,
               note_type: "intern",
               created_by: "AI",
+              tenant: mailbox.tenant,
             });
           }
 
-          await supabase.from("notes").insert({
+          await supabaseAdmin.from("notes").insert({
             lead_id: lead.id,
             content: "Lead beoordelen en opvolgen",
             note_type: "todo",
             is_completed: false,
             created_by: "Inbox",
             due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            tenant: mailbox.tenant,
           });
 
-          await supabase.from("activities").insert({
+          await supabaseAdmin.from("activities").insert({
             lead_id: lead.id,
             activity_type: "lead_created",
             description: `Lead aangemaakt via email intake: ${leadData.company_name || "Onbekend"}`,
             created_by: "Inbox",
+            tenant: mailbox.tenant,
           });
 
           // Inbox-entry zodat e-mail in /inbox verschijnt (naast nieuwe lead in /leads)
@@ -326,7 +332,7 @@ async function pollMailbox(mailbox) {
             const emailBody = parsed?.text || parsed?.html || "(kon email niet parsen)";
             const fromEmail = parsed?.from?.value?.[0]?.address || logEntry.email_from;
 
-            const { data: fallbackLead } = await supabase
+            const { data: fallbackLead } = await supabaseAdmin
               .from("leads")
               .insert({
                 tenant: mailbox.tenant,
@@ -341,19 +347,21 @@ async function pollMailbox(mailbox) {
               .single();
 
             if (fallbackLead) {
-              await supabase.from("notes").insert({
+              await supabaseAdmin.from("notes").insert({
                 lead_id: fallbackLead.id,
                 content: `[FOUT BIJ VERWERKING]\n\nOriginele email:\nVan: ${fromEmail}\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,
                 note_type: "email",
                 created_by: "Inbox",
+                tenant: mailbox.tenant,
               });
 
-              await supabase.from("notes").insert({
+              await supabaseAdmin.from("notes").insert({
                 lead_id: fallbackLead.id,
                 content: "Lead beoordelen en opvolgen — email kon niet automatisch verwerkt worden",
                 note_type: "todo",
                 is_completed: false,
                 created_by: "Inbox",
+                tenant: mailbox.tenant,
               });
 
               await insertEmailSubmission({
@@ -416,7 +424,7 @@ async function insertEmailSubmission({ tenant, leadId, fromEmail, fromName, subj
     const last = nameParts.slice(1).join(" ") || "";
     const safeSubject = subject || "(geen onderwerp)";
     const safeBody = body || "(geen inhoud)";
-    await supabase.from("form_submissions").insert({
+    await supabaseAdmin.from("form_submissions").insert({
       tenant,
       first_name: first,
       last_name: last,
@@ -437,7 +445,7 @@ async function insertEmailSubmission({ tenant, leadId, fromEmail, fromName, subj
 
 async function insertLog(entry) {
   try {
-    await supabase.from("lead_inbox_log").insert(entry);
+    await supabaseAdmin.from("lead_inbox_log").insert(entry);
   } catch {
     // Silently fail — logging should never break the main flow
   }

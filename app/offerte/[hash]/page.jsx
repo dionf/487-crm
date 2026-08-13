@@ -1,25 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import AcceptQuoteButton from "@/components/AcceptQuoteButton";
 import QuotePrintButtons from "@/components/QuotePrintButtons";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
-
-let _supabaseClient = null;
-const supabase = new Proxy(
-  {},
-  {
-    get(_target, prop) {
-      if (!_supabaseClient) {
-        _supabaseClient = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        );
-      }
-      const value = _supabaseClient[prop];
-      return typeof value === "function" ? value.bind(_supabaseClient) : value;
-    },
-  }
-);
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const BRAND = {
   hiphot: { name: "HipHot", url: "https://hiphot.nl", email: "hallo@hiphot.nl" },
@@ -31,7 +14,7 @@ function brandFor(tenant) {
 }
 
 export async function generateMetadata({ params }) {
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
     .select("quote_number, leads(company_name, tenant)")
     .eq("public_hash", params.hash)
@@ -62,7 +45,7 @@ function formatDate(dateStr) {
 }
 
 export default async function PublicQuotePage({ params }) {
-  const { data: quote } = await supabase
+  const { data: quote } = await supabaseAdmin
     .from("quotes")
     .select("*, leads(company_name, contact_person, contact_first_name, contact_last_name, email, phone, tenant, industry, billing_street, billing_house_number, billing_postal_code, billing_city, billing_country, billing_email, customer_reference, delivery_same_as_billing, delivery_street, delivery_house_number, delivery_postal_code, delivery_city, delivery_country)")
     .eq("public_hash", params.hash)
@@ -79,7 +62,7 @@ export default async function PublicQuotePage({ params }) {
   // Auto-generate HipHot HTML on-the-fly when missing (handles oude quotes)
   if (isHipHot && !quote.html_content) {
     try {
-      const { data: lineItems } = await supabase
+      const { data: lineItems } = await supabaseAdmin
         .from("quote_line_items")
         .select("*")
         .eq("quote_id", quote.id)
@@ -87,7 +70,7 @@ export default async function PublicQuotePage({ params }) {
 
       const enriched = calculateLineTotals(lineItems || []);
 
-      const { data: settings } = await supabase
+      const { data: settings } = await supabaseAdmin
         .from("hiphot_settings")
         .select("*")
         .eq("tenant", "hiphot")
@@ -129,7 +112,7 @@ export default async function PublicQuotePage({ params }) {
   }
 
   // Get view count
-  const { count } = await supabase
+  const { count } = await supabaseAdmin
     .from("quote_views")
     .select("*", { count: "exact", head: true })
     .eq("quote_id", quote.id);

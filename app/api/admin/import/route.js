@@ -1,12 +1,14 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // POST /api/admin/import — bulk import leads
 export async function POST(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  const role = request.headers.get("x-auth-role");
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  const tenant = session.tenant;
 
   // Admin only
-  if (role !== "admin") {
+  if (session.role !== "admin") {
     return Response.json({ error: "Alleen admins kunnen importeren" }, { status: 403 });
   }
 
@@ -23,7 +25,7 @@ export async function POST(request) {
     try {
       // Check duplicate on company_name + email within same tenant
       if (lead.company_name && lead.email) {
-        const { data: existing } = await supabase
+        const { data: existing } = await supabaseAdmin
           .from("leads")
           .select("id")
           .eq("tenant", tenant)
@@ -48,7 +50,7 @@ export async function POST(request) {
         }
       }
 
-      const { error } = await supabase.from("leads").insert({
+      const { error } = await supabaseAdmin.from("leads").insert({
         company_name: lead.company_name || "Onbekend",
         contact_person: lead.contact_person || "-",
         email: lead.email || null,

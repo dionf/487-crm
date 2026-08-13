@@ -1,8 +1,10 @@
-import { supabase } from "@/lib/supabase";
+import { getVerifiedSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
-  const tenant = request.headers.get("x-auth-tenant");
-  if (tenant !== "hiphot") {
+  const session = getVerifiedSession(request);
+  if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+  if (session.tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });
   }
 
@@ -11,7 +13,7 @@ export async function GET(request) {
   const search = searchParams.get("search");
   const active_only = searchParams.get("active_only") !== "false";
 
-  let query = supabase
+  let query = supabaseAdmin
     .from("hiphot_articles")
     .select("*")
     .eq("tenant", "hiphot")

@@ -48,7 +48,7 @@ export async function POST(request) {
   // Fetch lead + gebruikersselectie
   const { data: lead } = await supabaseAdmin
     .from("leads")
-    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone")
+    .select("id, tenant, company_name, contact_person, contact_first_name, contact_last_name, industry, city, billing_city, billing_country, delivery_country, email, phone, language")
     .eq("id", resolvedLeadId)
     .single();
 
@@ -73,7 +73,7 @@ export async function POST(request) {
     subIds.length > 0
       ? supabaseAdmin
           .from("form_submissions")
-          .select("id, created_at, source, message, conversation_data, first_name, last_name")
+          .select("id, created_at, source, message, conversation_data, conversation_transcript, first_name, last_name")
           .in("id", subIds)
           .eq("lead_id", resolvedLeadId)
           .eq("tenant", tenant)
@@ -91,6 +91,7 @@ export async function POST(request) {
       city: lead.city || lead.billing_city,
       country: lead.delivery_country || lead.billing_country || "NL",
       phone: lead.phone,
+      language: lead.language || "nl",
     },
     notes: (notesRes.data || []).map((n) => ({
       id: n.id,
@@ -104,6 +105,7 @@ export async function POST(request) {
       source: s.source,
       message: s.message,
       conversation_data: s.conversation_data,
+      conversation_transcript: s.conversation_transcript,
       contact: [s.first_name, s.last_name].filter(Boolean).join(" "),
       created_at: s.created_at,
     })),
@@ -136,7 +138,8 @@ export async function POST(request) {
       id: s.id,
       source: s.source,
       created_at: s.created_at,
-      preview: String(s.message || "").slice(0, 80),
+      preview: String(s.conversation_transcript || s.message || "").slice(0, 80),
+      has_transcript: !!s.conversation_transcript,
     })),
     lead: leadContext.lead,
   };

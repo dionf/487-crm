@@ -25,8 +25,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# local env files (broad: catches .env.local, .env.local.bak, .env.prod.old, ...)
+.env*
+!.env.example
 
 # vercel
 .vercel

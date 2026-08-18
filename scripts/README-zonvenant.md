@@ -14,7 +14,7 @@ Dit fixt:
 ## Stap 2 — Dry-run de import
 
 ```bash
-cd /Users/dion/Documents/Dev/487crm
+cd /Users/dion/Code/487-crm
 node scripts/import-zonvenant.mjs --dry-run
 ```
 

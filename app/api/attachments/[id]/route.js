@@ -1,6 +1,36 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+// Supabase Storage refuses to serve html/svg with their stored content type —
+// it downgrades them to text/plain so uploaded markup cannot run on the
+// supabase.co origin. Opening such a file in a tab therefore shows source code.
+// Only hand out an inline URL for types the browser renders as-is; everything
+// else gets content-disposition: attachment so it downloads properly.
+const INLINE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+const EXT_TO_TYPE = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+function rendersInline(attachment) {
+  const type = attachment.file_type || attachment.mime_type;
+  if (type) return INLINE_TYPES.has(type.toLowerCase());
+  // Rows written by the MCP server leave file_type empty — fall back to the extension.
+  const ext = attachment.storage_path.split(".").pop()?.toLowerCase() || "";
+  return INLINE_TYPES.has(EXT_TO_TYPE[ext]);
+}
+
 export async function GET(request, { params }) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
@@ -33,9 +63,17 @@ export async function GET(request, { params }) {
   }
 
   // Generate signed URL (valid for 1 hour)
+  const fileName =
+    attachment.file_name ||
+    attachment.filename ||
+    attachment.storage_path.split("/").pop();
   const { data: signedData, error: signError } = await supabaseAdmin.storage
     .from("attachments")
-    .createSignedUrl(attachment.storage_path, 3600);
+    .createSignedUrl(
+      attachment.storage_path,
+      3600,
+      rendersInline(attachment) ? undefined : { download: fileName }
+    );
 
   if (signError) {
     return Response.json({ error: signError.message }, { status: 500 });

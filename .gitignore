@@ -25,8 +25,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# local env files (broad: catches .env.local, .env.local.bak, .env.prod.old, ...)
+.env*
+!.env.example
 
 # vercel
 .vercel
@@ -38,12 +39,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local MCP config (contains secrets)
+# .mcp.json.disabled is de lokale kopie ervan; het patroon hierboven dekt die
+# naam niet, dus die staat er apart bij.
+.mcp.json
+.mcp.json.disabled
+
 # claude code — lokale worktrees (honderden MB's) en settings met secrets
 .claude/worktrees/
 .claude/settings.local.json
-
-# lokale kopie van .mcp.json; bevat sleutels, hoort niet in git
-.mcp.json.disabled
 
 # data-exports met persoonsgegevens horen niet in de repo
 /*.csv

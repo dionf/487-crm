@@ -43,10 +43,8 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchExpanded, setSearchExpanded] = useState(false);
   const searchRef = useRef(null);
   const searchInputRef = useRef(null);
-  const searchQueryRef = useRef("");
 
   // Beheer dropdown state
   const [adminOpen, setAdminOpen] = useState(false);
@@ -101,16 +99,6 @@ export default function Navbar() {
     return () => window.removeEventListener("inbox-updated", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Houd de query bij in een ref voor de outside-click handler
-  useEffect(() => {
-    searchQueryRef.current = searchQuery;
-  }, [searchQuery]);
-
-  // Focus het zoekveld zodra het uitklapt
-  useEffect(() => {
-    if (searchExpanded) searchInputRef.current?.focus();
-  }, [searchExpanded]);
 
   // Sluit het beheermenu bij navigatie
   useEffect(() => {
@@ -177,7 +165,6 @@ export default function Navbar() {
     function handleClick(e) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
-        if (!searchQueryRef.current) setSearchExpanded(false);
       }
       if (adminRef.current && !adminRef.current.contains(e.target)) {
         setAdminOpen(false);
@@ -240,7 +227,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <div
               className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center text-white font-bold text-xs overflow-hidden"
               style={{ backgroundColor: accentColor }}
@@ -253,13 +240,14 @@ export default function Navbar() {
           </Link>
 
           {/* Nav links */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             {navItems.map((item) => {
               const isActive = isActiveHref(item.href);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  title={item.label}
                   className={cn(
                     "relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors",
                     isActive
@@ -268,7 +256,7 @@ export default function Navbar() {
                   )}
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" />
-                  {item.label}
+                  <span className="hidden xl:inline">{item.label}</span>
                   {item.href === "/inbox" && inboxCount > 0 && (
                     <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] rounded-full text-[9px] font-bold flex items-center justify-center text-white bg-blue-500">
                       {inboxCount}
@@ -292,7 +280,7 @@ export default function Navbar() {
                   title="Beheer"
                 >
                   <Settings className="w-4 h-4 flex-shrink-0" />
-                  Beheer
+                  <span className="hidden xl:inline">Beheer</span>
                   <ChevronDown
                     className={cn(
                       "w-3.5 h-3.5 flex-shrink-0 transition-transform",
@@ -329,52 +317,41 @@ export default function Navbar() {
           </div>
 
           {/* Search */}
-          <div ref={searchRef} className="relative flex-shrink-0">
-            {searchExpanded || searchQuery ? (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setSearchOpen(true);
+          <div ref={searchRef} className="relative flex-1 min-w-0 max-w-[16rem] mx-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearchQuery("");
+                    setSearchResults(null);
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder="Zoek leads, notities..."
+                className="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-gray-50 focus:bg-white transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchResults(null);
+                    searchInputRef.current?.focus();
                   }}
-                  onFocus={() => setSearchOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setSearchQuery("");
-                      setSearchResults(null);
-                      setSearchOpen(false);
-                      setSearchExpanded(false);
-                    }
-                  }}
-                  placeholder="Zoek leads, notities..."
-                  className="w-56 xl:w-64 pl-9 pr-8 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-gray-50 focus:bg-white transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSearchResults(null);
-                      searchInputRef.current?.focus();
-                    }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => setSearchExpanded(true)}
-                className="p-2 rounded-xl text-gray-400 hover:text-brand-dark-gray hover:bg-gray-100 transition-colors"
-                title="Zoek leads, notities..."
-              >
-                <Search className="w-4 h-4" />
-              </button>
-            )}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
             {/* Search results dropdown */}
             {searchOpen && searchResults && (
@@ -428,7 +405,7 @@ export default function Navbar() {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* Notifications bell */}
             <div ref={notifRef} className="relative">
               <button

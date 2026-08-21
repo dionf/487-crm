@@ -21,6 +21,7 @@ import {
   Paperclip,
   Sparkles,
   Megaphone,
+  ChevronDown,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -42,7 +43,14 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchQueryRef = useRef("");
+
+  // Beheer dropdown state
+  const [adminOpen, setAdminOpen] = useState(false);
+  const adminRef = useRef(null);
 
   // Todo panel state
   const [todosOpen, setTodosOpen] = useState(false);
@@ -93,6 +101,21 @@ export default function Navbar() {
     return () => window.removeEventListener("inbox-updated", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Houd de query bij in een ref voor de outside-click handler
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
+  // Focus het zoekveld zodra het uitklapt
+  useEffect(() => {
+    if (searchExpanded) searchInputRef.current?.focus();
+  }, [searchExpanded]);
+
+  // Sluit het beheermenu bij navigatie
+  useEffect(() => {
+    setAdminOpen(false);
+  }, [pathname]);
 
   // Search debounce
   useEffect(() => {
@@ -154,6 +177,10 @@ export default function Navbar() {
     function handleClick(e) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
+        if (!searchQueryRef.current) setSearchExpanded(false);
+      }
+      if (adminRef.current && !adminRef.current.contains(e.target)) {
+        setAdminOpen(false);
       }
       if (todoRef.current && !todoRef.current.contains(e.target)) {
         setTodosOpen(false);
@@ -171,6 +198,38 @@ export default function Navbar() {
   }
 
   const accentColor = organization?.theme?.accent || "#F5A623";
+  const logoText = organization?.theme?.logo_text || "CRM";
+  // Lange logo-tekst past niet in de 32px badge -> val terug op de initiaal
+  const logoBadge = logoText.length > 3 ? logoText.charAt(0).toUpperCase() : logoText;
+
+  // Hoofdnav: dagelijks werk. Nieuwsbrieven is een functie, geen beheerinstelling.
+  const navItems = [
+    ...baseNavItems,
+    ...(tenant === "hiphot"
+      ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
+      : []),
+    ...(isAdmin
+      ? [{ href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone }]
+      : []),
+  ];
+
+  // Beheer: instellingen en eenmalige acties, gebundeld in een dropdown
+  const adminItems = isAdmin
+    ? [
+        { href: "/admin/users", label: "Users", icon: Users },
+        { href: "/admin/import", label: "Import", icon: Upload },
+        { href: "/admin/email-bijlagen", label: "Bijlagen", icon: Paperclip },
+        ...(tenant === "hiphot"
+          ? [{ href: "/admin/hiphot-teksten", label: "Teksten", icon: FileText }]
+          : []),
+      ]
+    : [];
+
+  function isActiveHref(href) {
+    return pathname === href || (href !== "/" && pathname.startsWith(href));
+  }
+
+  const adminActive = adminItems.some((item) => isActiveHref(item.href));
 
   const hasOverdue = todos.some(
     (t) => t.due_date && new Date(t.due_date) < new Date()
@@ -183,51 +242,32 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+              className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center text-white font-bold text-xs overflow-hidden"
               style={{ backgroundColor: accentColor }}
             >
-              {organization?.theme?.logo_text || "CRM"}
+              {logoBadge}
             </div>
-            <span className="font-bold text-brand-black">
+            <span className="font-bold text-brand-black whitespace-nowrap">
               {organization?.display_name || "CRM"}
             </span>
           </Link>
 
           {/* Nav links */}
           <div className="flex items-center gap-1">
-            {[
-              ...baseNavItems,
-              // HipHot-only voor iedereen (agents + admins)
-              ...(tenant === "hiphot"
-                ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
-                : []),
-              ...(isAdmin
-                ? [
-                    { href: "/admin/users", label: "Users", icon: Settings },
-                    { href: "/admin/import", label: "Import", icon: Upload },
-                    { href: "/admin/email-bijlagen", label: "Bijlagen", icon: Paperclip },
-                    { href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone },
-                    ...(tenant === "hiphot"
-                      ? [{ href: "/admin/hiphot-teksten", label: "Teksten", icon: FileText }]
-                      : []),
-                  ]
-                : []),
-            ].map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href));
+            {navItems.map((item) => {
+              const isActive = isActiveHref(item.href);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors",
+                    "relative flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors",
                     isActive
                       ? "bg-brand-amber/10 text-brand-orange"
                       : "text-brand-dark-gray hover:bg-gray-100"
                   )}
                 >
-                  <item.icon className="w-4 h-4" />
+                  <item.icon className="w-4 h-4 flex-shrink-0" />
                   {item.label}
                   {item.href === "/inbox" && inboxCount > 0 && (
                     <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] rounded-full text-[9px] font-bold flex items-center justify-center text-white bg-blue-500">
@@ -237,36 +277,108 @@ export default function Navbar() {
                 </Link>
               );
             })}
+
+            {/* Beheer dropdown (alleen admins) */}
+            {adminItems.length > 0 && (
+              <div ref={adminRef} className="relative">
+                <button
+                  onClick={() => setAdminOpen(!adminOpen)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors",
+                    adminActive || adminOpen
+                      ? "bg-brand-amber/10 text-brand-orange"
+                      : "text-brand-dark-gray hover:bg-gray-100"
+                  )}
+                  title="Beheer"
+                >
+                  <Settings className="w-4 h-4 flex-shrink-0" />
+                  Beheer
+                  <ChevronDown
+                    className={cn(
+                      "w-3.5 h-3.5 flex-shrink-0 transition-transform",
+                      adminOpen && "rotate-180"
+                    )}
+                  />
+                </button>
+
+                {adminOpen && (
+                  <div className="absolute left-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 z-50">
+                    <p className="px-3 py-1 text-[10px] font-bold uppercase text-gray-400 tracking-wide">
+                      Beheer
+                    </p>
+                    {adminItems.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setAdminOpen(false)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+                          isActiveHref(item.href)
+                            ? "text-brand-orange bg-brand-amber/10"
+                            : "text-brand-dark-gray hover:bg-gray-50"
+                        )}
+                      >
+                        <item.icon className="w-4 h-4 flex-shrink-0" />
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Search */}
-          <div ref={searchRef} className="relative">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setSearchOpen(true);
-                }}
-                onFocus={() => setSearchOpen(true)}
-                placeholder="Zoek leads, notities..."
-                className="w-64 pl-9 pr-8 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-gray-50 focus:bg-white transition-colors"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => { setSearchQuery(""); setSearchResults(null); }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+          <div ref={searchRef} className="relative flex-shrink-0">
+            {searchExpanded || searchQuery ? (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSearchOpen(true);
+                  }}
+                  onFocus={() => setSearchOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setSearchQuery("");
+                      setSearchResults(null);
+                      setSearchOpen(false);
+                      setSearchExpanded(false);
+                    }
+                  }}
+                  placeholder="Zoek leads, notities..."
+                  className="w-56 xl:w-64 pl-9 pr-8 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber bg-gray-50 focus:bg-white transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSearchResults(null);
+                      searchInputRef.current?.focus();
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setSearchExpanded(true)}
+                className="p-2 rounded-xl text-gray-400 hover:text-brand-dark-gray hover:bg-gray-100 transition-colors"
+                title="Zoek leads, notities..."
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Search results dropdown */}
             {searchOpen && searchResults && (
-              <div className="absolute top-full mt-2 w-80 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 max-h-96 overflow-y-auto">
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 max-h-96 overflow-y-auto">
                 {searchResults.leads?.length > 0 && (
                   <div>
                     <p className="px-3 py-1 text-[10px] font-bold uppercase text-gray-400 tracking-wide">Leads</p>
@@ -505,16 +617,12 @@ export default function Navbar() {
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-100">
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                style={{ backgroundColor: accentColor }}
-              >
-                {user?.name?.charAt(0) || "?"}
-              </div>
-              <span className="text-sm font-medium text-brand-dark-gray">
-                {user?.name?.split(" ")[0] || "User"}
-              </span>
+            <div
+              className="w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+              style={{ backgroundColor: accentColor }}
+              title={user?.name || "User"}
+            >
+              {user?.name?.charAt(0) || "?"}
             </div>
             <button
               onClick={handleLogout}

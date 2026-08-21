@@ -185,9 +185,6 @@ export default function Navbar() {
   }
 
   const accentColor = organization?.theme?.accent || "#F5A623";
-  const logoText = organization?.theme?.logo_text || "CRM";
-  // Lange logo-tekst past niet in de 32px badge -> val terug op de initiaal
-  const logoBadge = logoText.length > 3 ? logoText.charAt(0).toUpperCase() : logoText;
 
   // Hoofdnav: dagelijks werk. Nieuwsbrieven is een functie, geen beheerinstelling.
   const navItems = [
@@ -227,13 +224,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-            <div
-              className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center text-white font-bold text-xs overflow-hidden"
-              style={{ backgroundColor: accentColor }}
-            >
-              {logoBadge}
-            </div>
+          <Link href="/" className="flex items-center flex-shrink-0">
             <span className="font-bold text-brand-black whitespace-nowrap">
               {organization?.display_name || "CRM"}
             </span>

@@ -1,9 +1,20 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function POST(request) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Roept de Claude API aan per aanvraag; een lus hierop kost direct geld.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/quotes/generate",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const body = await request.json();
   const { lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by } = body;

@@ -1,4 +1,5 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
@@ -14,6 +15,17 @@ function getResendKey(tenant) {
 export async function POST(request, { params }) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Verstuurt e-mail namens het bedrijf. Ongelimiteerd is dat een mailbom-knop
+  // en een risico voor de afzenderreputatie.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/inbox/reply",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const userName = session.name || "CRM";
   const { id } = await params;

@@ -1,4 +1,5 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,17 @@ async function scrapeWebsite(url) {
 export async function POST(request, { params }) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // AI-bedrijfsanalyse: scrapet een website en roept de Claude API aan. Zonder
+  // limiet kan één sessie in een lus de rekening laten oplopen.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/leads/summary",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const { id } = await params;
 

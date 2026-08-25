@@ -1,4 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  enforceRateLimit,
+  getClientIp,
+  registerFailedAttempt,
+} from "@/lib/rate-limit";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -26,8 +31,41 @@ function cleanString(v) {
   return t.length > 0 ? t : null;
 }
 
+// Hashes komen uit randomBytes(16).toString("hex") — altijd 32 hex-tekens.
+const HASH_RE = /^[0-9a-f]{32}$/i;
+const SCOPE = "/api/public/quotes/accept";
+
+export const dynamic = "force-dynamic";
+
+// POST /api/public/quotes/<hash>/accept — klant accepteert zijn offerte.
+//
+// Onbeschermd publiek schrijfpad: elke aanroep deed een lookup en, bij een
+// treffer, een status-update plus een mail. Een bot die hashes afloopt kostte
+// dus queries en kon bij een treffer ongelimiteerd mails uitlokken. Vandaar een
+// volumelimiet per IP en een aparte teller op missers — een echte klant heeft
+// zijn hash uit de mail en mist niet.
 export async function POST(request, { params }) {
   const hash = (await params).hash;
+  const ip = getClientIp(request);
+
+  const gate = await enforceRateLimit({
+    request,
+    policy: "public-hash",
+    identifier: ip,
+    scope: SCOPE,
+  });
+  if (gate.response) return gate.response;
+
+  if (!HASH_RE.test(hash || "")) {
+    await registerFailedAttempt({
+      request,
+      policy: "public-hash-miss",
+      identifier: ip,
+      scope: SCOPE,
+      reason: "Offerte-accept met ongeldig hash-formaat",
+    });
+    return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
+  }
 
   // Body is optional — als de klant via de oude (body-loze) flow komt, behandelen we 'm als leeg.
   let body = {};
@@ -45,6 +83,13 @@ export async function POST(request, { params }) {
     .maybeSingle();
 
   if (!quote) {
+    await registerFailedAttempt({
+      request,
+      policy: "public-hash-miss",
+      identifier: ip,
+      scope: SCOPE,
+      reason: "Offerte-accept voor onbekende hash",
+    });
     return Response.json(
       { error: "Offerte niet gevonden" },
       { status: 404 }

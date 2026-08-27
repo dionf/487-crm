@@ -91,22 +91,30 @@ tellers, zodat één typefout niet meetelt richting de lockout van morgen.
 
 ## Uitrol
 
-1. Deploy de app.
-2. Draai `migrations/030_rate_limiting_and_abuse.sql` op het CRM Supabase-project.
-   De migratie is idempotent.
-3. Controleer:
+De migratie is puur additief: drie nieuwe tabellen en zes nieuwe functies, geen
+wijziging aan bestaande objecten. Hij kan dus vóór de deploy, en dat heeft de
+voorkeur — andersom draait de app een tijd met een RPC die nog niet bestaat.
+
+1. Draai `migrations/030_rate_limiting_and_abuse.sql` op het CRM
+   Supabase-project. Idempotent, dus opnieuw draaien kan geen kwaad.
+2. Controleer:
 
 ```bash
 npm run check:rate-limit
 ```
 
-De check moet `ok: true` teruggeven. Verwacht: 3 tabellen met RLS aan, 6
-`security definer` functies, en `public_execute_grants: 0`.
+   De check moet `ok: true` teruggeven. Verwacht: 3 tabellen met RLS aan, 6
+   `security definer` functies, en `public_execute_grants: 0`.
+3. Deploy de app.
 
-**Volgorde is belangrijk.** Zolang de migratie niet gedraaid is, faalt elke RPC
-en valt de app terug op de in-memory teller. Dat werkt, maar de bescherming
-tegen verspreide brute force is er dan niet — en dat is alleen zichtbaar in de
-Vercel-logs, niet in het gedrag van de app.
+> Stand op 2026-08-27: stap 1 en 2 zijn uitgevoerd op project
+> `olzyffwotjtyvupomoiz` (`ok: true`). De code staat nog op de branch, dus er
+> verwijst nog niets naar deze tabellen en ze blijven leeg tot de deploy.
+
+Zolang de migratie niet gedraaid is faalt elke RPC en valt de app terug op de
+in-memory teller. Dat werkt, maar de bescherming tegen verspreide brute force
+is er dan niet — en dat is alleen zichtbaar in de Vercel-logs, niet in het
+gedrag van de app.
 
 ## Optionele instelling
 

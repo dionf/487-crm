@@ -2,9 +2,11 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthCookie, verifyToken } from "@/lib/auth";
+import { verifyCronBearer } from "@/lib/rate-limit";
 
-// Protect endpoint: callable via cron secret OR by an authenticated user (manual trigger)
-const CRON_SECRET = process.env.CRON_SECRET;
+// Protect endpoint: callable via cron secret OR by an authenticated user (manual trigger).
+// Het cron-secret gaat via verifyCronBearer: constante-tijd vergelijking plus een
+// teller op misgokken.
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Allow up to 60s for IMAP polling
@@ -40,9 +42,12 @@ function getMailboxes() {
 
 export async function GET(request) {
   try {
-    // Auth check: accept cron bearer OR an authenticated user cookie
-    const authHeader = request.headers.get("authorization");
-    const isCronCall = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+    // Auth check: accept cron bearer OR an authenticated user cookie.
+    // Het secret wordt in constante tijd vergeleken en elke misser telt mee:
+    // dit endpoint opent IMAP-verbindingen, dus raden moet duur zijn.
+    const cron = await verifyCronBearer(request, "/api/poll-inbox");
+    if (cron.response) return cron.response;
+    const isCronCall = cron.valid;
     let callerTenant = null;
     if (!isCronCall) {
       const token = getAuthCookie(request);

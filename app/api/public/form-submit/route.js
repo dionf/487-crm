@@ -1,4 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  enforceRateLimit,
+  getClientIp,
+  recordAbuse,
+} from "@/lib/rate-limit";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 import { parseEmailList, logRejectedIntake } from "@/lib/public-intake";
@@ -125,6 +130,25 @@ export async function POST(request) {
       return Response.json({ success: true }, { headers });
     }
 
+    // Per-IP limiet naast de bestaande per-e-mailteller. Die telde alleen
+    // hetzelfde adres, dus een bot die per inzending een nieuw adres verzint
+    // liep er ongehinderd langs. Het IP is wat een spam-run wél deelt.
+    const intakeGate = await enforceRateLimit({
+      request,
+      policy: "public-intake-ip",
+      identifier: getClientIp(request),
+      scope: "/api/public/form-submit",
+      tenant: typeof tenant === "string" ? tenant : null,
+    });
+    if (intakeGate.response) {
+      // CORS-headers meegeven, anders ziet de widget alleen een netwerkfout in
+      // plaats van de 429 en valt hij nodeloos terug op de e-mailfallback.
+      for (const [key, value] of Object.entries(headers)) {
+        intakeGate.response.headers.set(key, value);
+      }
+      return intakeGate.response;
+    }
+
     // Trim/cap tracking-velden; lege strings → null zodat we lead-data niet
     // overschrijven met "" als een latere submit zonder klik-context binnenkomt.
     const cleanTrack = (v) => {
@@ -193,6 +217,14 @@ export async function POST(request) {
       .gte("created_at", oneHourAgo);
 
     if (count >= 5) {
+      await recordAbuse({
+        request,
+        scope: "/api/public/form-submit",
+        policy: "public-intake-email",
+        reason: `Formulier-intake: meer dan 5 inzendingen per uur voor hetzelfde e-mailadres`,
+        tenant,
+        identifier: cleanEmail,
+      });
       return reject("Te veel aanvragen. Probeer het later opnieuw.", 429);
     }
 

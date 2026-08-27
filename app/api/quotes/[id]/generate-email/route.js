@@ -1,4 +1,5 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -8,6 +9,16 @@ export async function POST(request, { params }) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Roept de Claude API aan per aanvraag; een lus hierop kost direct geld.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/quotes/generate-email",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const userId = session.user_id;
   const { id } = await params;

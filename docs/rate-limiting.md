@@ -66,13 +66,36 @@ In de middleware (laag 1), per IP:
 | `auth` | 40 / min op `/api/auth/*` |
 | `public` | 90 / min op publieke paden |
 | `probe` | 20 requests zonder geldige sessie / 10 min, daarna 30 min blok |
+| `webhook` | 6000 / min op `/api/newsletter/webhook`, geen strafblokkade |
+
+De ondertekende Resend-webhook heeft een eigen emmer en telt niet mee in
+`burst`/`sustained`. Zijn authenticatie is de Svix-handtekening, niet het IP, en
+één nieuwsbriefbatch (100 ontvangers) levert honderden events kort na elkaar —
+dat gaat legitiem over een emmer die op browserverkeer is gedimensioneerd. Een
+verloren bounce- of klachtevent betekent dat we opnieuw mailen naar een adres
+dat al hard gebounced is, dus daar is een 429 duurder dan het risico. Volledig
+vrijstellen doen we niet: een request met een ongeldige handtekening kost een
+query op `newsletter_settings` vóórdat hij wordt afgekeurd.
 
 Plus 900 requests per minuut per ingelogde gebruiker — een gestolen cookie die
 achter wisselende adressen wordt gebruikt loopt anders langs elke IP-teller heen.
 
 Blokkades zijn progressief: herhaling verdubbelt de duur (`strikes`), afgetopt op
-24 uur in de database en 6 uur in het geheugen. Een geslaagde login wist de
-tellers, zodat één typefout niet meetelt richting de lockout van morgen.
+24 uur in de database en 6 uur in het geheugen.
+
+**`limit` betekent twee dingen, afhankelijk van de aanroep.** Bij
+`enforceRateLimit` is het het aantal toegestane requests: bij 20 mag de
+twintigste er nog door en wordt de eenentwintigste geweigerd. Bij
+`registerFailedAttempt` is het het aantal mislukte pogingen dat een lockout
+zet: bij 5 is het account ná de vijfde misser op slot. Wie dat door elkaar
+haalt, geeft er precies één poging te veel weg.
+
+Een geslaagde login wist de faalteller van dat account, zodat één typefout niet
+meetelt richting de lockout van morgen. De IP-teller blijft dan bewust staan:
+die telt élke verificatiepoging en is het enige plafond op het totale volume
+vanaf één bron. Zou je hem óók wissen, dan krijgt iemand die één pincode kent
+een gratis reset — negentien gokken op andere accounts, dan inloggen op het
+eigen account, en de teller staat weer op nul.
 
 ## Wat er verder is gewijzigd
 

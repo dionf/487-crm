@@ -22,6 +22,14 @@ const PUBLIC_PATHS = [
 // zou anders een sessie kunnen suggereren aan routes die getVerifiedSession()
 // gebruiken; op publieke paden zette de middleware ze niet en werden ze ook niet
 // verwijderd. Altijd strippen, daarna pas zelf zetten.
+// Ondertekende webhooks. Hun authenticatie is de handtekening, niet het IP, en
+// de afzender is één bekende dienst die legitiem in bursts levert: een
+// nieuwsbriefbatch van 100 ontvangers (DEFAULT_BATCH_SIZE in lib/newsletters.js)
+// produceert honderden events kort na elkaar. Die door de generieke IP-emmers
+// duwen kost verloren bounce- en klachtevents — en dus mail naar adressen die
+// al hard gebounced zijn.
+const SIGNED_WEBHOOK_PATHS = ["/api/newsletter/webhook"];
+
 const SERVER_ONLY_HEADERS = [
   "x-auth-user-id",
   "x-auth-tenant",
@@ -49,19 +57,25 @@ const EDGE_LIMITS = {
   // hooguit een paar keer (verlopen sessie in een open tabblad); in bulk is het
   // per definitie iemand die endpoints aan het aflopen is.
   probe: { limit: 20, windowSeconds: 600, blockSeconds: 1800 },
+  // Ondertekende webhooks: ruim genoeg voor een campagne-burst, maar niet
+  // ongelimiteerd — een request met een ongeldige handtekening kost een query
+  // op newsletter_settings vóórdat hij wordt afgekeurd, dus helemaal vrijstellen
+  // maakt het endpoint een gratis databasepomp. blockSeconds 0: een 429 zolang
+  // de emmer vol is, nooit een strafperiode voor een legitieme afzender.
+  webhook: { limit: 6000, windowSeconds: 60, blockSeconds: 0 },
 };
 
 function isPublicPath(pathname) {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
+function isSignedWebhook(pathname) {
+  return SIGNED_WEBHOOK_PATHS.some((p) => pathname.startsWith(p));
+}
+
 function pathClass(pathname) {
   if (pathname.startsWith("/api/auth/")) return "auth";
-  if (
-    pathname.startsWith("/api/public/") ||
-    pathname.startsWith("/api/track/") ||
-    pathname.startsWith("/api/newsletter/webhook")
-  ) {
+  if (pathname.startsWith("/api/public/") || pathname.startsWith("/api/track/")) {
     return "public";
   }
   return null;
@@ -79,9 +93,14 @@ function limitResponse(retryAfter) {
  * overschreden is, anders null.
  */
 function checkEdgeLimits(ip, pathname) {
-  const buckets = ["burst", "sustained"];
-  const cls = pathClass(pathname);
-  if (cls) buckets.push(cls);
+  // Een ondertekende webhook telt alleen tegen zijn eigen emmer: de generieke
+  // burst/sustained-emmers zijn gedimensioneerd op browserverkeer en een
+  // campagne-burst gaat daar legitiem overheen.
+  const buckets = isSignedWebhook(pathname) ? ["webhook"] : ["burst", "sustained"];
+  if (!isSignedWebhook(pathname)) {
+    const cls = pathClass(pathname);
+    if (cls) buckets.push(cls);
+  }
 
   for (const name of buckets) {
     const key = `edge:${name}:${ip}`;
@@ -91,8 +110,11 @@ function checkEdgeLimits(ip, pathname) {
     const config = EDGE_LIMITS[name];
     const result = consumeMemoryLimit(key, config.limit, config.windowSeconds);
     if (!result.allowed) {
-      const block = blockMemory(key, config.blockSeconds, `edge-limiet ${name}`);
-      const retryAfter = Math.max(Math.ceil((block.expiresAt - Date.now()) / 1000), 1);
+      let retryAfter = result.retryAfter;
+      if (config.blockSeconds > 0) {
+        const block = blockMemory(key, config.blockSeconds, `edge-limiet ${name}`);
+        retryAfter = Math.max(Math.ceil((block.expiresAt - Date.now()) / 1000), 1);
+      }
       console.warn(`[rate-limit] edge-limiet ${name} geraakt voor ${ip} op ${pathname}`);
       return limitResponse(retryAfter);
     }

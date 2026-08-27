@@ -135,12 +135,15 @@ export async function POST(request) {
     return failedLogin("Onjuiste pincode");
   }
 
-  // Geslaagd: tellers wissen zodat een enkele typefout niet meetelt richting
-  // de lockout van morgen.
-  await Promise.all([
-    resetRateLimit("auth-pin-user", user_id),
-    resetRateLimit("auth-pin-ip", ip),
-  ]);
+  // Geslaagd: alleen de faalteller van dit account wissen, zodat een enkele
+  // typefout niet meetelt richting de lockout van morgen.
+  //
+  // De IP-teller blijft bewust staan. Die telt élke verificatiepoging, niet
+  // alleen de mislukte, en is daarmee het enige plafond op het totale volume
+  // vanaf één bron. Wie hem bij een geslaagde login zou wissen, geeft iemand
+  // die één pincode kent een gratis reset: negentien gokken op andere accounts,
+  // dan inloggen op het eigen account, en de teller staat weer op nul.
+  await resetRateLimit("auth-pin-user", user_id);
 
   // Create JWT payload
   const tokenPayload = {

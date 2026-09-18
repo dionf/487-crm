@@ -10,6 +10,7 @@ import {
   Settings,
   Upload,
   LogOut,
+  KeyRound,
   Search,
   ListTodo,
   Bell,
@@ -26,6 +27,7 @@ import {
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
+import ChangePinModal from "./ChangePinModal";
 import StatusBadge from "./StatusBadge";
 
 const baseNavItems = [
@@ -179,6 +181,8 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const [showChangePin, setShowChangePin] = useState(false);
 
   function handleLogout() {
     logout();
@@ -593,6 +597,13 @@ export default function Navbar() {
               {user?.name?.charAt(0) || "?"}
             </div>
             <button
+              onClick={() => setShowChangePin(true)}
+              className="p-2 rounded-xl text-gray-400 hover:text-brand-black hover:bg-gray-100 transition-colors"
+              title="Pincode wijzigen"
+            >
+              <KeyRound className="w-4 h-4" />
+            </button>
+            <button
               onClick={handleLogout}
               className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
               title="Uitloggen"
@@ -602,6 +613,7 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+      <ChangePinModal open={showChangePin} onClose={() => setShowChangePin(false)} />
     </nav>
   );
 }

@@ -17,7 +17,7 @@ export async function GET(request) {
   const [{ data: freshUser }, { data: org }] = await Promise.all([
     supabaseAdmin
       .from("users")
-      .select("id, name, email, role, phone")
+      .select("id, name, email, role, phone, must_change_pin")
       .eq("id", payload.user_id)
       .single(),
     supabaseAdmin
@@ -26,6 +26,13 @@ export async function GET(request) {
       .eq("slug", payload.tenant)
       .single(),
   ]);
+
+  // Startsessie waarvan de pinwijziging al elders is afgerond: de middleware
+  // blijft hem weigeren (claim in het JWT) en change-pin accepteert hem niet
+  // meer als verplichte wijziging. Opnieuw inloggen is de enige weg verder.
+  if (payload.pin_change_required === true && freshUser?.must_change_pin !== true) {
+    return Response.json({ session: null });
+  }
 
   return Response.json({
     session: {
@@ -38,6 +45,7 @@ export async function GET(request) {
       },
       organization: org || { slug: payload.tenant },
       tenant: payload.tenant,
+      must_change_pin: payload.pin_change_required === true,
       expires_at: new Date(payload.exp * 1000).toISOString(),
     },
   });

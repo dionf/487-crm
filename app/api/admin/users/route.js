@@ -66,6 +66,9 @@ export async function POST(request) {
       phone: body.phone || null,
       pin_hash: pinHash,
       role: body.role || "agent",
+      // De admin kent deze startpincode: bij de eerste login kiest de
+      // gebruiker verplicht een eigen pincode.
+      must_change_pin: true,
     })
     .select("id, name, email, phone, role, is_active, created_at")
     .single();

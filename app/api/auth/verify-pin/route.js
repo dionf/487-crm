@@ -97,7 +97,7 @@ export async function POST(request) {
   // Fetch user with org info
   const { data: user, error } = await supabaseAdmin
     .from("users")
-    .select("id, name, email, phone, role, organization_id, pin_hash, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
+    .select("id, name, email, phone, role, organization_id, pin_hash, must_change_pin, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
     .eq("id", user_id)
     .eq("is_active", true)
     .single();
@@ -155,6 +155,11 @@ export async function POST(request) {
     org_id: user.organizations.id,
   };
 
+  // Startpincode die een admin heeft ingesteld: de sessie krijgt een claim
+  // waarmee de middleware alles behalve /api/auth/ dichthoudt tot de gebruiker
+  // via /api/auth/change-pin een eigen pincode heeft gekozen.
+  if (user.must_change_pin) tokenPayload.pin_change_required = true;
+
   const token = await signToken(tokenPayload);
 
   // Build session data for client (UI state)
@@ -168,6 +173,7 @@ export async function POST(request) {
     },
     organization: user.organizations,
     tenant: user.organizations.slug,
+    must_change_pin: user.must_change_pin === true,
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   };
 

@@ -38,6 +38,7 @@ export async function GET(request) {
       },
       organization: org || { slug: payload.tenant },
       tenant: payload.tenant,
+      must_change_pin: payload.pin_change_required === true,
       expires_at: new Date(payload.exp * 1000).toISOString(),
     },
   });

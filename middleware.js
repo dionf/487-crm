@@ -188,6 +188,16 @@ export async function middleware(request) {
     return handleUnauthenticated(ip, pathname, "Sessie verlopen");
   }
 
+  // Verplichte pinwijziging: met een startpincode van de admin komt de sessie
+  // nergens in tot de gebruiker een eigen pincode heeft gekozen. De wijziging
+  // zelf loopt via /api/auth/change-pin, en /api/auth/ is hierboven al publiek.
+  if (session.pin_change_required === true) {
+    return NextResponse.json(
+      { error: "Wijzig eerst je pincode", code: "PIN_CHANGE_REQUIRED" },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   // Pass verified session data to API routes via request headers
   // These headers are trusted because middleware set them (client can't spoof them)
   requestHeaders.set("x-auth-user-id", session.user_id);

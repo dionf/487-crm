@@ -236,6 +236,11 @@ export default function UserManagementPage() {
                   className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
                   placeholder="4-6 cijfers"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  {editingId
+                    ? "Reset je de pincode van een collega, dan kiest die bij de volgende login zelf een nieuwe."
+                    : "Startpincode: de gebruiker kiest bij de eerste login zelf een nieuwe."}
+                </p>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase">Rol</label>

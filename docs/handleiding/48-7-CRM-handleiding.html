@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>48-7 CRM — Handleiding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --amber: #FAB868; --amber-dark: #E5A04D; --burnt: #D4731C;
+    --black: #0D0D0F; --dark: #292828; --gray: #6B7280;
+    --light: #F4F4F4; --line: rgba(0,0,0,0.08);
+    --amber-100: #FEF3C7; --amber-700: #B45309;
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: "Geist", "Inter", "Segoe UI", system-ui, sans-serif; color: var(--black);
+         font-size: 10.5pt; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .page { width: 210mm; height: 297mm; padding: 15mm 20mm 20mm; position: relative;
+          page-break-after: always; break-after: page; overflow: hidden; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  /* header/footer per page */
+  .ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7mm; }
+  .wordmark { font-weight: 700; font-size: 13pt; letter-spacing: -0.02em; }
+  .wordmark span { color: var(--burnt); }
+  .ph .crumb { font-size: 8pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gray); }
+  .pf { position: absolute; left: 20mm; right: 20mm; bottom: 10mm; display: flex; justify-content: space-between;
+        font-size: 8pt; color: var(--gray); border-top: 1px solid var(--line); padding-top: 3mm; }
+
+  h1 { font-size: 34pt; line-height: 1.05; letter-spacing: -0.03em; margin: 0 0 5mm; font-weight: 700; }
+  h2 { font-size: 20pt; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 2mm; font-weight: 700; }
+  h3 { font-size: 11.5pt; margin: 0 0 1.5mm; font-weight: 600; }
+  p { margin: 0 0 3mm; }
+  .lead { font-size: 11.5pt; color: var(--gray); margin-bottom: 5mm; max-width: 150mm; }
+  .eyebrow { font-size: 8pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--burnt); margin-bottom: 2.5mm; }
+  b, strong { font-weight: 600; }
+  .ui { font-weight: 600; background: var(--light); border-radius: 5px; padding: 0.3mm 1.6mm; font-size: 9.5pt; white-space: nowrap; }
+
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 5mm 6mm; }
+  .card.top { border-top: 4px solid var(--amber); }
+  .card.soft { background: var(--light); border-color: transparent; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; }
+  .mt { margin-top: 5mm; } .mts { margin-top: 3.5mm; }
+
+  .step-num { width: 10mm; height: 10mm; border-radius: 50%; background: var(--amber); color: var(--black);
+              font-weight: 700; font-size: 12pt; display: flex; align-items: center; justify-content: center; margin-bottom: 3mm; }
+  .mock { margin-top: 3mm; background: var(--light); border-radius: 12px; padding: 3.5mm; font-size: 8.5pt; }
+  .mock .t { font-weight: 600; font-size: 9.5pt; } .mock .s { color: var(--gray); margin-bottom: 2mm; }
+  .mock .row { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 1.6mm 2.5mm; margin-top: 1.5mm; }
+  .mock .row.sel { border-color: var(--amber); box-shadow: 0 0 0 1.5px var(--amber) inset; font-weight: 600; }
+  .mock .dots { letter-spacing: 3mm; font-size: 13pt; text-align: center; padding: 1mm 0; }
+  .mock .btn { background: var(--amber); border-radius: 999px; text-align: center; font-weight: 600; padding: 1.6mm; margin-top: 2mm; }
+
+  .pill { display: inline-block; border-radius: 999px; padding: 1mm 3.2mm; font-size: 8pt; font-weight: 700;
+          letter-spacing: 0.05em; text-transform: uppercase; background: var(--amber-100); color: var(--amber-700); }
+  .pill.g { background: #DCFCE7; color: #15803D; } .pill.r { background: #FEE2E2; color: #B91C1C; }
+  .pill.b { background: #DBEAFE; color: #1D4ED8; } .pill.n { background: var(--light); color: var(--dark); }
+
+  .pipeline { display: flex; flex-wrap: wrap; gap: 2mm; align-items: center; }
+  .pipeline .arrow { color: var(--gray); font-size: 9pt; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  th { text-align: left; font-size: 7.5pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray); font-weight: 700;
+       padding: 0 3mm 2mm 0; border-bottom: 1px solid var(--line); }
+  td { padding: 1.7mm 3mm 1.7mm 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+
+  ul { margin: 0; padding-left: 4.5mm; } li { margin-bottom: 1.4mm; } li::marker { color: var(--burnt); }
+  ol { margin: 0; padding-left: 5mm; } ol li { margin-bottom: 1.6mm; } ol li::marker { color: var(--burnt); font-weight: 700; }
+
+  .note { border-radius: 12px; background: #FFF8EC; border: 1px solid #FBDDAE; padding: 4mm 5mm; font-size: 9.5pt; }
+  .note b { color: var(--burnt); }
+
+  /* cover */
+  .cover { padding: 0; display: flex; flex-direction: column; }
+  .cover .top { flex: 1; padding: 24mm 22mm 0; }
+  .cover .wordmark { font-size: 18pt; }
+  .cover h1 { font-size: 50pt; margin-top: 46mm; }
+  .cover h1 em { font-style: normal; color: var(--burnt); }
+  .cover .sub { font-size: 14pt; color: var(--gray); max-width: 130mm; }
+  .cover .chips { margin-top: 10mm; display: flex; gap: 2.5mm; flex-wrap: wrap; }
+  .cover .bottom { background: var(--black); color: #fff; padding: 12mm 22mm; display: flex; justify-content: space-between; align-items: flex-end; }
+  .cover .bottom .big { font-size: 13pt; font-weight: 600; }
+  .cover .bottom .url { color: var(--amber); font-weight: 600; font-size: 13pt; }
+  .cover .bottom small { color: #9CA3AF; font-size: 8.5pt; display: block; margin-bottom: 1mm; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+  .bar { height: 3mm; background: var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- 1. COVER -->
+<section class="page cover">
+  <div class="top">
+    <div class="wordmark">48<span>-</span>7 <span style="color:var(--gray);font-weight:500">AI Professionals</span></div>
+    <h1>Aan de slag met<br>het <em>48-7 CRM</em></h1>
+    <p class="sub">Inloggen, leads volgen, notities en to-do's bijhouden en offertes maken — alles wat je nodig hebt op een paar pagina's.</p>
+    <div class="chips">
+      <span class="pill">Inloggen</span><span class="pill">Dashboard</span><span class="pill">Leads</span>
+      <span class="pill">Notities &amp; to-do's</span><span class="pill">Offertes</span><span class="pill">Inbox</span>
+    </div>
+  </div>
+  <div class="bar"></div>
+  <div class="bottom">
+    <div><small>Jouw login</small><span class="url">crm.48-7.nl/487</span></div>
+    <div style="text-align:right"><small>Versie</small><span class="big">September 2026</span></div>
+  </div>
+</section>
+
+<!-- 2. INLOGGEN -->
+<section class="page">
+  <div class="ph"><div class="wordmark">48<span>-</span>7</div><div class="crumb">01 · Inloggen</div></div>
+  <div class="eyebrow">Stap voor stap</div>
+  <h2>Inloggen in drie stappen</h2>
+  <p class="lead">Het CRM werkt met een persoonlijke pincode in plaats van een wachtwoord. Ga naar <b>crm.48-7.nl/487</b> — 48-7 is dan al voor je geselecteerd.</p>
+
+  <div class="grid3">
+    <div class="card top">
+      <div class="step-num">1</div>
+      <h3>Open de login</h3>
+      <p>Ga naar <b>crm.48-7.nl/487</b>. Zet de pagina gerust in je favorieten.</p>
+      <div class="mock"><div class="t">Welkom</div><div class="s">Kies je organisatie</div>
+        <div class="row sel">48-7 AI Professionals</div><div class="row">HipHot</div></div>
+    </div>
+    <div class="card top">
+      <div class="step-num">2</div>
+      <h3>Kies je naam</h3>
+      <p>Onder <span class="ui">Wie ben je?</span> klik je op je eigen naam.</p>
+      <div class="mock"><div class="t">Wie ben je?</div><div class="s">48-7 AI Professionals</div>
+        <div class="row">Dion Fokkema</div><div class="row">Jaap Boerma</div><div class="row sel">Jouw naam</div></div>
+    </div>
+    <div class="card top">
+      <div class="step-num">3</div>
+      <h3>Voer je pincode in</h3>
+      <p>Typ je pincode en klik op <span class="ui">Inloggen</span>. De eerste keer is dat de startpincode die je van Dion krijgt.</p>
+      <div class="mock"><div class="t">Hallo!</div><div class="s">Voer je pincode in</div>
+        <div class="row dots">••••••</div><div class="btn">Inloggen</div></div>
+    </div>
+  </div>
+
+  <div class="grid2 mt">
+    <div class="card soft">
+      <h3>Goed om te weten</h3>
+      <ul>
+        <li><b>Eerste keer inloggen:</b> het CRM vraagt je direct om een eigen pincode van 4 tot 6 cijfers te kiezen. De startpincode vervalt daarmee.</li>
+        <li>Je blijft <b>24 uur</b> ingelogd; daarna vraagt het CRM opnieuw om je pincode.</li>
+        <li>Uitloggen doe je rechtsboven via <span class="ui">Uitloggen</span>.</li>
+        <li>Na meerdere foute pogingen wordt inloggen tijdelijk geblokkeerd. Wacht even en probeer het dan opnieuw.</li>
+        <li>Het CRM werkt in elke moderne browser, ook op je telefoon.</li>
+      </ul>
+    </div>
+    <div class="card soft">
+      <h3>Pincode vergeten of wijzigen?</h3>
+      <p>Vraag een admin (Dion of Jaap) om een nieuwe startpincode. Bij de eerstvolgende login kies je daarna weer zelf je eigen pincode.</p>
+      <p style="margin:0"><b>Deel je pincode met niemand.</b> Alles wat je in het CRM doet, wordt onder jouw naam vastgelegd.</p>
+    </div>
+  </div>
+
+  <div class="pf"><span>48-7 CRM — Handleiding</span><span>2</span></div>
+</section>
+
+<!-- 3. NAVIGATIE & DASHBOARD -->
+<section class="page">
+  <div class="ph"><div class="wordmark">48<span>-</span>7</div><div class="crumb">02 · Navigatie &amp; dashboard</div></div>
+  <div class="eyebrow">Overzicht</div>
+  <h2>Je weg vinden</h2>
+  <p class="lead">Bovenin staat de menubalk. Daarmee bereik je alles; rechts vind je zoeken, meldingen en je to-do's.</p>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:34mm">Onderdeel</th><th>Wat je er doet</th></tr>
+      <tr><td>Inbox</td><td>Nieuwe aanvragen uit het websiteformulier en e-mail. Een blauw bolletje toont hoeveel er ongelezen zijn.</td></tr>
+      <tr><td>Dashboard</td><td>De pipeline als kanban-bord, met de belangrijkste cijfers erboven.</td></tr>
+      <tr><td>Leads</td><td>Alle leads in een lijst, met zoeken en filters op status, service en collega.</td></tr>
+      <tr><td>Zoekveld</td><td><span class="ui">Zoek leads, notities...</span> doorzoekt in één keer bedrijven, contactpersonen en notities.</td></tr>
+      <tr><td>Belletje</td><td>Je openstaande follow-up taken.</td></tr>
+      <tr><td>Open to-do's</td><td>Alle to-do's die nog niet zijn afgevinkt, met deadline.</td></tr>
+    </table>
+  </div>
+
+  <h3 class="mt">Het dashboard</h3>
+  <p>Bovenaan zie je vier tegels: <span class="ui">Pipeline waarde</span> <span class="ui">Gewonnen</span> <span class="ui">Win rate</span> <span class="ui">Actieve leads</span>. Daaronder staat het bord met per status een kolom. <b>Sleep een lead naar een andere kolom</b> om de status te wijzigen.</p>
+
+  <div class="card soft mts">
+    <h3>De pipeline van 48-7</h3>
+    <div class="pipeline" style="margin-top:2.5mm">
+      <span class="pill b">Nieuwe Leads</span><span class="arrow">→</span>
+      <span class="pill">Gekwalificeerd</span><span class="arrow">→</span>
+      <span class="pill">Inventarisatie</span><span class="arrow">→</span>
+      <span class="pill">Offerte Verstuurd</span><span class="arrow">→</span>
+      <span class="pill">Onderhandeling</span><span class="arrow">→</span>
+      <span class="pill g">Gewonnen</span>
+      <span class="pill r">Verloren</span>
+      <span class="pill n">Geen lead</span>
+    </div>
+    <p style="margin:3.5mm 0 0;font-size:9.5pt;color:var(--dark)">Bij <b>Gewonnen</b> of <b>Verloren</b> vraagt het CRM om een reden (bijvoorbeeld Prijs, Timing of Expertise). Vul die altijd in — zo leren we wat werkt. <b>Geen lead</b> gebruik je voor spam of aanvragen die niets met ons werk te maken hebben.</p>
+  </div>
+
+  <div class="note mt"><b>Tip:</b> de ververs-knop op het dashboard haalt meteen ook nieuwe e-mails op uit de intake-mailbox. Nieuwe leads verschijnen dan direct in de kolom Nieuwe Leads.</div>
+
+  <div class="pf"><span>48-7 CRM — Handleiding</span><span>3</span></div>
+</section>
+
+<!-- 4. LEADS -->
+<section class="page">
+  <div class="ph"><div class="wordmark">48<span>-</span>7</div><div class="crumb">03 · Leads</div></div>
+  <div class="eyebrow">Dagelijks werk</div>
+  <h2>Werken met leads</h2>
+  <p class="lead">Een lead is een bedrijf met een contactpersoon. Alles wat je met die klant bespreekt, leg je op de leadpagina vast.</p>
+
+  <div class="grid2">
+    <div class="card top">
+      <h3>Een lead aanmaken</h3>
+      <ol>
+        <li>Klik op <span class="ui">Nieuwe Lead</span> (dashboard of leadlijst).</li>
+        <li>Vul minimaal <b>Bedrijfsnaam</b>, <b>Voornaam</b>, <b>Achternaam</b> en <b>Email</b> in.</li>
+        <li>Kies waar mogelijk <b>Branche</b>, <b>Bron</b> en <b>Service type</b>, en vul de <b>Geschatte waarde</b> in — die telt mee in de pipeline waarde.</li>
+        <li>Opslaan. De lead start in <i>Nieuwe Leads</i>.</li>
+      </ol>
+    </div>
+    <div class="card top">
+      <h3>Leads komen ook vanzelf binnen</h3>
+      <ul>
+        <li><b>E-mail:</b> stuur of forward een aanvraag naar <b>leads@48-7.nl</b>. AI leest de mail uit en maakt er een lead van, of koppelt hem aan een bestaande lead.</li>
+        <li><b>Website:</b> formulieren van 48-7.nl komen in de <span class="ui">Inbox</span> terecht.</li>
+        <li>De mailbox wordt elke ochtend automatisch gecontroleerd; met <span class="ui">Check mail</span> in de leadlijst doe je dat direct.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="mt">De leadpagina</h3>
+  <p>Klik op een lead om hem te openen. Je vindt er deze blokken:</p>
+  <div class="card">
+    <table>
+      <tr><th style="width:42mm">Blok</th><th>Waarvoor</th></tr>
+      <tr><td>Contactgegevens</td><td>Bedrijf, contactpersoon, status en waarde. Aanpassen via <span class="ui">Bewerken</span>.</td></tr>
+      <tr><td>Contactpersonen</td><td>Extra contactpersonen binnen hetzelfde bedrijf.</td></tr>
+      <tr><td>Adressen &amp; facturatie</td><td>Bezoek- en factuuradres, factuur-e-mail en referentie.</td></tr>
+      <tr><td>Notities</td><td>Gespreksverslagen, e-mails, interne opmerkingen en to-do's.</td></tr>
+      <tr><td>AI Bedrijfsanalyse</td><td>Klik op <span class="ui">Analyseer</span> voor een AI-samenvatting van het bedrijf en de kansen.</td></tr>
+      <tr><td>Offertes</td><td>Offertes aanmaken, publiceren en mailen.</td></tr>
+      <tr><td>Bijlagen</td><td>Documenten bij deze lead uploaden en terugvinden.</td></tr>
+      <tr><td>Activiteiten</td><td>Tijdlijn van alles wat er met de lead is gebeurd, en door wie.</td></tr>
+    </table>
+  </div>
+
+
+  <div class="pf"><span>48-7 CRM — Handleiding</span><span>4</span></div>
+</section>
+
+<!-- 5. NOTITIES, OFFERTES, INBOX -->
+<section class="page">
+  <div class="ph"><div class="wordmark">48<span>-</span>7</div><div class="crumb">04 · Notities, offertes &amp; inbox</div></div>
+  <div class="eyebrow">Vastleggen en opvolgen</div>
+  <h2>Notities, to-do's en offertes</h2>
+  <p class="lead">Drie dingen die je het vaakst doet op een leadpagina.</p>
+
+  <div class="grid2">
+    <div class="card top">
+      <h3>Notities en to-do's</h3>
+      <p>Kies bij een nieuwe notitie het type:</p>
+      <p><span class="pill n">Gesprek</span> <span class="pill n">Email</span> <span class="pill n">Intern</span> <span class="pill n">Inventarisatie</span> <span class="pill">To-do</span></p>
+      <ul>
+        <li>Bij een <b>To-do</b> stel je een <b>Deadline</b> (datum en tijd) in.</li>
+        <li>Open to-do's zie je rechtsboven in de menubalk; vink ze af als ze klaar zijn.</li>
+        <li>Met de tabs <span class="ui">Alles</span> <span class="ui">Gesprekken</span> <span class="ui">To-do's</span> <span class="ui">Intern</span> filter je de notities.</li>
+      </ul>
+    </div>
+    <div class="card top">
+      <h3>Een offerte maken</h3>
+      <ol>
+        <li>Klik in het blok <b>Offertes</b> op het plusje → <span class="ui">Nieuwe Offerte</span>.</li>
+        <li>Vul <b>Bedrag excl. BTW</b>, <b>BTW %</b>, <b>Geldig tot</b> en een <b>Omschrijving</b> in en klik <span class="ui">Offerte aanmaken</span>. Het offertenummer volgt automatisch.</li>
+        <li>Met <span class="ui">Publiceer offerte</span> krijgt de offerte een eigen online pagina waar de klant hem kan bekijken en accepteren.</li>
+        <li>Met <span class="ui">Mailen</span> stuur je de offerte naar de klant.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="card soft mt">
+    <h3>Offertestatussen</h3>
+    <p style="margin-bottom:2.5mm"><span class="pill n">Concept</span> <span class="pill b">Verstuurd</span> <span class="pill g">Geaccepteerd</span> <span class="pill r">Afgewezen</span> <span class="pill">Verlopen</span></p>
+    <p style="margin:0;font-size:9.5pt;color:var(--dark)">Een verlopen of afgewezen offerte kun je met <span class="ui">Verlengen</span> 30 dagen langer geldig maken. Wil je een variant maken? Maak dan een kopie; die start als nieuw concept. Vergeet niet de lead naar <b>Offerte Verstuurd</b> te slepen.</p>
+  </div>
+
+  <h3 class="mt">De inbox</h3>
+  <p>In de <span class="ui">Inbox</span> staan binnengekomen aanvragen met de status <b>Nieuw</b>, <b>Gelezen</b>, <b>Beantwoord</b> of <b>Gearchiveerd</b>. Je kunt direct vanuit het CRM antwoorden; het antwoord wordt verstuurd vanaf hallo@48-7.nl en bij de aanvraag bewaard.</p>
+
+  <div class="note mts"><b>Let op:</b> de AI-analyse en de AI die e-mails uitleest zijn hulpmiddelen. Controleer de gegevens van een automatisch aangemaakte lead altijd even voordat je contact opneemt.</div>
+
+  <div class="pf"><span>48-7 CRM — Handleiding</span><span>5</span></div>
+</section>
+
+<!-- 6. WERKAFSPRAKEN & HULP -->
+<section class="page">
+  <div class="ph"><div class="wordmark">48<span>-</span>7</div><div class="crumb">05 · Werkafspraken &amp; hulp</div></div>
+  <div class="eyebrow">Zo houden we het bruikbaar</div>
+  <h2>Werkafspraken en hulp</h2>
+  <p class="lead">Een CRM is zo goed als wat wij erin zetten. Vijf gewoontes die het verschil maken.</p>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:9mm">#</th><th style="width:66mm">Gewoonte</th><th>Waarom</th></tr>
+      <tr><td style="color:var(--burnt)">1</td><td>Elk contact = een notitie</td><td style="font-weight:400">Collega's kunnen het gesprek overnemen en we weten wat er is toegezegd.</td></tr>
+      <tr><td style="color:var(--burnt)">2</td><td>Vervolgstap = een to-do met deadline</td><td style="font-weight:400">Niets blijft liggen; open to-do's staan altijd in beeld.</td></tr>
+      <tr><td style="color:var(--burnt)">3</td><td>Status klopt met de werkelijkheid</td><td style="font-weight:400">Het dashboard en de pipeline waarde zijn alleen dan betrouwbaar.</td></tr>
+      <tr><td style="color:var(--burnt)">4</td><td>Geschatte waarde invullen</td><td style="font-weight:400">Zo zien we waar de grootste kansen zitten.</td></tr>
+      <tr><td style="color:var(--burnt)">5</td><td>Reden bij Gewonnen / Verloren</td><td style="font-weight:400">Daarmee verbeteren we ons aanbod en onze aanpak.</td></tr>
+    </table>
+  </div>
+
+  <div class="grid2 mt">
+    <div class="card soft">
+      <h3>Wat kan alleen een admin?</h3>
+      <p>Onder <span class="ui">Beheer</span> in de menubalk:</p>
+      <ul>
+        <li><b>Users</b> — collega's toevoegen en pincodes instellen</li>
+        <li><b>Import</b> — leads importeren uit Excel of CSV</li>
+        <li><b>Bijlagen</b> — standaard e-mailbijlagen beheren</li>
+      </ul>
+      <p style="margin:3mm 0 0">Daarnaast <b>Nieuwsbrieven</b> en het toewijzen van leads aan collega's.</p>
+    </div>
+    <div class="card soft">
+      <h3>Veelgestelde vragen</h3>
+      <p><b>Ik zie mijn naam niet bij het inloggen.</b><br>Controleer of je 48-7 als organisatie hebt gekozen (gebruik crm.48-7.nl/487).</p>
+      <p><b>Mijn pincode werkt niet.</b><br>Wacht een paar minuten na meerdere pogingen, of vraag een admin om een nieuwe.</p>
+      <p style="margin:0"><b>Een lead staat er dubbel in.</b><br>Meld het bij Dion; verwijder niet zelf, zodat notities niet verloren gaan.</p>
+    </div>
+  </div>
+
+  <div class="card mt" style="background:var(--black);color:#fff;border:0;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div class="eyebrow" style="color:var(--amber)">Hulp nodig?</div>
+      <div style="font-size:14pt;font-weight:600">Dion Fokkema</div>
+      <div style="color:#D1D5DB">dion@48-7.nl</div>
+    </div>
+    <div style="background:var(--amber);color:var(--black);font-weight:600;border-radius:999px;padding:3mm 7mm">crm.48-7.nl/487</div>
+  </div>
+
+  <div class="pf"><span>48-7 CRM — Handleiding</span><span>6</span></div>
+</section>
+
+</body>
+</html>

@@ -25,8 +25,9 @@ export const dynamic = "force-dynamic";
 // Deze route verifieert de cookie daarom zelf.
 //
 // Twee situaties:
-//   - verplichte wijziging (claim pin_change_required in het JWT): de gebruiker
-//     heeft zojuist met de startpincode ingelogd, dus die vragen we niet nog eens
+//   - verplichte wijziging (claim pin_change_required in het JWT én de vlag
+//     must_change_pin nog aan in de database): de gebruiker heeft zojuist met de
+//     startpincode ingelogd, dus die vragen we niet nog eens
 //   - vrijwillige wijziging: huidige pincode verplicht, met dezelfde lockout als
 //     de login, zodat een gestolen sessie de pincode niet kan overnemen
 export async function POST(request) {
@@ -63,14 +64,18 @@ export async function POST(request) {
 
   const { data: user, error } = await supabaseAdmin
     .from("users")
-    .select("id, name, email, phone, role, pin_hash, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
+    .select("id, name, email, phone, role, pin_hash, must_change_pin, organizations(id, slug, display_name, pipeline_stages, service_types, theme)")
     .eq("id", session.user_id)
     .eq("is_active", true)
     .single();
 
   if (error || !user) return reply({ error: "Niet ingelogd" }, 401);
 
-  const forced = session.pin_change_required === true;
+  // De claim alleen is niet genoeg: het JWT blijft 24 uur geldig, ook nadat de
+  // pincode al is gewijzigd. Een gekopieerde startsessie zou dan zonder huidige
+  // pincode de nieuwe pincode kunnen overschrijven. De vlag in de database is
+  // de eenmalige autorisatie; die wordt hieronder atomair verbruikt.
+  const forced = session.pin_change_required === true && user.must_change_pin === true;
 
   if (!forced) {
     const userBlock = await getBlock("auth-pin-user", user.id);
@@ -104,12 +109,21 @@ export async function POST(request) {
     return reply({ error: "Kies een andere pincode dan je huidige" }, 400);
   }
 
-  const { error: updateError } = await supabaseAdmin
+  // Verplichte wijziging: alleen slagen zolang de vlag nog aan staat. Twee
+  // gelijktijdige requests met dezelfde startsessie kunnen zo niet allebei
+  // winnen; de tweede raakt nul rijen.
+  let update = supabaseAdmin
     .from("users")
     .update({ pin_hash: newHash, must_change_pin: false })
     .eq("id", user.id);
+  if (forced) update = update.eq("must_change_pin", true);
+
+  const { data: updated, error: updateError } = await update.select("id");
 
   if (updateError) return reply({ error: "Pincode opslaan mislukt" }, 500);
+  if (!updated?.length) {
+    return reply({ error: "Je pincode is al gewijzigd. Log opnieuw in." }, 409);
+  }
 
   // Nieuw JWT zonder de claim pin_change_required, anders blijft de middleware
   // de sessie tegenhouden tot de oude cookie verloopt.

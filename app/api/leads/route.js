@@ -1,17 +1,16 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { ensurePrimaryContactForLead } from "@/lib/contacts";
+import { getRelationTypes } from "@/lib/constants";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
-  HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
 const HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS = new Set(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((s) => s.id));
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
-const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
 
 function cleanDate(value) {
   if (!value) return null;
@@ -70,6 +69,8 @@ export async function GET(request) {
   const marketing_segment = searchParams.get("marketing_segment");
   const relationship_type = searchParams.get("relationship_type");
   const hubspot_deal_origin = searchParams.get("hubspot_deal_origin");
+  // Standaard alleen de salespipeline; relaties (in_pipeline = false) apart.
+  const scope = searchParams.get("scope") || "pipeline";
 
   let query = supabaseAdmin
     .from("leads")
@@ -77,6 +78,8 @@ export async function GET(request) {
     .eq("tenant", tenant)
     .order(sort, { ascending: order === "asc" });
 
+  if (scope === "pipeline") query = query.eq("in_pipeline", true);
+  if (scope === "relations") query = query.eq("in_pipeline", false);
   if (status) query = query.eq("status", status);
   if (service_type) query = query.eq("service_type", service_type);
   if (assigned_to) query = query.eq("assigned_to", assigned_to);
@@ -84,7 +87,7 @@ export async function GET(request) {
   if (marketing_segment && (tenant !== "hiphot" || HIPHOT_MARKETING_SEGMENT_IDS.has(marketing_segment))) {
     query = query.contains("marketing_segments", [marketing_segment]);
   }
-  if (tenant === "hiphot" && relationship_type && HIPHOT_RELATION_TYPE_IDS.has(relationship_type)) {
+  if (relationship_type && getRelationTypes(tenant).some((type) => type.id === relationship_type)) {
     query = query.eq("relationship_type", relationship_type);
   }
   if (tenant === "hiphot" && hubspot_deal_origin && HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(hubspot_deal_origin)) {
@@ -146,18 +149,20 @@ export async function POST(request) {
   const lastName = contact_last_name || (contact_person ? contact_person.split(" ").slice(1).join(" ") : "");
   const fullName = `${firstName} ${lastName}`.trim();
 
-  if (!company_name || !fullName || !email) {
+  // Een relatie buiten de pipeline mag zonder contactnaam (bijv. alleen nieuwsbrief).
+  const inPipeline = body.in_pipeline !== false;
+  if (!company_name || !email || (inPipeline && !fullName)) {
     return Response.json(
-      { error: "company_name, voornaam/achternaam en email zijn verplicht" },
+      { error: inPipeline ? "company_name, voornaam/achternaam en email zijn verplicht" : "Bedrijfsnaam en e-mail zijn verplicht" },
       { status: 400 }
     );
   }
 
   const defaultStatus = tenant === "hiphot" ? "nieuwe_aanvraag" : "nieuw";
   const marketingFields = cleanMarketingFields(body, tenant);
-  const relationshipFields = tenant === "hiphot" && HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
-    ? { relationship_type: body.relationship_type }
-    : {};
+  const relationshipFields = getRelationTypes(tenant).some((type) => type.id === body.relationship_type)
+    ? { relationship_type: body.relationship_type, in_pipeline: inPipeline }
+    : { in_pipeline: inPipeline };
   const hubspotOriginFields = tenant === "hiphot" && HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
     ? { hubspot_deal_origin: body.hubspot_deal_origin }
     : {};

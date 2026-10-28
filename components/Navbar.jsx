@@ -198,7 +198,10 @@ export default function Navbar() {
       ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
       : []),
     ...(isAdmin
-      ? [{ href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone }]
+      ? [
+          { href: "/relaties", label: "Relaties", icon: Contact },
+          { href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone },
+        ]
       : []),
   ];
 
@@ -206,7 +209,6 @@ export default function Navbar() {
   const adminItems = isAdmin
     ? [
         { href: "/admin/users", label: "Users", icon: Users },
-        { href: "/admin/contacten", label: "Contacten", icon: Contact },
         { href: "/admin/import", label: "Import", icon: Upload },
         { href: "/admin/email-bijlagen", label: "Bijlagen", icon: Paperclip },
         ...(tenant === "hiphot"

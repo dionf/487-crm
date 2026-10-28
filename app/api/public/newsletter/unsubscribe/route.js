@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { recordNewsletterEvent } from "@/lib/newsletters";
+import { escapeLikePattern, recordNewsletterEvent } from "@/lib/newsletters";
 import { verifyUnsubscribeSignature } from "@/lib/newsletter-unsubscribe";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +88,7 @@ export async function POST(request) {
 
   // Zelfde gedrag als de Resend-webhook bij een afmelding.
   const contactUpdate = supabaseAdmin.from("contacts").update({ marketing_consent: false }).eq("tenant", recipient.tenant);
-  await (recipient.contact_id ? contactUpdate.eq("id", recipient.contact_id) : contactUpdate.eq("email", recipient.email));
+  await (recipient.contact_id ? contactUpdate.eq("id", recipient.contact_id) : contactUpdate.ilike("email", escapeLikePattern(recipient.email)));
 
   await supabaseAdmin
     .from("newsletter_campaign_recipients")

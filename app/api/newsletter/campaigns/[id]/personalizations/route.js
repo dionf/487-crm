@@ -6,6 +6,7 @@ import {
   fetchCampaignPersonalizations,
   generatePersonalizationForLead,
   getPersonalizedCampaign,
+  resetCampaignTest,
   summarizeCompanyApproval,
 } from "@/lib/newsletter-personalize";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -64,6 +65,7 @@ export async function POST(request, { params }) {
 
     const items = await fetchCampaignItems(tenant, id);
     const slots = await generatePersonalizationForLead(tenant, campaign, items, company, userName);
+    await resetCampaignTest(tenant, id);
     return Response.json({ slots });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -119,6 +121,8 @@ export async function PATCH(request, { params }) {
     const { data, error } = await query.select("*");
     if (error) throw new Error(error.message);
     if (!data?.length) return Response.json({ error: "Geen personalisatie gevonden" }, { status: 404 });
+    // Gewijzigde tekst moet eerst in een testmail gezien worden.
+    if ("text" in body) await resetCampaignTest(tenant, id);
     return Response.json({ slots: data });
   } catch (error) {
     if (error instanceof Response) return error;

@@ -34,6 +34,9 @@ export default function DashboardPage() {
     try {
       const params = new URLSearchParams();
       if (callFilter) params.set("call_filter", callFilter);
+      // Ook relaties ophalen: een gewonnen lead die klant-relatie werd telt mee
+      // in omzet en conversie, maar staat niet meer op het bord.
+      params.set("scope", "all");
       const url = `/api/leads${params.toString() ? `?${params}` : ""}`;
       const res = await apiFetch(url);
       const data = await res.json();
@@ -178,7 +181,7 @@ export default function DashboardPage() {
           <div className="w-8 h-8 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <KanbanBoard leads={leads} onStatusChange={handleStatusChange} statuses={pipelineStatuses} />
+        <KanbanBoard leads={leads.filter((lead) => lead.in_pipeline !== false)} onStatusChange={handleStatusChange} statuses={pipelineStatuses} />
       )}
 
       {/* Lead Form Modal */}

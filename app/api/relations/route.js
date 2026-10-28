@@ -33,15 +33,19 @@ const LEAD_FIELDS = [
 export async function GET(request) {
   try {
     const { tenant } = requireAdmin(request);
+    // ?lead_id= geeft alleen dat bedrijf terug (verversen na een klik).
+    const leadId = new URL(request.url).searchParams.get("lead_id");
 
     const leads = [];
     for (let from = 0; ; from += PAGE_SIZE) {
-      const { data, error } = await supabaseAdmin
+      let query = supabaseAdmin
         .from("leads")
         .select(LEAD_FIELDS)
         .eq("tenant", tenant)
         .order("company_name", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
+      if (leadId) query = query.eq("id", leadId);
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       leads.push(...(data || []));
       if (!data || data.length < PAGE_SIZE) break;
@@ -100,6 +104,7 @@ export async function GET(request) {
         relationship_type: lead.relationship_type,
         website_url: lead.website_url,
         newsletter_subscribed: isLeadNewsletterSubscribed(lead),
+        hard_bounced: Boolean(lead.marketing_hard_bounced) || lead.marketing_subscription_status === "hard_bounce",
         marketing_subscription_status: lead.marketing_subscription_status || "unknown",
         profile_status: lead.newsletter_profile_status || null,
         receiving_count: contacts.filter((contact) => contact.newsletter.receives).length,

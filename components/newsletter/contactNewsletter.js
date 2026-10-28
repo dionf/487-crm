@@ -30,7 +30,12 @@ export async function setEmailNewsletter(email, subscribed) {
 }
 
 // Bedrijf in- of uitschrijven (company-niveau, zelfde regels als het leadformulier).
-export async function setCompanyNewsletter(leadId, subscribed) {
+// Na een hard bounce staat het bedrijf geblokkeerd; weer aanzetten heft die
+// blokkade op na bevestiging. Geeft false terug als de gebruiker annuleert.
+export async function setCompanyNewsletter(leadId, subscribed, { hardBounced = false } = {}) {
+  if (subscribed && hardBounced && !confirm("Dit bedrijf is geblokkeerd na een hard bounce. Weet je zeker dat het weer de nieuwsbrief mag ontvangen?")) {
+    return false;
+  }
   const res = await apiFetch(`/api/leads/${leadId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -39,6 +44,7 @@ export async function setCompanyNewsletter(leadId, subscribed) {
         ? {
             marketing_consent: true,
             marketing_subscription_status: "subscribed",
+            marketing_hard_bounced: false,
             marketing_consent_source: "handmatig",
             marketing_consent_date: new Date().toISOString(),
           }
@@ -47,5 +53,5 @@ export async function setCompanyNewsletter(leadId, subscribed) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || "Nieuwsbrief bedrijf wijzigen mislukt");
-  return json;
+  return true;
 }

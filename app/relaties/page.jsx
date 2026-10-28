@@ -168,12 +168,21 @@ export default function RelatiesPage() {
     load();
   }, []);
 
-  async function run(key, action) {
+  // Alleen het geraakte bedrijf opnieuw laden, niet de hele lijst met historie.
+  async function reloadCompany(companyId) {
+    const res = await apiFetch(`/api/relations?lead_id=${companyId}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Kon bedrijf niet verversen");
+    const fresh = json.companies?.[0];
+    if (fresh) setCompanies((current) => current.map((company) => (company.id === companyId ? fresh : company)));
+  }
+
+  async function run(key, companyId, action) {
     setBusy(key);
     setError("");
     try {
       await action();
-      await load();
+      await reloadCompany(companyId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -181,16 +190,16 @@ export default function RelatiesPage() {
     }
   }
 
-  const toggleContact = (contact, subscribed) =>
-    run(`contact-${contact.email}`, async () => {
+  const toggleContact = (company, contact, subscribed) =>
+    run(`contact-${contact.email}`, company.id, async () => {
       if (!subscribed && !confirm(`${contact.email} uitschrijven voor de nieuwsbrief?`)) return;
       await setEmailNewsletter(contact.email, subscribed);
     });
 
   const toggleCompany = (company, subscribed) =>
-    run(`company-${company.id}`, async () => {
+    run(`company-${company.id}`, company.id, async () => {
       if (!subscribed && !confirm(`${company.company_name} uitschrijven? Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.`)) return;
-      await setCompanyNewsletter(company.id, subscribed);
+      await setCompanyNewsletter(company.id, subscribed, { hardBounced: company.hard_bounced });
     });
 
   function toggleExpanded(id) {
@@ -346,14 +355,14 @@ export default function RelatiesPage() {
                         key={contact.contact_id || `company-${contact.email}`}
                         contact={contact}
                         busy={busy === `contact-${contact.email}`}
-                        onToggle={toggleContact}
+                        onToggle={(contactRow, value) => toggleContact(company, contactRow, value)}
                       />
                     ))}
                     {addingContactFor === company.id ? (
                       <AddContactForm
                         leadId={company.id}
                         onCancel={() => setAddingContactFor(null)}
-                        onSaved={async () => { setAddingContactFor(null); await load(); }}
+                        onSaved={async () => { setAddingContactFor(null); await reloadCompany(company.id); }}
                       />
                     ) : (
                       <button

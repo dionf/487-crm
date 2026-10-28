@@ -180,6 +180,15 @@ export async function PATCH(request, { params }) {
         { status: 400 }
       );
     }
+    // Andere opzet = andere slots (intro, aantal itemregels): opnieuw genereren.
+    if ("personalization_layout" in patch && patch.personalization_layout !== currentCampaign.personalization_layout) {
+      const { error: slotError } = await supabaseAdmin
+        .from("newsletter_campaign_personalizations")
+        .delete()
+        .eq("tenant", tenant)
+        .eq("campaign_id", id);
+      if (slotError) throw new Error(slotError.message);
+    }
     return Response.json({ campaign: data });
   } catch (error) {
     if (error instanceof Response) return error;

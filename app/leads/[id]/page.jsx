@@ -160,7 +160,9 @@ export default function LeadDetailPage() {
     if (!subscribed && !confirm("Bedrijf uitschrijven? Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.")) return;
     setMarketingError("");
     try {
-      await setCompanyNewsletter(params.id, subscribed);
+      await setCompanyNewsletter(params.id, subscribed, {
+        hardBounced: Boolean(data?.lead?.marketing_hard_bounced) || data?.lead?.marketing_subscription_status === "hard_bounce",
+      });
       fetchData();
     } catch (err) {
       setMarketingError(err.message);
@@ -671,7 +673,6 @@ export default function LeadDetailPage() {
             )}
           </div>
 
-          {(
             <div className="bg-white border border-gray-100 rounded-card p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
@@ -746,7 +747,6 @@ export default function LeadDetailPage() {
                 )}
               </div>
             </div>
-          )}
 
           {/* Addresses & facturatie */}
           <div className="bg-white border border-gray-100 rounded-card p-5">

@@ -289,10 +289,11 @@ server.tool(
   "Toon pipeline statistieken van de 48-7 CRM: win rate, waarde, cyclustijd per service type (STANDALONE — geen Supabase MCP nodig).",
   {},
   async () => {
-    const { data: leads } = await supabase.from("leads").select("status, service_type, estimated_value, created_at, won_at, updated_at");
+    const { data: leads } = await supabase.from("leads").select("status, service_type, estimated_value, created_at, won_at, updated_at, in_pipeline");
     if (!leads?.length) return { content: [{ type: "text", text: "Geen data beschikbaar." }] };
 
-    const active = leads.filter(l => !["gewonnen", "verloren"].includes(l.status));
+    // Relaties buiten de pipeline (klant, partner, nieuwsbrief) zijn geen open deals.
+    const active = leads.filter(l => l.in_pipeline !== false && !["gewonnen", "verloren"].includes(l.status));
     const won = leads.filter(l => l.status === "gewonnen");
     const lost = leads.filter(l => l.status === "verloren");
     const pipelineValue = active.reduce((s, l) => s + (parseFloat(l.estimated_value) || 0), 0);

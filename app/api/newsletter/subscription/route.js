@@ -1,4 +1,5 @@
-import { normalizeEmail, requireAdmin, setEmailSubscription } from "@/lib/newsletters";
+import { requireVerifiedSession } from "@/lib/auth";
+import { normalizeEmail, setEmailSubscription } from "@/lib/newsletters";
 
 export const dynamic = "force-dynamic";
 
@@ -6,7 +7,10 @@ export const dynamic = "force-dynamic";
 // bedrijfsadres): { email, subscribed: boolean, force?: boolean }.
 export async function PATCH(request) {
   try {
-    const { tenant, userName } = requireAdmin(request);
+    // Elke ingelogde gebruiker, net als de oude marketingtoggle per contact.
+    const session = requireVerifiedSession(request);
+    const { tenant } = session;
+    const userName = session.name || "CRM";
     const body = await request.json();
     const email = normalizeEmail(body.email);
     if (!email) return Response.json({ error: "Geldig e-mailadres is verplicht" }, { status: 400 });

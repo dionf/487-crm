@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { useOrg } from "@/lib/org-context";
 import NewsletterHistory, { historySummaryText } from "@/components/NewsletterHistory";
 import { NEWSLETTER_STATE_LABELS, setEmailNewsletter } from "@/components/newsletter/contactNewsletter";
 import {
@@ -21,20 +20,19 @@ import {
 const normalize = (email) => String(email || "").trim().toLowerCase();
 
 export default function ContactsPanel({ leadId, contacts = [], onUpdate }) {
-  const { isAdmin } = useOrg();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", role: "", is_primary: false });
-  // Nieuwsbriefstatus en historie per adres (alleen voor admins beschikbaar).
+  // Nieuwsbriefstatus en historie per adres.
   const [newsletter, setNewsletter] = useState(null);
   const [openHistory, setOpenHistory] = useState(null);
   const [newsletterError, setNewsletterError] = useState("");
 
   const loadNewsletter = useCallback(async () => {
-    if (!isAdmin || !leadId) return;
+    if (!leadId) return;
     const res = await apiFetch(`/api/newsletter/history?lead_id=${leadId}`);
     if (res.ok) setNewsletter(await res.json());
-  }, [isAdmin, leadId]);
+  }, [leadId]);
 
   useEffect(() => {
     loadNewsletter();

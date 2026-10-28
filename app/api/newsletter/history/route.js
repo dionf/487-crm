@@ -1,9 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireVerifiedSession } from "@/lib/auth";
 import {
   contactNewsletterState,
   fetchNewsletterSuppressions,
   normalizeEmail,
-  requireAdmin,
 } from "@/lib/newsletters";
 import { fetchNewsletterHistory, summarizeHistory } from "@/lib/newsletter-history";
 
@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 // nieuwsbriefstatus en een samenvatting per adres.
 export async function GET(request) {
   try {
-    const { tenant } = requireAdmin(request);
+    // Elke ingelogde gebruiker van de tenant (ook voor de leadpagina).
+    const { tenant } = requireVerifiedSession(request);
     const { searchParams } = new URL(request.url);
     const email = normalizeEmail(searchParams.get("email"));
     const leadId = searchParams.get("lead_id");

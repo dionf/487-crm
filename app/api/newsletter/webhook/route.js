@@ -197,6 +197,23 @@ export async function POST(request) {
         .maybeSingle();
       if (emailMatch?.campaign_id) campaign = { id: emailMatch.campaign_id };
     }
+    // Events die binnenkomen voordat resend_email_id is opgeslagen: de mail
+    // draagt de tag campaign_id (object- of lijstvorm, afhankelijk van het event).
+    if (!campaign) {
+      const tags = eventData.tags;
+      const taggedCampaignId = Array.isArray(tags)
+        ? tags.find((tag) => tag?.name === "campaign_id")?.value
+        : tags?.campaign_id;
+      if (taggedCampaignId) {
+        const { data } = await supabaseAdmin
+          .from("newsletter_campaigns")
+          .select("id")
+          .eq("tenant", tenant)
+          .eq("id", taggedCampaignId)
+          .maybeSingle();
+        campaign = data;
+      }
+    }
 
     let recipient = null;
     if (campaign?.id && email) {

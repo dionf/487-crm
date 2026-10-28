@@ -23,6 +23,7 @@ import {
   Sparkles,
   Megaphone,
   ChevronDown,
+  Contact,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -205,6 +206,7 @@ export default function Navbar() {
   const adminItems = isAdmin
     ? [
         { href: "/admin/users", label: "Users", icon: Users },
+        { href: "/admin/contacten", label: "Contacten", icon: Contact },
         { href: "/admin/import", label: "Import", icon: Upload },
         { href: "/admin/email-bijlagen", label: "Bijlagen", icon: Paperclip },
         ...(tenant === "hiphot"

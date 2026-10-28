@@ -22,7 +22,7 @@ export async function GET(request) {
       const { data, error } = await supabaseAdmin
         .from("contacts")
         .select(
-          "id, lead_id, name, email, phone, role, is_primary, created_at, leads(id, company_name, status, website_url, marketing_consent, marketing_subscription_status, marketing_hard_bounced)"
+          "id, lead_id, name, email, phone, role, is_primary, created_at, leads(id, company_name, status, website_url, marketing_consent, marketing_subscription_status, marketing_hard_bounced, newsletter_profile_status)"
         )
         .eq("tenant", tenant)
         .order("name", { ascending: true })
@@ -57,6 +57,7 @@ export async function GET(request) {
         company_subscribed: companySubscribed,
         email_suppressed: emailSuppressed,
         receives_newsletter: companySubscribed && Boolean(email) && !emailSuppressed,
+        profile_status: lead.newsletter_profile_status || null,
       };
     });
 

@@ -15,6 +15,7 @@ import QuoteToOrderModal from "@/components/QuoteToOrderModal";
 import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
+import NewsletterProfilePanel from "@/components/NewsletterProfilePanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, INDUSTRIES, SOURCES } from "@/lib/constants";
 import { marketingSegmentLabels, marketingStatusLabel } from "@/lib/hiphot-marketing";
@@ -1180,6 +1181,8 @@ export default function LeadDetailPage() {
               </div>
             )}
           </div>
+
+          {!isHipHot && <NewsletterProfilePanel lead={lead} onSaved={fetchData} />}
 
           {/* Quotes - Collapsible */}
           <div className="bg-white border border-gray-100 rounded-card overflow-hidden">

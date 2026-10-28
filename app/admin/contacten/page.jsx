@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useMemo } from "react";
 import AppShell from "@/components/AppShell";
 import { apiFetch } from "@/lib/api";
-import { ArrowLeft, Loader2, Search, Star } from "lucide-react";
+import { ArrowLeft, Loader2, Search, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 
 const SUBSCRIPTION_FILTERS = [
@@ -35,28 +35,74 @@ function NewsletterBadge({ contact }) {
   return <span className="text-xs font-medium px-2 py-0.5 rounded-pill bg-gray-100 text-gray-500">Nee</span>;
 }
 
+const PROFILE_BADGES = {
+  approved: { label: "Goedgekeurd", className: "bg-green-50 text-green-700" },
+  draft: { label: "Concept", className: "bg-amber-50 text-amber-700" },
+};
+
+function ProfileBadge({ status }) {
+  const badge = PROFILE_BADGES[status];
+  if (!badge) return <span className="text-xs font-medium px-2 py-0.5 rounded-pill bg-gray-100 text-gray-500">Ontbreekt</span>;
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded-pill ${badge.className}`}>{badge.label}</span>;
+}
+
 export default function ContactenPage() {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("receives");
+  const [generating, setGenerating] = useState(null); // { done, total, failed }
+
+  async function fetchContacts() {
+    try {
+      const res = await apiFetch("/api/contacts/overview");
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setContacts(data.contacts || []);
+    } catch (err) {
+      setError(err.message || "Kon contacten niet laden");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchContacts() {
-      try {
-        const res = await apiFetch("/api/contacts/overview");
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        setContacts(data.contacts || []);
-      } catch (err) {
-        setError(err.message || "Kon contacten niet laden");
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchContacts();
   }, []);
+
+  // Profielen voor ontvangende bedrijven zonder profiel, één voor één
+  // (de API is per gebruiker begrensd en scrapet per bedrijf een website).
+  const missingProfileLeadIds = [
+    ...new Set(
+      contacts
+        .filter((contact) => contact.receives_newsletter && !contact.profile_status)
+        .map((contact) => contact.lead_id)
+    ),
+  ];
+
+  async function generateMissingProfiles() {
+    const ids = missingProfileLeadIds;
+    if (!ids.length) return;
+    setError("");
+    const failed = [];
+    setGenerating({ done: 0, total: ids.length, failed: 0 });
+    for (const [index, leadId] of ids.entries()) {
+      try {
+        const res = await apiFetch(`/api/leads/${leadId}/newsletter-profile`, { method: "POST" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          failed.push(`${contacts.find((c) => c.lead_id === leadId)?.company_name}: ${data.error || res.status}`);
+        }
+      } catch (err) {
+        failed.push(err.message);
+      }
+      setGenerating({ done: index + 1, total: ids.length, failed: failed.length });
+    }
+    if (failed.length) setError(`Niet gelukt voor ${failed.length} bedrijf/bedrijven: ${failed.join("; ")}`);
+    setGenerating(null);
+    await fetchContacts();
+  }
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -116,6 +162,17 @@ export default function ContactenPage() {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+          <button
+            onClick={generateMissingProfiles}
+            disabled={Boolean(generating) || missingProfileLeadIds.length === 0}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black disabled:opacity-40"
+            title="Nieuwsbriefprofiel genereren voor ontvangende bedrijven zonder profiel"
+          >
+            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {generating
+              ? `Profielen ${generating.done}/${generating.total}`
+              : `Genereer ontbrekende profielen (${missingProfileLeadIds.length})`}
+          </button>
         </div>
 
         <div className="bg-white border border-gray-100 rounded-card overflow-x-auto">
@@ -136,6 +193,7 @@ export default function ContactenPage() {
                   <th className="px-4 py-3">Bedrijf</th>
                   <th className="px-4 py-3">Inschrijving bedrijf</th>
                   <th className="px-4 py-3">Nieuwsbrief</th>
+                  <th className="px-4 py-3">Profiel</th>
                 </tr>
               </thead>
               <tbody>
@@ -158,6 +216,7 @@ export default function ContactenPage() {
                       {SUBSCRIPTION_LABELS[contact.marketing_subscription_status] || contact.marketing_subscription_status}
                     </td>
                     <td className="px-4 py-3"><NewsletterBadge contact={contact} /></td>
+                    <td className="px-4 py-3"><ProfileBadge status={contact.profile_status} /></td>
                   </tr>
                 ))}
               </tbody>

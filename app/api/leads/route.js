@@ -1,5 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ensurePrimaryContactForLead } from "@/lib/contacts";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
@@ -221,6 +222,8 @@ export async function POST(request) {
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
+
+  await ensurePrimaryContactForLead(data.id, tenant);
 
   // Log activity
   await supabaseAdmin.from("activities").insert({

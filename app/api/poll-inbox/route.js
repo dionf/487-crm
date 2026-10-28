@@ -3,6 +3,7 @@ import { simpleParser } from "mailparser";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthCookie, verifyToken } from "@/lib/auth";
 import { verifyCronBearer } from "@/lib/rate-limit";
+import { ensurePrimaryContactForLead } from "@/lib/contacts";
 
 // Protect endpoint: callable via cron secret OR by an authenticated user (manual trigger).
 // Het cron-secret gaat via verifyCronBearer: constante-tijd vergelijking plus een
@@ -271,6 +272,7 @@ async function pollMailbox(mailbox) {
             .single();
 
           if (leadError) throw new Error(`Lead insert failed: ${leadError.message}`);
+          await ensurePrimaryContactForLead(lead.id, mailbox.tenant);
 
           await supabaseAdmin.from("notes").insert({
             lead_id: lead.id,
@@ -352,6 +354,7 @@ async function pollMailbox(mailbox) {
               .single();
 
             if (fallbackLead) {
+              await ensurePrimaryContactForLead(fallbackLead.id, mailbox.tenant);
               await supabaseAdmin.from("notes").insert({
                 lead_id: fallbackLead.id,
                 content: `[FOUT BIJ VERWERKING]\n\nOriginele email:\nVan: ${fromEmail}\nOnderwerp: ${logEntry.email_subject}\n\n${emailBody}`,

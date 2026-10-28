@@ -1009,7 +1009,7 @@ export default function NieuwsbrievenPage() {
                   placeholder="Previewtekst"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
                 />
-                {!campaignForm.mode === "personalized" && (
+                {campaignForm.mode !== "personalized" && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase">Verzenddatum en tijd</label>
                   <div className="relative">
@@ -1092,7 +1092,7 @@ export default function NieuwsbrievenPage() {
                     Meerdere doelgroepen worden samengevoegd. Dubbele e-mailadressen worden bij verzending automatisch ontdubbeld.
                   </p>
                 </div>
-                {!campaignForm.mode === "personalized" && (
+                {campaignForm.mode !== "personalized" && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1310,7 +1310,7 @@ export default function NieuwsbrievenPage() {
                   {busy === "campaign" ? <Loader2 className="w-4 h-4 animate-spin" /> : editingCampaignId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   {editingCampaignId ? "Wijzigingen opslaan" : "Campagne aanmaken"}
                 </button>
-                {editingCampaignId && !campaignForm.mode === "personalized" && (
+                {editingCampaignId && campaignForm.mode !== "personalized" && (
                   <button
                     type="button"
                     onClick={() => saveCampaign({ testAfterSave: true })}

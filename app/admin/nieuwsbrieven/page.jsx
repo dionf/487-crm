@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
+import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import {
@@ -18,6 +19,7 @@ import {
   Save,
   Send,
   Settings,
+  Sparkles,
   Trash2,
   Users,
 } from "lucide-react";
@@ -86,8 +88,18 @@ function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
     max_unsubscribe_rate: "0.05",
     scheduled_at: "",
     body_html: "",
+    mode: "broadcast",
+    personalization_layout: "combined",
+    headline: "",
+    intro_text: "",
   };
 }
+
+const LAYOUT_OPTIONS = [
+  { id: "combined", label: "Combinatie: intro-hook plus regel bij de 1-2 meest relevante items" },
+  { id: "intro", label: "Alleen intro-hook bovenaan" },
+  { id: "per_item", label: "Bij elk item een regel" },
+];
 
 function toDateTimeLocal(value) {
   if (!value) return "";
@@ -394,6 +406,10 @@ export default function NieuwsbrievenPage() {
       max_unsubscribe_rate: campaign.max_unsubscribe_rate ?? "0.05",
       scheduled_at: campaign.scheduled_at || "",
       body_html: campaign.body_html || "",
+      mode: campaign.mode || "broadcast",
+      personalization_layout: campaign.personalization_layout || "combined",
+      headline: campaign.headline || "",
+      intro_text: campaign.intro_text || "",
     });
     setEditorMode("html");
     setActiveSection("campaigns");
@@ -504,6 +520,17 @@ export default function NieuwsbrievenPage() {
     }
   }
 
+  // Gepersonaliseerd verstuurt (nog) in één keer en zonder planning; de HTML
+  // wordt per ontvanger opgebouwd. Het soort campagne ligt vast na aanmaken.
+  function campaignPayload(form) {
+    if (form.mode !== "personalized") {
+      const { mode, personalization_layout, headline, intro_text, ...rest } = form;
+      return editingCampaignId ? rest : { ...rest, mode: "broadcast" };
+    }
+    const { body_html, scheduled_at, mode, ...rest } = form;
+    return { ...rest, ...(editingCampaignId ? {} : { mode }), batch_mode: "single" };
+  }
+
   async function createCampaign(e) {
     e.preventDefault();
     return saveCampaign({ testAfterSave: false });
@@ -519,7 +546,7 @@ export default function NieuwsbrievenPage() {
         {
           method: isEditing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(campaignForm),
+          body: JSON.stringify(campaignPayload(campaignForm)),
         }
       );
       const json = await res.json();
@@ -576,6 +603,16 @@ export default function NieuwsbrievenPage() {
     } finally {
       setBusy("");
     }
+  }
+
+  function openCampaign(campaign) {
+    setSelected(campaign);
+    setRecipients(null);
+  }
+
+  function updateCampaignInState(campaign) {
+    setCampaigns((current) => current.map((item) => (item.id === campaign.id ? campaign : item)));
+    setSelected((current) => (current?.id === campaign.id ? campaign : current));
   }
 
   async function previewRecipients(campaign) {
@@ -925,6 +962,25 @@ export default function NieuwsbrievenPage() {
                   </button>
                 )}
               </div>
+              {!editingCampaignId && (
+                <div className="inline-flex items-center gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1 mb-4">
+                  {[
+                    { id: "broadcast", label: "Standaard (eigen HTML)" },
+                    { id: "personalized", label: "Gepersonaliseerd per bedrijf" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setCampaignForm({ ...campaignForm, mode: item.id })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                        campaignForm.mode === item.id ? "bg-white text-brand-orange shadow-sm" : "text-gray-500 hover:text-brand-black"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-5 items-start">
                 <div className="space-y-3">
                 <input
@@ -945,6 +1001,7 @@ export default function NieuwsbrievenPage() {
                   placeholder="Previewtekst"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
                 />
+                {!campaignForm.mode === "personalized" && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase">Verzenddatum en tijd</label>
                   <div className="relative">
@@ -992,6 +1049,7 @@ export default function NieuwsbrievenPage() {
                     </p>
                   )}
                 </div>
+                )}
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <label className="block text-xs font-semibold text-gray-500 uppercase">Mailen naar</label>
@@ -1026,6 +1084,7 @@ export default function NieuwsbrievenPage() {
                     Meerdere doelgroepen worden samengevoegd. Dubbele e-mailadressen worden bij verzending automatisch ontdubbeld.
                   </p>
                 </div>
+                {!campaignForm.mode === "personalized" && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1108,6 +1167,7 @@ export default function NieuwsbrievenPage() {
                     </div>
                   )}
                 </div>
+                )}
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Niet mailen naar</p>
                   <p className="text-xs text-gray-500 mb-2">
@@ -1145,6 +1205,46 @@ export default function NieuwsbrievenPage() {
                 </div>
                 </div>
                 <div className="space-y-3">
+                {campaignForm.mode === "personalized" ? (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
+                    <p className="text-sm text-gray-600">
+                      De mail wordt per bedrijf opgebouwd uit items in drie secties, met een eigen onderwerpregel,
+                      intro en &quot;waarom interessant&quot;-regels. Na het aanmaken voeg je de items toe en review je de
+                      personalisatie per bedrijf. Verzenden gaat in één keer, zonder planning.
+                    </p>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase">
+                      Opzet
+                      <select
+                        value={campaignForm.personalization_layout}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, personalization_layout: e.target.value })}
+                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
+                      >
+                        {LAYOUT_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase">
+                      Kop bovenaan (optioneel)
+                      <input
+                        value={campaignForm.headline}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, headline: e.target.value })}
+                        placeholder="Bijv. Wat AI deze maand voor het mkb betekent"
+                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase">
+                      Algemene inleiding (optioneel, voor iedereen gelijk)
+                      <textarea
+                        value={campaignForm.intro_text}
+                        onChange={(e) => setCampaignForm({ ...campaignForm, intro_text: e.target.value })}
+                        rows={4}
+                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                <>
                 <div className="flex items-center justify-between gap-3">
                   <div className="inline-flex items-center gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
                     {[
@@ -1191,6 +1291,8 @@ export default function NieuwsbrievenPage() {
                     )}
                   </div>
                 )}
+                </>
+                )}
                 <button
                   type="submit"
                   disabled={busy === "campaign" || setupRequired || !targetSegmentIds.length}
@@ -1200,7 +1302,7 @@ export default function NieuwsbrievenPage() {
                   {busy === "campaign" ? <Loader2 className="w-4 h-4 animate-spin" /> : editingCampaignId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                   {editingCampaignId ? "Wijzigingen opslaan" : "Campagne aanmaken"}
                 </button>
-                {editingCampaignId && (
+                {editingCampaignId && !campaignForm.mode === "personalized" && (
                   <button
                     type="button"
                     onClick={() => saveCampaign({ testAfterSave: true })}
@@ -1260,7 +1362,15 @@ export default function NieuwsbrievenPage() {
                     ) : campaigns.map((campaign) => (
                       <tr key={campaign.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-3">
-                          <p className="text-sm font-semibold">{campaign.name}</p>
+                          <p className="text-sm font-semibold">
+                            {campaign.name}
+                            {campaign.mode === "personalized" && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase text-brand-orange bg-amber-50 border border-amber-100 rounded-pill px-2 py-0.5 align-middle">
+                                <Sparkles className="w-3 h-3" />
+                                Gepersonaliseerd
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-gray-500">{campaign.subject}</p>
                           {campaign.scheduled_at && (
                             <p className="text-xs text-brand-orange mt-1">
@@ -1323,6 +1433,17 @@ export default function NieuwsbrievenPage() {
                             >
                               {busy === `preview-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                             </button>
+                            {campaign.mode === "personalized" ? (
+                              <button
+                                onClick={() => openCampaign(campaign)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-orange hover:bg-amber-50"
+                                title="Inhoud, personalisatie, testmail en verzenden"
+                              >
+                                <Sparkles className="w-4 h-4" />
+                                Openen
+                              </button>
+                            ) : (
+                            <>
                             <button
                               onClick={() => sendTest(campaign)}
                               disabled={busy === `test-${campaign.id}` || !canMutateCampaign(campaign) || !resendReady}
@@ -1341,6 +1462,8 @@ export default function NieuwsbrievenPage() {
                               {busy === `send-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                               {sendActionLabel(campaign)}
                             </button>
+                            </>
+                            )}
                             <button
                               onClick={() => deleteCampaign(campaign)}
                               disabled={busy === `delete-campaign-${campaign.id}` || !canMutateCampaign(campaign)}
@@ -1372,6 +1495,17 @@ export default function NieuwsbrievenPage() {
                     </span>
                   )}
                 </div>
+                {selected.mode === "personalized" ? (
+                  <PersonalizedCampaignPanel
+                    campaign={selected}
+                    resendReady={resendReady}
+                    testEmail={testEmail}
+                    setTestEmail={setTestEmail}
+                    accent={accent}
+                    onCampaignChange={updateCampaignInState}
+                  />
+                ) : (
+                <>
                 {canMutateCampaign(selected) && (
                   <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -1450,6 +1584,8 @@ export default function NieuwsbrievenPage() {
                   </>
                 ) : (
                   <p className="text-sm text-gray-500">Bekijk ontvangers met de gebruikersknop in de campagnelijst.</p>
+                )}
+                </>
                 )}
               </div>
             )}

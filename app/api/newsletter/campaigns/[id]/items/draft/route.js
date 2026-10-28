@@ -1,6 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { NEWSLETTER_MODEL } from "@/lib/ai-models";
 import { requireAdmin } from "@/lib/newsletters";
+import { generateNewsletterJson } from "@/lib/newsletter-ai";
 import { SECTION_LABELS, getPersonalizedCampaign } from "@/lib/newsletter-personalize";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { scrapeWebsite } from "@/lib/website-scrape";
@@ -8,18 +7,15 @@ import { scrapeWebsite } from "@/lib/website-scrape";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const DRAFT_TOOL = {
-  name: "schrijf_item",
-  description: "Lever een concept voor één nieuwsbriefitem.",
-  input_schema: {
-    type: "object",
-    properties: {
-      title: { type: "string", description: "Korte, concrete titel, max 70 tekens." },
-      body: { type: "string", description: "2-4 zinnen, helder en concreet." },
-      link_label: { type: "string", description: "Linktekst, bijv. 'Lees de case' of 'Zo werkt het'." },
-    },
-    required: ["title", "body", "link_label"],
+const DRAFT_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Korte, concrete titel, max 70 tekens." },
+    body: { type: "string", description: "2-4 zinnen, helder en concreet." },
+    link_label: { type: "string", description: "Linktekst, bijv. 'Lees de case' of 'Zo werkt het'." },
   },
+  required: ["title", "body", "link_label"],
+  additionalProperties: false,
 };
 
 // AI-concept voor een item op basis van een korte input en/of een URL.
@@ -38,8 +34,6 @@ export async function POST(request, { params }) {
 
     const { id } = await params;
     await getPersonalizedCampaign(tenant, id);
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error("API key niet geconfigureerd");
-
     const body = await request.json();
     const section = SECTION_LABELS[body.section] ? body.section : "company_news";
     const input = String(body.input || "").trim();
@@ -53,16 +47,7 @@ Toon: jij/jullie-vorm, helder, concreet, geen hype, geen uitroeptekens. Gebruik 
 
 ${input ? `Omschrijving van de redacteur:\n${input}\n` : ""}${url ? `Link: ${url}\n` : ""}${pageText ? `\n--- INHOUD VAN DE LINK ---\n${pageText}\n--- EINDE ---` : ""}`;
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const resp = await anthropic.messages.create({
-      model: NEWSLETTER_MODEL,
-      max_tokens: 800,
-      tools: [DRAFT_TOOL],
-      tool_choice: { type: "tool", name: DRAFT_TOOL.name },
-      messages: [{ role: "user", content: prompt }],
-    });
-    const draft = resp.content?.find((block) => block.type === "tool_use")?.input;
-    if (!draft) throw new Error("Claude gaf geen bruikbaar antwoord terug");
+    const draft = await generateNewsletterJson(prompt, DRAFT_SCHEMA);
     return Response.json({ draft: { ...draft, section, url: url || null } });
   } catch (error) {
     if (error instanceof Response) return error;

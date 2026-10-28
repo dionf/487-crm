@@ -461,6 +461,14 @@ export default function NieuwsbrievenPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Segment opslaan mislukt");
       setSegments((current) => [...current, json.segment]);
+      // Eerste doelgroep direct kiezen in het campagneformulier.
+      if (!json.segment.default_excluded) {
+        setCampaignForm((current) => (
+          campaignTargetIds(current).length
+            ? current
+            : { ...current, segment_id: json.segment.id, included_segment_ids: [json.segment.id] }
+        ));
+      }
       setSegmentForm({ name: "", source_type: "all_marketing", source_value: "" });
       flash("Segment toegevoegd");
     } catch (err) {

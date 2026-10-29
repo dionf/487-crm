@@ -55,7 +55,7 @@ export default function KanbanColumn({ status, leads }) {
 
         {leads.length === 0 && (
           <div className="text-center py-8 text-xs text-gray-300">
-            Geen leads
+            Geen trajecten
           </div>
         )}
       </div>

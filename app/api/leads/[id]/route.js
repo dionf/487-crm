@@ -115,7 +115,7 @@ export async function GET(request, { params }) {
   const tenant = session.tenant;
   const { id } = await params;
 
-  const [leadRes, quotesRes, notesRes, activitiesRes, chatbotRes] = await Promise.all([
+  const [leadRes, quotesRes, notesRes, activitiesRes, chatbotRes, opportunitiesRes] = await Promise.all([
     supabaseAdmin.from("leads").select("*").eq("id", id).eq("tenant", tenant).single(),
     supabaseAdmin.from("quotes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
     supabaseAdmin.from("notes").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
@@ -129,6 +129,7 @@ export async function GET(request, { params }) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabaseAdmin.from("opportunities").select("*").eq("lead_id", id).eq("tenant", tenant).order("created_at", { ascending: false }),
   ]);
 
   if (leadRes.error) {
@@ -140,6 +141,7 @@ export async function GET(request, { params }) {
     quotes: quotesRes.data || [],
     notes: notesRes.data || [],
     activities: activitiesRes.data || [],
+    opportunities: opportunitiesRes.data || [],
     chatbot_submission_id: chatbotRes?.data?.id || null,
   });
 }

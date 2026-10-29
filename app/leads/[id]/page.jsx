@@ -16,6 +16,7 @@ import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
 import NewsletterProfilePanel from "@/components/NewsletterProfilePanel";
+import OpportunitiesPanel from "@/components/OpportunitiesPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, getRelationTypes, relationLabel, INDUSTRIES, SOURCES } from "@/lib/constants";
 import { setCompanyNewsletter } from "@/components/newsletter/contactNewsletter";
@@ -73,6 +74,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showHipHotBuilder, setShowHipHotBuilder] = useState(false);
+  const [quoteOpportunityId, setQuoteOpportunityId] = useState(null); // traject voor nieuwe offerte
   const [editHipHotQuoteId, setEditHipHotQuoteId] = useState(null);
   const [showEmailCompose, setShowEmailCompose] = useState(null); // quote ID
   const [emailQuoteOverride, setEmailQuoteOverride] = useState(null); // quoteData from publish flow
@@ -334,7 +336,22 @@ export default function LeadDetailPage() {
     );
   }
 
-  const { lead, quotes, notes, activities, attachments, contacts } = data;
+  const { lead, quotes, notes, activities, attachments, contacts, opportunities = [] } = data;
+
+  function openQuoteForm(opportunityId = null) {
+    setQuoteOpportunityId(opportunityId);
+    if (isHipHot) setShowHipHotBuilder(true);
+    else setShowQuoteForm(true);
+  }
+
+  async function moveQuote(quoteId, opportunityId) {
+    await apiFetch(`/api/quotes/${quoteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunity_id: opportunityId }),
+    });
+    fetchData();
+  }
   const isHipHot = lead.tenant === "hiphot";
   const serviceLabel = SERVICE_TYPES.find((s) => s.id === lead.service_type)?.label;
 
@@ -520,7 +537,7 @@ export default function LeadDetailPage() {
           </button>
 
           <button
-            onClick={() => isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true)}
+            onClick={() => openQuoteForm()}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black transition-colors"
           >
             <FileText className="w-4 h-4" />
@@ -1262,6 +1279,16 @@ export default function LeadDetailPage() {
 
           {!isHipHot && <NewsletterProfilePanel lead={lead} onSaved={fetchData} />}
 
+          {/* Trajecten */}
+          <OpportunitiesPanel
+            leadId={params.id}
+            tenant={tenant}
+            opportunities={opportunities}
+            quotes={quotes}
+            onChanged={fetchData}
+            onNewQuote={openQuoteForm}
+          />
+
           {/* Quotes - Collapsible */}
           <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
             <button
@@ -1286,7 +1313,7 @@ export default function LeadDetailPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => { isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true); }}
+                  onClick={() => openQuoteForm()}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
                 >
                   <Plus className="w-3 h-3" />
@@ -1337,6 +1364,19 @@ export default function LeadDetailPage() {
                               </button>
                             </div>
                           </div>
+                          {opportunities.length > 1 && (
+                            <select
+                              value={q.opportunity_id || ""}
+                              onChange={(e) => moveQuote(q.id, e.target.value)}
+                              className="mt-1 text-[10px] font-semibold text-brand-orange bg-transparent border-0 p-0 cursor-pointer"
+                              title="Traject van deze offerte"
+                            >
+                              {!q.opportunity_id && <option value="">Geen traject</option>}
+                              {opportunities.map((o) => (
+                                <option key={o.id} value={o.id}>Traject: {o.name}</option>
+                              ))}
+                            </select>
+                          )}
                           {q.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{q.description}</p>}
                           {/* Publish / Link */}
                           <div className="flex flex-wrap items-center gap-1 mt-1.5">
@@ -1486,6 +1526,7 @@ export default function LeadDetailPage() {
           onClose={() => { setShowHipHotBuilder(false); setEditHipHotQuoteId(null); }}
           lead={lead}
           editQuoteId={editHipHotQuoteId}
+          opportunityId={quoteOpportunityId}
           onSaved={fetchData}
           onPublishedEmail={(quoteData) => {
             setEmailQuoteOverride(quoteData);
@@ -1498,6 +1539,8 @@ export default function LeadDetailPage() {
         onClose={() => setShowQuoteForm(false)}
         leadId={params.id}
         onSaved={fetchData}
+        opportunities={opportunities}
+        defaultOpportunityId={quoteOpportunityId}
       />
       <NoteForm
         open={showNoteForm}

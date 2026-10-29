@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { apiFetch } from "@/lib/api";
 
-export default function QuoteForm({ open, onClose, leadId, onSaved }) {
+export default function QuoteForm({ open, onClose, leadId, onSaved, opportunities = [], defaultOpportunityId = null }) {
   const [form, setForm] = useState({
     amount_excl_vat: "",
     vat_percentage: "21",
@@ -14,6 +14,12 @@ export default function QuoteForm({ open, onClose, leadId, onSaved }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [opportunityId, setOpportunityId] = useState("");
+
+  // Bij openen: het gekozen traject, anders laat de API het huidige traject kiezen.
+  useEffect(() => {
+    if (open) setOpportunityId(defaultOpportunityId || "");
+  }, [open, defaultOpportunityId]);
 
   function getCurrentUser() {
     if (typeof window !== "undefined") {
@@ -33,6 +39,7 @@ export default function QuoteForm({ open, onClose, leadId, onSaved }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: leadId,
+          opportunity_id: opportunityId || null,
           amount_excl_vat: parseFloat(form.amount_excl_vat),
           vat_percentage: parseFloat(form.vat_percentage),
           description: form.description || null,
@@ -81,6 +88,24 @@ export default function QuoteForm({ open, onClose, leadId, onSaved }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
             <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl">{error}</div>
+          )}
+
+          {opportunities.length > 1 && (
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Traject
+              </label>
+              <select
+                value={opportunityId}
+                onChange={(e) => setOpportunityId(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+              >
+                <option value="">Huidig traject</option>
+                {opportunities.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
           )}
 
           <div>

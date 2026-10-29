@@ -29,6 +29,7 @@ Dit is NIET HubSpot. Als de gebruiker "CRM", "487crm", "48-7 crm", "leads" of "o
 - AI bedrijfsanalyse per lead
 - Zoekfunctie in header
 - Todo overzicht per gebruiker
+- Remote MCP-connector voor Claude (`/api/mcp`, OAuth 2.1 met e-mail + pincode, `lib/oauth.js`, tools in `lib/mcp/tools.js`); uitleg en koppelingen op `/mcp`
 
 ## Multi-Tenant Uitbreiding
 Zie PRD-multi-tenant.md voor de volledige specificatie.

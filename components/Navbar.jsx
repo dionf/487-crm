@@ -24,6 +24,7 @@ import {
   Megaphone,
   ChevronDown,
   Contact,
+  Bot,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -600,6 +601,18 @@ export default function Navbar() {
             >
               {user?.name?.charAt(0) || "?"}
             </div>
+            <Link
+              href="/mcp"
+              className={cn(
+                "p-2 rounded-xl transition-colors",
+                isActiveHref("/mcp")
+                  ? "bg-brand-amber/10 text-brand-orange"
+                  : "text-gray-400 hover:text-brand-black hover:bg-gray-100"
+              )}
+              title="Claude koppelen"
+            >
+              <Bot className="w-4 h-4" />
+            </Link>
             <button
               onClick={() => setShowChangePin(true)}
               className="p-2 rounded-xl text-gray-400 hover:text-brand-black hover:bg-gray-100 transition-colors"

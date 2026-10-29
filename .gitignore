@@ -40,4 +40,14 @@ yarn-error.log*
 next-env.d.ts
 
 # local MCP config (contains secrets)
+# .mcp.json.disabled is de lokale kopie ervan; het patroon hierboven dekt die
+# naam niet, dus die staat er apart bij.
 .mcp.json
+.mcp.json.disabled
+
+# claude code — lokale worktrees (honderden MB's) en settings met secrets
+.claude/worktrees/
+.claude/settings.local.json
+
+# data-exports met persoonsgegevens horen niet in de repo
+/*.csv

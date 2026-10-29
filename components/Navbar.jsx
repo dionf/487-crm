@@ -21,6 +21,7 @@ import {
   FileText,
   Paperclip,
   Sparkles,
+  MessageSquareText,
   Megaphone,
   ChevronDown,
   Contact,
@@ -196,7 +197,10 @@ export default function Navbar() {
   const navItems = [
     ...baseNavItems,
     ...(tenant === "hiphot"
-      ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
+      ? [
+          { href: "/hiphot/chats", label: "Chats", icon: MessageSquareText },
+          { href: "/ai-regels", label: "AI-regels", icon: Sparkles },
+        ]
       : []),
     ...(isAdmin
       ? [

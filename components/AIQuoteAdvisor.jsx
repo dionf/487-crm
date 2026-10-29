@@ -379,8 +379,13 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                                       {s.has_structured_data && (
                                         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-pill bg-amber-50 text-amber-700">gestructureerd</span>
                                       )}
+                                      {s.has_transcript && (
+                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-pill bg-blue-50 text-blue-700">volledig gesprek</span>
+                                      )}
                                     </div>
-                                    <p className="text-xs text-gray-500 truncate">{s.message_preview || "(geen preview)"}</p>
+                                    <p className="text-xs text-gray-500 line-clamp-2 whitespace-pre-wrap">
+                                      {s.transcript_preview || s.message_preview || "(geen preview)"}
+                                    </p>
                                   </div>
                                 </label>
                               );
@@ -538,7 +543,7 @@ export default function AIQuoteAdvisor({ open, onClose, formSubmissionId, leadId
                         <Info className="inline-block w-3 h-3 mr-1 -mt-0.5" />
                         Advies op basis van:{" "}
                         {[
-                          ...contextSummary.submissions.map((s) => `${s.source || "form"} ${new Date(s.created_at).toLocaleDateString("nl-NL")}`),
+                          ...contextSummary.submissions.map((s) => `${s.source || "form"}${s.has_transcript ? " volledig gesprek" : ""} ${new Date(s.created_at).toLocaleDateString("nl-NL")}`),
                           ...contextSummary.notes.map((n) => `${n.note_type || "notitie"} ${new Date(n.created_at).toLocaleDateString("nl-NL")}`),
                         ].join(", ")}
                         {context && (

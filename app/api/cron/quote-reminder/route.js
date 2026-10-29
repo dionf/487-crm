@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 import { getAuthCookie, verifyToken } from "@/lib/auth";
+import { verifyCronBearer } from "@/lib/rate-limit";
 
 // Monitor-modus: detecteert quotes die rijp zijn voor een vervalherinnering,
 // stuurt een dagelijkse digest-mail naar het HipHot-team. Verstuurt NIETS naar
@@ -9,7 +10,6 @@ import { getAuthCookie, verifyToken } from "@/lib/auth";
 // is, vervangen we de digest-loop door een echte resend.emails.send naar de
 // klant met de gebruikelijke template.
 
-const CRON_SECRET = process.env.CRON_SECRET;
 const REMINDER_THRESHOLD_DAYS = 10;
 const NOTIFY_EMAIL = "hallo@hiphot.nl";
 const FROM = "HipHot CRM <hallo@hiphot.nl>";
@@ -36,9 +36,11 @@ function formatDateNL(d) {
 }
 
 export async function GET(request) {
-  // Auth: cron bearer OF ingelogde HipHot-user (handmatige trigger)
-  const authHeader = request.headers.get("authorization");
-  const isCronCall = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  // Auth: cron bearer OF ingelogde HipHot-user (handmatige trigger).
+  // Het secret wordt in constante tijd vergeleken; mislukte pogingen tellen mee.
+  const cron = await verifyCronBearer(request, "/api/cron/quote-reminder");
+  if (cron.response) return cron.response;
+  const isCronCall = cron.valid;
   if (!isCronCall) {
     const token = getAuthCookie(request);
     const session = token ? await verifyToken(token) : null;

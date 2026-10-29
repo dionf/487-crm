@@ -49,10 +49,15 @@ export default function LeadCard({ lead, isDragging }) {
           <GripVertical className="w-3.5 h-3.5" />
         </button>
 
-        <Link href={`/leads/${lead.id}`} className="flex-1 min-w-0">
+        <Link href={`/leads/${lead.lead_id || lead.id}`} className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-brand-black truncate">
             {lead.company_name}
           </p>
+          {lead.opportunity_count > 1 && lead.name && (
+            <p className="text-xs font-medium text-brand-orange truncate">
+              {lead.name}
+            </p>
+          )}
           <p className="text-xs text-gray-500 truncate">
             {lead.contact_first_name && lead.contact_last_name
               ? `${lead.contact_first_name} ${lead.contact_last_name}`

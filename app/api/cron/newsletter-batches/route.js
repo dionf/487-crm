@@ -1,16 +1,17 @@
 import { getAuthCookie, verifyToken } from "@/lib/auth";
+import { verifyCronBearer } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { processAutomaticBatchCampaign } from "@/lib/newsletters";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const CRON_SECRET = process.env.CRON_SECRET;
-
 async function authorize(request) {
-  const authHeader = request.headers.get("authorization");
-  const isCronCall = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
-  if (isCronCall) return { cron: true, tenant: null, userName: "CRM cron" };
+  // Constante-tijd vergelijking + teller op mislukte secrets: dit endpoint
+  // verstuurt nieuwsbrieven, dus een geslaagde gok is meteen schade.
+  const cron = await verifyCronBearer(request, "/api/cron/newsletter-batches");
+  if (cron.response) throw cron.response;
+  if (cron.valid) return { cron: true, tenant: null, userName: "CRM cron" };
 
   const token = getAuthCookie(request);
   const session = token ? await verifyToken(token) : null;

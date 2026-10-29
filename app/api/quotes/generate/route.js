@@ -1,12 +1,24 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveOpportunityId } from "@/lib/opportunities";
 
 export async function POST(request) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Roept de Claude API aan per aanvraag; een lus hierop kost direct geld.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/quotes/generate",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const body = await request.json();
-  const { lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by } = body;
+  const { lead_id, opportunity_id, amount_excl_vat, vat_percentage, description, valid_until, created_by } = body;
 
   if (!lead_id || !amount_excl_vat) {
     return Response.json({ error: "lead_id en amount_excl_vat zijn verplicht" }, { status: 400 });
@@ -27,11 +39,14 @@ export async function POST(request) {
   // Generate quote number
   const { data: quoteNumber } = await supabaseAdmin.rpc("generate_quote_number");
 
+  const opportunityId = await resolveOpportunityId(lead_id, tenant, opportunity_id);
+
   // Create quote record
   const { data: quote, error: quoteError } = await supabaseAdmin
     .from("quotes")
     .insert({
       lead_id,
+      opportunity_id: opportunityId,
       quote_number: quoteNumber,
       amount_excl_vat: parseFloat(amount_excl_vat),
       vat_percentage: parseFloat(vat_percentage || 21),

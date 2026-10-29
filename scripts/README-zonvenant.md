@@ -61,7 +61,7 @@ Onbekende waarden → `industry = NULL`, ruwe waarde in de note met ⚠️.
 
 ## Veiligheid
 
-- Script gebruikt `SUPABASE_SERVICE_ROLE_KEY` (als gezet) of `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Script vereist `SUPABASE_SERVICE_ROLE_KEY`; de anon key heeft sinds migratie 039 geen toegang tot CRM-data.
 - Dedup is robuust genoeg dat het script **herhaald** gedraaid kan worden zonder duplicaten.
 - Dry-run maakt geen writes.
 - Dependencies: `xlsx` en `@supabase/supabase-js` — beide al in het project.

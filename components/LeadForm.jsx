@@ -56,6 +56,26 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
   const [error, setError] = useState("");
   const [showAddresses, setShowAddresses] = useState(false);
   const [showMarketing, setShowMarketing] = useState(false);
+  // Bij bestaande contactpersonen zijn die de bron van waarheid; dan beheer je
+  // naam/e-mail/telefoon via het blok Contactpersonen, niet via dit formulier.
+  const [contactsManaged, setContactsManaged] = useState(false);
+
+  useEffect(() => {
+    if (!open || !lead?.id || isHipHot) {
+      setContactsManaged(false);
+      return;
+    }
+    let cancelled = false;
+    apiFetch(`/api/contacts?lead_id=${lead.id}`)
+      .then((res) => (res.ok ? res.json() : { contacts: [] }))
+      .then((data) => {
+        if (!cancelled) setContactsManaged((data.contacts || []).length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, lead?.id, isHipHot]);
 
   // Pre-fill when editing, auto-extract website from email if empty
   useEffect(() => {
@@ -190,6 +210,11 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
         commission_partner_percentage: form.commission_partner_percentage ? parseFloat(form.commission_partner_percentage) : null,
         marketing_hard_bounced: form.marketing_subscription_status === "hard_bounce",
       };
+      if (contactsManaged) {
+        for (const key of ["contact_person", "contact_first_name", "contact_last_name", "contact_function", "email", "phone"]) {
+          delete payload[key];
+        }
+      }
 
       const url = isEdit ? `/api/leads/${lead.id}` : "/api/leads";
       const method = isEdit ? "PATCH" : "POST";
@@ -259,71 +284,79 @@ export default function LeadForm({ open, onClose, onSaved, lead }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Voornaam *
-              </label>
-              <input
-                type="text"
-                required
-                value={form.contact_first_name}
-                onChange={(e) => setForm({ ...form, contact_first_name: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-              />
+          {contactsManaged ? (
+            <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-xl">
+              Naam, e-mail en telefoon beheer je via het blok Contactpersonen op de leadpagina.
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Achternaam *
-              </label>
-              <input
-                type="text"
-                required
-                value={form.contact_last_name}
-                onChange={(e) => setForm({ ...form, contact_last_name: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-              />
+          ) : (
+            <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Voornaam *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.contact_first_name}
+                  onChange={(e) => setForm({ ...form, contact_first_name: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Achternaam *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.contact_last_name}
+                  onChange={(e) => setForm({ ...form, contact_last_name: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Functie
-              </label>
-              <input
-                type="text"
-                value={form.contact_function}
-                onChange={(e) => setForm({ ...form, contact_function: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                placeholder="bijv. Eigenaar, Directeur"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Functie
+                </label>
+                <input
+                  type="text"
+                  value={form.contact_function}
+                  onChange={(e) => setForm({ ...form, contact_function: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                  placeholder="bijv. Eigenaar, Directeur"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Telefoon
+                </label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Telefoon
-              </label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-              />
-            </div>
-          </div>
 
-          <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-              Email *
-            </label>
-            <input
-              type="email"
-              required
-              value={form.email}
-              onChange={(e) => handleEmailChange(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-            />
-          </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                className="w-full mt-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
+              />
+            </div>
+            </>
+          )}
 
           <div>
             <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">

@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useOrg } from "@/lib/org-context";
 import { ArrowLeft } from "lucide-react";
+import ChangePinForm from "./ChangePinForm";
 
 export default function PinGate({ children, tenantSlug }) {
-  const { isLoggedIn, loading: sessionLoading, login } = useOrg();
+  const { isLoggedIn, session, loading: sessionLoading, login } = useOrg();
 
   const [step, setStep] = useState(tenantSlug ? "loading" : "org"); // org → user → pin
   const [orgs, setOrgs] = useState([]);
@@ -106,6 +107,9 @@ export default function PinGate({ children, tenantSlug }) {
       </div>
     );
   }
+
+  // Startpincode van de admin: eerst een eigen pincode kiezen, dan pas de app
+  if (isLoggedIn && session?.must_change_pin) return <ChangePinForm />;
 
   if (isLoggedIn) return children;
 

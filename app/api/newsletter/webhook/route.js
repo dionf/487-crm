@@ -186,6 +186,34 @@ export async function POST(request) {
         if (recipientMatch?.campaign_id) campaign = { id: recipientMatch.campaign_id };
       }
     }
+    // Gepersonaliseerde campagnes gaan per mail (geen broadcast): koppel via het e-mail-ID.
+    if (!campaign && resendEmailId) {
+      const { data: emailMatch } = await supabaseAdmin
+        .from("newsletter_campaign_recipients")
+        .select("campaign_id")
+        .eq("tenant", tenant)
+        .eq("resend_email_id", resendEmailId)
+        .limit(1)
+        .maybeSingle();
+      if (emailMatch?.campaign_id) campaign = { id: emailMatch.campaign_id };
+    }
+    // Events die binnenkomen voordat resend_email_id is opgeslagen: de mail
+    // draagt de tag campaign_id (object- of lijstvorm, afhankelijk van het event).
+    if (!campaign) {
+      const tags = eventData.tags;
+      const taggedCampaignId = Array.isArray(tags)
+        ? tags.find((tag) => tag?.name === "campaign_id")?.value
+        : tags?.campaign_id;
+      if (taggedCampaignId) {
+        const { data } = await supabaseAdmin
+          .from("newsletter_campaigns")
+          .select("id")
+          .eq("tenant", tenant)
+          .eq("id", taggedCampaignId)
+          .maybeSingle();
+        campaign = data;
+      }
+    }
 
     let recipient = null;
     if (campaign?.id && email) {

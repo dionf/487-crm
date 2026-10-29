@@ -12,6 +12,17 @@ import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import { getLeadStatuses } from "@/lib/constants";
 
+// Een kaart op het bord is een traject; bedrijfsgegevens komen van de lead.
+function toCard({ lead, ...opportunity }) {
+  return {
+    ...lead,
+    ...opportunity,
+    lead_id: lead.id,
+    company_name: lead.company_name,
+    in_pipeline: lead.in_pipeline,
+  };
+}
+
 const CALL_FILTERS = [
   { id: null, label: "Alle", icon: null },
   { id: "nieuw", label: "Nieuw", icon: Phone, color: "text-green-600 bg-green-50 border-green-200" },
@@ -34,10 +45,16 @@ export default function DashboardPage() {
     try {
       const params = new URLSearchParams();
       if (callFilter) params.set("call_filter", callFilter);
-      const url = `/api/leads${params.toString() ? `?${params}` : ""}`;
+      // Ook relaties ophalen: een gewonnen traject van een bedrijf dat klant-relatie
+      // werd telt mee in omzet en conversie, maar staat niet meer op het bord.
+      params.set("scope", "all");
+      const url = `/api/opportunities${params.toString() ? `?${params}` : ""}`;
       const res = await apiFetch(url);
       const data = await res.json();
-      setLeads(data.leads || []);
+      const opportunities = data.opportunities || [];
+      const perLead = {};
+      for (const o of opportunities) perLead[o.lead_id] = (perLead[o.lead_id] || 0) + 1;
+      setLeads(opportunities.map((o) => ({ ...toCard(o), opportunity_count: perLead[o.lead_id] })));
     } catch {
       console.error("Failed to fetch leads");
     } finally {
@@ -78,14 +95,14 @@ export default function DashboardPage() {
     if (mounted) fetchLeads();
   }, [mounted, fetchLeads]);
 
-  async function handleStatusChange(leadId, newStatus) {
+  async function handleStatusChange(opportunityId, newStatus) {
     // Optimistic update
     setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus } : l))
+      prev.map((l) => (l.id === opportunityId ? { ...l, status: newStatus } : l))
     );
 
     try {
-      await apiFetch(`/api/leads/${leadId}`, {
+      await apiFetch(`/api/opportunities/${opportunityId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -178,7 +195,7 @@ export default function DashboardPage() {
           <div className="w-8 h-8 border-2 border-brand-amber border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <KanbanBoard leads={leads} onStatusChange={handleStatusChange} statuses={pipelineStatuses} />
+        <KanbanBoard leads={leads.filter((lead) => lead.in_pipeline !== false)} onStatusChange={handleStatusChange} statuses={pipelineStatuses} />
       )}
 
       {/* Lead Form Modal */}

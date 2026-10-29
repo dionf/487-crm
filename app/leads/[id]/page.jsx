@@ -15,8 +15,11 @@ import QuoteToOrderModal from "@/components/QuoteToOrderModal";
 import AIQuoteAdvisor from "@/components/AIQuoteAdvisor";
 import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
+import NewsletterProfilePanel from "@/components/NewsletterProfilePanel";
+import OpportunitiesPanel from "@/components/OpportunitiesPanel";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
-import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, INDUSTRIES, SOURCES } from "@/lib/constants";
+import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, getRelationTypes, relationLabel, INDUSTRIES, SOURCES } from "@/lib/constants";
+import { setCompanyNewsletter } from "@/components/newsletter/contactNewsletter";
 import { marketingSegmentLabels, marketingStatusLabel } from "@/lib/hiphot-marketing";
 import { useOrg } from "@/lib/org-context";
 import {
@@ -71,12 +74,15 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [showHipHotBuilder, setShowHipHotBuilder] = useState(false);
+  const [quoteOpportunityId, setQuoteOpportunityId] = useState(null); // traject voor nieuwe offerte
   const [editHipHotQuoteId, setEditHipHotQuoteId] = useState(null);
   const [showEmailCompose, setShowEmailCompose] = useState(null); // quote ID
   const [emailQuoteOverride, setEmailQuoteOverride] = useState(null); // quoteData from publish flow
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showRelationMenu, setShowRelationMenu] = useState(false);
+  const [marketingError, setMarketingError] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [callNote, setCallNote] = useState("");
   const [callingOutcome, setCallingOutcome] = useState(null);
@@ -137,6 +143,32 @@ export default function LeadDetailPage() {
       body: JSON.stringify({ status: newStatus }),
     });
     fetchData();
+  }
+
+  // Relatie buiten de pipeline (met label) of terug de pipeline in.
+  async function updatePipeline(inPipeline, relationshipType) {
+    setShowRelationMenu(false);
+    await apiFetch(`/api/leads/${params.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        inPipeline ? { in_pipeline: true } : { in_pipeline: false, relationship_type: relationshipType }
+      ),
+    });
+    fetchData();
+  }
+
+  async function toggleCompanyNewsletter(subscribed) {
+    if (!subscribed && !confirm("Bedrijf uitschrijven? Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.")) return;
+    setMarketingError("");
+    try {
+      await setCompanyNewsletter(params.id, subscribed, {
+        hardBounced: Boolean(data?.lead?.marketing_hard_bounced) || data?.lead?.marketing_subscription_status === "hard_bounce",
+      });
+      fetchData();
+    } catch (err) {
+      setMarketingError(err.message);
+    }
   }
 
   async function toggleTodo(noteId, isCompleted) {
@@ -304,7 +336,22 @@ export default function LeadDetailPage() {
     );
   }
 
-  const { lead, quotes, notes, activities, attachments, contacts } = data;
+  const { lead, quotes, notes, activities, attachments, contacts, opportunities = [] } = data;
+
+  function openQuoteForm(opportunityId = null) {
+    setQuoteOpportunityId(opportunityId);
+    if (isHipHot) setShowHipHotBuilder(true);
+    else setShowQuoteForm(true);
+  }
+
+  async function moveQuote(quoteId, opportunityId) {
+    await apiFetch(`/api/quotes/${quoteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opportunity_id: opportunityId }),
+    });
+    fetchData();
+  }
   const isHipHot = lead.tenant === "hiphot";
   const serviceLabel = SERVICE_TYPES.find((s) => s.id === lead.service_type)?.label;
 
@@ -385,7 +432,16 @@ export default function LeadDetailPage() {
             <h1 className="text-2xl font-bold text-brand-black">
               {lead.company_name}
             </h1>
-            <StatusBadge status={lead.status} size="md" />
+            {lead.in_pipeline === false ? (
+              <span className="text-xs font-semibold px-2 py-1 rounded-pill bg-gray-100 text-gray-500">Buiten pipeline</span>
+            ) : (
+              <StatusBadge status={lead.status} size="md" />
+            )}
+            {lead.relationship_type && (
+              <span className="text-xs font-semibold px-2 py-1 rounded-pill bg-blue-50 text-blue-700 border border-blue-100">
+                {relationLabel(tenant, lead.relationship_type)}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-sm text-gray-500">
@@ -435,6 +491,43 @@ export default function LeadDetailPage() {
             )}
           </div>
 
+          {lead.in_pipeline === false ? (
+            <button
+              onClick={() => updatePipeline(true)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:border-brand-amber transition-colors"
+              title="Weer als lead in dashboard en pipeline tonen"
+            >
+              Terug naar pipeline
+            </button>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowRelationMenu(!showRelationMenu)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:border-brand-amber transition-colors"
+                title="Bedrijf als relatie buiten de salespipeline zetten"
+              >
+                Uit pipeline
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {showRelationMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-lg border border-gray-100 py-1 z-50">
+                  <p className="px-3 py-1.5 text-[11px] text-gray-400">Relatie maken als:</p>
+                  {getRelationTypes(tenant).map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => updatePipeline(false, type.id)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                        type.id === "customer" && ["gewonnen", "offerte_gewonnen"].includes(lead.status) ? "text-brand-orange font-medium" : ""
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={() => setShowNoteForm(true)}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium hover:border-brand-amber transition-colors"
@@ -444,7 +537,7 @@ export default function LeadDetailPage() {
           </button>
 
           <button
-            onClick={() => isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true)}
+            onClick={() => openQuoteForm()}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black transition-colors"
           >
             <FileText className="w-4 h-4" />
@@ -597,12 +690,11 @@ export default function LeadDetailPage() {
             )}
           </div>
 
-          {isHipHot && (
             <div className="bg-white border border-gray-100 rounded-card p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
                   <Megaphone className="w-3.5 h-3.5 text-brand-orange" />
-                  Marketing bedrijf
+                  {isHipHot ? "Marketing bedrijf" : "Nieuwsbrief"}
                 </h3>
                 <button
                   onClick={() => setShowLeadForm(true)}
@@ -614,13 +706,15 @@ export default function LeadDetailPage() {
 
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-pill ${
-                    lead.marketing_consent
-                      ? "bg-green-50 text-green-700 border border-green-100"
-                      : "bg-gray-100 text-gray-500"
-                  }`}>
-                    {lead.marketing_consent ? "Nieuwsbrief toegestaan" : "Geen nieuwsbrief"}
-                  </span>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mr-1">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(lead.marketing_consent)}
+                      onChange={(e) => toggleCompanyNewsletter(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
+                    />
+                    Bedrijf ontvangt nieuwsbrief
+                  </label>
                   <span className="text-xs font-semibold px-2 py-1 rounded-pill bg-gray-100 text-gray-600">
                     {marketingStatusLabel(lead.marketing_subscription_status)}
                   </span>
@@ -631,7 +725,10 @@ export default function LeadDetailPage() {
                   )}
                 </div>
 
-                {marketingSegmentLabels(lead.marketing_segments).length > 0 ? (
+                {marketingError && <p className="text-xs text-red-600">{marketingError}</p>}
+                <p className="text-xs text-gray-400">Per contactpersoon uitschrijven kan met de megafoon bij Contactpersonen.</p>
+
+                {!isHipHot ? null : marketingSegmentLabels(lead.marketing_segments).length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {marketingSegmentLabels(lead.marketing_segments).map((label) => (
                       <span key={label} className="text-xs font-semibold px-2 py-1 rounded-pill bg-amber-50 text-brand-orange border border-amber-100">
@@ -667,7 +764,6 @@ export default function LeadDetailPage() {
                 )}
               </div>
             </div>
-          )}
 
           {/* Addresses & facturatie */}
           <div className="bg-white border border-gray-100 rounded-card p-5">
@@ -1181,6 +1277,18 @@ export default function LeadDetailPage() {
             )}
           </div>
 
+          {!isHipHot && <NewsletterProfilePanel lead={lead} onSaved={fetchData} />}
+
+          {/* Trajecten */}
+          <OpportunitiesPanel
+            leadId={params.id}
+            tenant={tenant}
+            opportunities={opportunities}
+            quotes={quotes}
+            onChanged={fetchData}
+            onNewQuote={openQuoteForm}
+          />
+
           {/* Quotes - Collapsible */}
           <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
             <button
@@ -1205,7 +1313,7 @@ export default function LeadDetailPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => { isHipHot ? setShowHipHotBuilder(true) : setShowQuoteForm(true); }}
+                  onClick={() => openQuoteForm()}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-pill bg-brand-amber/10 text-brand-orange text-xs font-semibold hover:bg-brand-amber/20 transition-colors"
                 >
                   <Plus className="w-3 h-3" />
@@ -1256,6 +1364,19 @@ export default function LeadDetailPage() {
                               </button>
                             </div>
                           </div>
+                          {opportunities.length > 1 && (
+                            <select
+                              value={q.opportunity_id || ""}
+                              onChange={(e) => moveQuote(q.id, e.target.value)}
+                              className="mt-1 text-[10px] font-semibold text-brand-orange bg-transparent border-0 p-0 cursor-pointer"
+                              title="Traject van deze offerte"
+                            >
+                              {!q.opportunity_id && <option value="">Geen traject</option>}
+                              {opportunities.map((o) => (
+                                <option key={o.id} value={o.id}>Traject: {o.name}</option>
+                              ))}
+                            </select>
+                          )}
                           {q.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{q.description}</p>}
                           {/* Publish / Link */}
                           <div className="flex flex-wrap items-center gap-1 mt-1.5">
@@ -1405,6 +1526,7 @@ export default function LeadDetailPage() {
           onClose={() => { setShowHipHotBuilder(false); setEditHipHotQuoteId(null); }}
           lead={lead}
           editQuoteId={editHipHotQuoteId}
+          opportunityId={quoteOpportunityId}
           onSaved={fetchData}
           onPublishedEmail={(quoteData) => {
             setEmailQuoteOverride(quoteData);
@@ -1417,6 +1539,8 @@ export default function LeadDetailPage() {
         onClose={() => setShowQuoteForm(false)}
         leadId={params.id}
         onSaved={fetchData}
+        opportunities={opportunities}
+        defaultOpportunityId={quoteOpportunityId}
       />
       <NoteForm
         open={showNoteForm}

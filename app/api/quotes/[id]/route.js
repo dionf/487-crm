@@ -1,5 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveOpportunityId, updateOpportunityValue } from "@/lib/opportunities";
 
 export async function GET(request, { params }) {
   const session = getVerifiedSession(request);
@@ -29,9 +30,14 @@ export async function PATCH(request, { params }) {
 
   // Verify quote belongs to tenant via its lead
   const { data: quote } = await supabaseAdmin
-    .from("quotes").select("lead_id, leads(tenant)").eq("id", id).single();
+    .from("quotes").select("lead_id, opportunity_id, leads(tenant)").eq("id", id).single();
   if (!quote || quote.leads?.tenant !== tenant) {
     return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
+  }
+
+  // Offerte naar een ander traject van dezelfde lead verplaatsen
+  if ("opportunity_id" in body) {
+    body.opportunity_id = await resolveOpportunityId(quote.lead_id, tenant, body.opportunity_id);
   }
 
   if (body.status === "verstuurd" && !body.sent_at) {
@@ -70,8 +76,11 @@ export async function PATCH(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  // Update lead estimated_value with total of all non-rejected quotes
-  await updateLeadValue(quote.lead_id, tenant);
+  // Waarde van het traject (en bij verplaatsen ook het oude traject) bijwerken
+  await updateOpportunityValue({ opportunityId: data.opportunity_id, leadId: quote.lead_id, tenant });
+  if (quote.opportunity_id && quote.opportunity_id !== data.opportunity_id) {
+    await updateOpportunityValue({ opportunityId: quote.opportunity_id, leadId: quote.lead_id, tenant });
+  }
 
   return Response.json({ quote: data });
 }
@@ -84,7 +93,7 @@ export async function DELETE(request, { params }) {
 
   // Verify quote belongs to tenant
   const { data: quote } = await supabaseAdmin
-    .from("quotes").select("lead_id, leads(tenant)").eq("id", id).single();
+    .from("quotes").select("lead_id, opportunity_id, leads(tenant)").eq("id", id).single();
   if (!quote || quote.leads?.tenant !== tenant) {
     return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
   }
@@ -95,24 +104,8 @@ export async function DELETE(request, { params }) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  // Update lead estimated_value after deletion
-  await updateLeadValue(quote.lead_id, tenant);
+  // Waarde van het traject bijwerken na verwijderen
+  await updateOpportunityValue({ opportunityId: quote.opportunity_id, leadId: quote.lead_id, tenant });
 
   return Response.json({ success: true });
-}
-
-async function updateLeadValue(leadId, tenant) {
-  const { data: allQuotes } = await supabaseAdmin
-    .from("quotes")
-    .select("amount_excl_vat")
-    .eq("lead_id", leadId)
-    .eq("tenant", tenant)
-    .not("status", "eq", "afgewezen");
-
-  const totalValue = (allQuotes || []).reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);
-  await supabaseAdmin
-    .from("leads")
-    .update({ estimated_value: totalValue })
-    .eq("id", leadId)
-    .eq("tenant", tenant);
 }

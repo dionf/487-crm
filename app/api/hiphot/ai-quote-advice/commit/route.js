@@ -2,6 +2,7 @@ import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { extractLessons, buildContextTags } from "@/lib/ai-lesson-extractor";
 import { getShippingCost } from "@/lib/hiphot-pricing";
+import { resolveOpportunityId, updateOpportunityValue } from "@/lib/opportunities";
 
 export const dynamic = "force-dynamic";
 // Lesson-extraction doet een Claude call — bump timeout zodat die kan afronden
@@ -25,7 +26,7 @@ export async function POST(request) {
     return Response.json({ error: "Ongeldige request body" }, { status: 400 });
   }
 
-  const { lead_id, quote_state, chat_log, form_submission_id, initial_quote_state, learn } = body || {};
+  const { lead_id, opportunity_id, quote_state, chat_log, form_submission_id, initial_quote_state, learn } = body || {};
 
   if (!lead_id || !quote_state || !Array.isArray(quote_state.line_items) || quote_state.line_items.length === 0) {
     return Response.json(
@@ -185,11 +186,14 @@ export async function POST(request) {
   };
   const patchedRationale = patchRationale(quote_state.rationale);
 
+  const opportunityId = await resolveOpportunityId(lead_id, tenant, opportunity_id);
+
   // Insert quote
   const { data: newQuote, error: quoteErr } = await supabaseAdmin
     .from("quotes")
     .insert({
       lead_id,
+      opportunity_id: opportunityId,
       quote_number,
       amount_excl_vat: amountExclVat,
       vat_percentage: 21.0,
@@ -249,17 +253,8 @@ export async function POST(request) {
     );
   }
 
-  // Update lead estimated_value (som van alle non-rejected quotes)
-  const { data: allQuotes } = await supabaseAdmin
-    .from("quotes")
-    .select("amount_excl_vat")
-    .eq("lead_id", lead_id)
-    .eq("tenant", tenant)
-    .not("status", "eq", "afgewezen");
-  if (allQuotes?.length) {
-    const totalValue = allQuotes.reduce((s, q) => s + (Number(q.amount_excl_vat) || 0), 0);
-    await supabaseAdmin.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id).eq("tenant", tenant);
-  }
+  // Waarde van het traject = som van zijn offertes
+  await updateOpportunityValue({ opportunityId: newQuote.opportunity_id, leadId: lead_id, tenant });
 
   // Audit note: chat-history + quote link
   if (Array.isArray(chat_log) && chat_log.length > 0) {

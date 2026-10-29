@@ -27,7 +27,13 @@ export async function PATCH(request, { params }) {
   if (body.phone !== undefined) updates.phone = body.phone || null;
   if (body.role) updates.role = body.role;
   if (body.is_active !== undefined) updates.is_active = body.is_active;
-  if (body.pin) updates.pin_hash = createHash("sha256").update(body.pin).digest("hex");
+  if (body.pin) {
+    updates.pin_hash = createHash("sha256").update(body.pin).digest("hex");
+    // Reset door een admin voor iemand anders: die pincode is bij twee mensen
+    // bekend, dus de gebruiker kiest bij de volgende login een eigen pincode.
+    // Wie zijn eigen pincode wijzigt hoeft dat niet nog eens te doen.
+    updates.must_change_pin = id !== session.user_id;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("users")

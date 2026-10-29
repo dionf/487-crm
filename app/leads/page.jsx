@@ -6,7 +6,7 @@ import AppShell from "@/components/AppShell";
 import StatusBadge from "@/components/StatusBadge";
 import LeadForm from "@/components/LeadForm";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
-import { SERVICE_TYPES, getLeadStatuses } from "@/lib/constants";
+import { SERVICE_TYPES, getLeadStatuses, relationLabel } from "@/lib/constants";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
@@ -67,6 +67,8 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Standaard alleen de salespipeline; relaties staan ook in Relaties.
+  const [scopeFilter, setScopeFilter] = useState("pipeline");
   const [serviceFilter, setServiceFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [relationshipTypeFilter, setRelationshipTypeFilter] = useState("");
@@ -85,6 +87,7 @@ export default function LeadsPage() {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
+    params.set("scope", scopeFilter);
     if (serviceFilter) params.set("service_type", serviceFilter);
     if (isHipHot && marketingFilter) params.set("marketing", marketingFilter);
     if (isHipHot && marketingSegmentFilter) params.set("marketing_segment", marketingSegmentFilter);
@@ -107,7 +110,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, serviceFilter, agentFilter, relationshipTypeFilter, hubspotDealOriginFilter, marketingFilter, marketingSegmentFilter, isHipHot, effectiveAdmin, user]);
+  }, [search, statusFilter, scopeFilter, serviceFilter, agentFilter, relationshipTypeFilter, hubspotDealOriginFilter, marketingFilter, marketingSegmentFilter, isHipHot, effectiveAdmin, user]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -323,6 +326,16 @@ export default function LeadsPage() {
         </div>
 
         <select
+          value={scopeFilter}
+          onChange={(e) => setScopeFilter(e.target.value)}
+          className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
+        >
+          <option value="pipeline">In pipeline</option>
+          <option value="relations">Relaties (buiten pipeline)</option>
+          <option value="all">Alles</option>
+        </select>
+
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:border-brand-amber"
@@ -476,7 +489,13 @@ export default function LeadsPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={lead.status} />
+                        {lead.in_pipeline === false ? (
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill bg-blue-50 text-blue-700 border border-blue-100">
+                            {relationLabel(effectiveTenant, lead.relationship_type) || "Relatie"}
+                          </span>
+                        ) : (
+                          <StatusBadge status={lead.status} />
+                        )}
                       </td>
                       {isHipHot ? (
                         <>

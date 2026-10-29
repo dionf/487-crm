@@ -10,7 +10,7 @@ import ProductSelector from "@/components/hiphot/ProductSelector";
 import LineItemsTable from "@/components/hiphot/LineItemsTable";
 import MarginPanel from "@/components/hiphot/MarginPanel";
 
-export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null, onPublishedEmail }) {
+export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQuoteId = null, onPublishedEmail, opportunityId = null }) {
   const { user } = useOrg();
   const [step, setStep] = useState("edit"); // edit | preview | published
   const [loading, setLoading] = useState(false);
@@ -214,7 +214,7 @@ export default function HipHotQuoteBuilder({ open, onClose, lead, onSaved, editQ
         const quoteRes = await apiFetch("/api/quotes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, opportunity_id: opportunityId }),
         });
         if (!quoteRes.ok) {
           const err = await quoteRes.json();

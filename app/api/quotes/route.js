@@ -1,5 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveOpportunityId, updateOpportunityValue } from "@/lib/opportunities";
 
 export async function GET(request) {
   const session = getVerifiedSession(request);
@@ -10,7 +11,7 @@ export async function GET(request) {
 
   let query = supabaseAdmin
     .from("quotes")
-    .select("*, leads(company_name, contact_person)")
+    .select("*, leads(company_name, contact_person), opportunities(id, name)")
     .eq("tenant", tenant)
     .order("created_at", { ascending: false });
 
@@ -31,7 +32,7 @@ export async function POST(request) {
   const tenant = session.tenant;
   const body = await request.json();
   const {
-    lead_id, amount_excl_vat, vat_percentage, description, valid_until, created_by,
+    lead_id, opportunity_id, amount_excl_vat, vat_percentage, description, valid_until, created_by,
     // HipHot fields
     quote_type, remarks_html, shipping_cost, shipping_discount_pct,
     margin_data, contact_name, contact_title, contact_email, contact_phone, language,
@@ -57,8 +58,11 @@ export async function POST(request) {
   const { data: numData } = await supabaseAdmin.rpc("generate_quote_number");
   const quote_number = numData;
 
+  const opportunityId = await resolveOpportunityId(lead_id, tenant, opportunity_id);
+
   const insertData = {
     lead_id,
+    opportunity_id: opportunityId,
     quote_number,
     amount_excl_vat,
     vat_percentage: vat_percentage || 21.0,
@@ -90,18 +94,8 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  // Update lead estimated_value with total of all quotes
-  const { data: allQuotes } = await supabaseAdmin
-    .from("quotes")
-    .select("amount_excl_vat")
-    .eq("lead_id", lead_id)
-    .eq("tenant", tenant)
-    .not("status", "eq", "afgewezen");
-
-  if (allQuotes?.length) {
-    const totalValue = allQuotes.reduce((sum, q) => sum + (Number(q.amount_excl_vat) || 0), 0);
-    await supabaseAdmin.from("leads").update({ estimated_value: totalValue }).eq("id", lead_id).eq("tenant", tenant);
-  }
+  // Waarde van het traject = som van zijn offertes
+  await updateOpportunityValue({ opportunityId, leadId: lead_id, tenant });
 
   // Log activity
   await supabaseAdmin.from("activities").insert({

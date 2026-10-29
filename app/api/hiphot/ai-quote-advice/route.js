@@ -1,4 +1,5 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateOrRefine } from "@/lib/ai-quote-advisor";
 
@@ -8,6 +9,16 @@ export const maxDuration = 60;
 export async function POST(request) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Roept de Claude API aan per aanvraag; een lus hierop kost direct geld.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/hiphot/ai-quote-advice",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   if (tenant !== "hiphot") {
     return Response.json({ error: "Alleen beschikbaar voor HipHot" }, { status: 403 });

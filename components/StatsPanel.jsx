@@ -31,8 +31,10 @@ export default function StatsPanel({ leads }) {
   const wonStatuses = ["gewonnen", "offerte_gewonnen"];
   const lostStatuses = ["verloren", "offerte_verloren"];
 
+  // `leads` zijn de trajecten op het bord (met in_pipeline van hun bedrijf).
+  // Relaties buiten de pipeline tellen niet als open pipeline, wel als gewonnen/verloren.
   const activePipeline = leads.filter(
-    (l) => !wonStatuses.includes(l.status) && !lostStatuses.includes(l.status)
+    (l) => l.in_pipeline !== false && !wonStatuses.includes(l.status) && !lostStatuses.includes(l.status)
   );
   const pipelineValue = activePipeline.reduce(
     (sum, l) => sum + (parseFloat(l.estimated_value) || 0),
@@ -82,7 +84,7 @@ export default function StatsPanel({ leads }) {
       color: "bg-blue-100 text-blue-700",
     },
     {
-      label: "Actieve leads",
+      label: "Actieve trajecten",
       value: activePipeline.length,
       icon: Users,
       color: "bg-purple-100 text-purple-700",
@@ -177,7 +179,7 @@ export default function StatsPanel({ leads }) {
                     <div>
                       <p className="text-sm font-medium">{serviceTypeLabels[type] || type}</p>
                       <p className="text-xs text-gray-400">
-                        {data.leads} leads · {data.won} gewonnen · {data.lost} verloren
+                        {data.leads} trajecten · {data.won} gewonnen · {data.lost} verloren
                       </p>
                     </div>
                     <div className="flex items-center gap-4 text-right">

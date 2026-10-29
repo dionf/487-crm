@@ -87,9 +87,16 @@ export async function POST(request) {
     const scheduledAt = normalizeScheduledAt(body.scheduled_at);
     const recipientLimit = normalizeRecipientLimit(body.recipient_limit);
     const batchSettings = normalizeBatchSettings(body);
-    if (!name || !subject || !bodyHtml) {
-      return Response.json({ error: "Naam, onderwerp en HTML zijn verplicht" }, { status: 400 });
+    const mode = body.mode === "personalized" ? "personalized" : "broadcast";
+    if (!name || !subject || (mode === "broadcast" && !bodyHtml)) {
+      return Response.json(
+        { error: mode === "broadcast" ? "Naam, onderwerp en HTML zijn verplicht" : "Naam en onderwerp zijn verplicht" },
+        { status: 400 }
+      );
     }
+    const layout = ["intro", "per_item", "combined"].includes(body.personalization_layout)
+      ? body.personalization_layout
+      : "combined";
 
     const includedSegmentIds = normalizeSegmentIds(body.included_segment_ids || (body.segment_id ? [body.segment_id] : []));
     if (!includedSegmentIds.length) {
@@ -111,7 +118,11 @@ export async function POST(request) {
         name,
         subject,
         preview_text: body.preview_text || null,
-        body_html: bodyHtml,
+        body_html: bodyHtml || null,
+        mode,
+        personalization_layout: layout,
+        headline: String(body.headline || "").trim() || null,
+        intro_text: String(body.intro_text || "").trim() || null,
         recipient_limit: recipientLimit,
         scheduled_at: scheduledAt,
         ...batchSettings,

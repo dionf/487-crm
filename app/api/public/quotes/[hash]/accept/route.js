@@ -1,4 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import {
+  enforceRateLimit,
+  getClientIp,
+  registerFailedAttempt,
+} from "@/lib/rate-limit";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 
@@ -26,8 +31,41 @@ function cleanString(v) {
   return t.length > 0 ? t : null;
 }
 
+// Hashes komen uit randomBytes(16).toString("hex") — altijd 32 hex-tekens.
+const HASH_RE = /^[0-9a-f]{32}$/i;
+const SCOPE = "/api/public/quotes/accept";
+
+export const dynamic = "force-dynamic";
+
+// POST /api/public/quotes/<hash>/accept — klant accepteert zijn offerte.
+//
+// Onbeschermd publiek schrijfpad: elke aanroep deed een lookup en, bij een
+// treffer, een status-update plus een mail. Een bot die hashes afloopt kostte
+// dus queries en kon bij een treffer ongelimiteerd mails uitlokken. Vandaar een
+// volumelimiet per IP en een aparte teller op missers — een echte klant heeft
+// zijn hash uit de mail en mist niet.
 export async function POST(request, { params }) {
   const hash = (await params).hash;
+  const ip = getClientIp(request);
+
+  const gate = await enforceRateLimit({
+    request,
+    policy: "public-hash",
+    identifier: ip,
+    scope: SCOPE,
+  });
+  if (gate.response) return gate.response;
+
+  if (!HASH_RE.test(hash || "")) {
+    await registerFailedAttempt({
+      request,
+      policy: "public-hash-miss",
+      identifier: ip,
+      scope: SCOPE,
+      reason: "Offerte-accept met ongeldig hash-formaat",
+    });
+    return Response.json({ error: "Offerte niet gevonden" }, { status: 404 });
+  }
 
   // Body is optional — als de klant via de oude (body-loze) flow komt, behandelen we 'm als leeg.
   let body = {};
@@ -40,11 +78,18 @@ export async function POST(request, { params }) {
   // Find quote by hash (include lead + tenant info)
   const { data: quote, error: findError } = await supabaseAdmin
     .from("quotes")
-    .select("id, lead_id, quote_number, status, valid_until, accepted_at, amount_excl_vat, tenant, leads(id, company_name, contact_person, email, tenant)")
+    .select("id, lead_id, opportunity_id, quote_number, status, valid_until, accepted_at, amount_excl_vat, tenant, leads(id, company_name, contact_person, email, tenant)")
     .eq("public_hash", hash)
     .maybeSingle();
 
   if (!quote) {
+    await registerFailedAttempt({
+      request,
+      policy: "public-hash-miss",
+      identifier: ip,
+      scope: SCOPE,
+      reason: "Offerte-accept voor onbekende hash",
+    });
     return Response.json(
       { error: "Offerte niet gevonden" },
       { status: 404 }
@@ -99,10 +144,11 @@ export async function POST(request, { params }) {
     const wonStatus = tenant === "hiphot" ? "offerte_gewonnen" : "gewonnen";
 
     // Bouw lead-update op met klant-input. Lege velden niet meesturen.
-    const leadUpdate = {
-      status: wonStatus,
-      won_at: new Date().toISOString(),
-    };
+    // Heeft de offerte een traject, dan wint dát traject (de lead volgt via de
+    // DB-trigger); oude offertes zonder traject zetten de lead zelf op gewonnen.
+    const leadUpdate = quote.opportunity_id
+      ? {}
+      : { status: wonStatus, won_at: new Date().toISOString() };
 
     for (const f of BILLING_FIELDS) {
       const v = cleanString(body[f]);
@@ -139,11 +185,20 @@ export async function POST(request, { params }) {
       }, {});
     }
 
-    await supabaseAdmin
-      .from("leads")
-      .update(leadUpdate)
-      .eq("id", quote.lead_id)
-      .eq("tenant", tenant);
+    if (quote.opportunity_id) {
+      await supabaseAdmin
+        .from("opportunities")
+        .update({ status: wonStatus, won_at: new Date().toISOString() })
+        .eq("id", quote.opportunity_id)
+        .eq("tenant", tenant);
+    }
+    if (Object.keys(leadUpdate).length > 0) {
+      await supabaseAdmin
+        .from("leads")
+        .update(leadUpdate)
+        .eq("id", quote.lead_id)
+        .eq("tenant", tenant);
+    }
 
     // Log activity
     const baseDescription = `Offerte ${quote.quote_number} geaccepteerd door klant via publieke link`;

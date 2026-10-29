@@ -68,17 +68,19 @@ server.tool(
     }
     if (!leadData) return { content: [{ type: "text", text: "Lead niet gevonden." }] };
 
-    const [notesRes, quotesRes, activitiesRes, attachRes] = await Promise.all([
+    const [notesRes, quotesRes, activitiesRes, attachRes, oppRes] = await Promise.all([
       supabase.from("notes").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
       supabase.from("quotes").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
       supabase.from("activities").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }).limit(10),
       supabase.from("attachments").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
+      supabase.from("opportunities").select("*").eq("lead_id", leadData.id).order("created_at", { ascending: false }),
     ]);
 
     const notes = notesRes.data || [];
     const quotes = quotesRes.data || [];
     const activities = activitiesRes.data || [];
     const attachments = attachRes.data || [];
+    const opportunities = oppRes.data || [];
 
     let text = `# ${leadData.company_name}\n`;
     text += `**Status:** ${leadData.status}\n`;
@@ -93,10 +95,18 @@ server.tool(
     if (leadData.website_url) text += `**Website:** ${leadData.website_url}\n`;
     if (leadData.ai_summary) text += `\n**AI Analyse:**\n${leadData.ai_summary}\n`;
 
+    if (opportunities.length) {
+      text += `\n## Trajecten (${opportunities.length})\n`;
+      opportunities.forEach(o => {
+        text += `• ${o.name} (${o.id}) — ${o.status}${o.estimated_value ? ` — €${o.estimated_value}` : ""}${o.lost_reason ? ` — reden: ${o.lost_reason}` : ""}\n`;
+      });
+    }
+
     if (quotes.length) {
+      const oppName = (id) => opportunities.find(o => o.id === id)?.name;
       text += `\n## Offertes (${quotes.length})\n`;
       quotes.forEach(q => {
-        text += `• ${q.quote_number} — €${q.amount_excl_vat} — ${q.status}${q.description ? ` — ${q.description}` : ""}\n`;
+        text += `• ${q.quote_number} — €${q.amount_excl_vat} — ${q.status}${oppName(q.opportunity_id) ? ` — traject: ${oppName(q.opportunity_id)}` : ""}${q.description ? ` — ${q.description}` : ""}\n`;
       });
     }
 
@@ -165,7 +175,7 @@ server.tool(
 // --- Update lead status ---
 server.tool(
   "crm_update_lead",
-  "Werk een lead bij — status, waarde, contactgegevens, etc. (STANDALONE — geen Supabase MCP nodig).",
+  "Werk een lead bij — status, waarde, contactgegevens, etc. Status en waarde gelden voor het huidige traject van het bedrijf; gebruik crm_update_opportunity voor een specifiek traject (STANDALONE — geen Supabase MCP nodig).",
   {
     lead_id: z.string().optional().describe("UUID van de lead"),
     company_name: z.string().optional().describe("Bedrijfsnaam (om lead te vinden als je geen ID hebt)"),
@@ -289,26 +299,29 @@ server.tool(
   "Toon pipeline statistieken van de 48-7 CRM: win rate, waarde, cyclustijd per service type (STANDALONE — geen Supabase MCP nodig).",
   {},
   async () => {
-    const { data: leads } = await supabase.from("leads").select("status, service_type, estimated_value, created_at, won_at, updated_at");
-    if (!leads?.length) return { content: [{ type: "text", text: "Geen data beschikbaar." }] };
+    // Trajecten tellen, niet bedrijven. Relaties buiten de pipeline (klant,
+    // partner, nieuwsbrief) hebben geen open deals.
+    const { data: rows } = await supabase.from("opportunities").select("status, service_type, estimated_value, leads(in_pipeline)").eq("tenant", "48-7");
+    const deals = (rows || []).map(o => ({ ...o, in_pipeline: o.leads?.in_pipeline }));
+    if (!deals.length) return { content: [{ type: "text", text: "Geen data beschikbaar." }] };
 
-    const active = leads.filter(l => !["gewonnen", "verloren"].includes(l.status));
-    const won = leads.filter(l => l.status === "gewonnen");
-    const lost = leads.filter(l => l.status === "verloren");
+    const active = deals.filter(l => l.in_pipeline !== false && !["gewonnen", "verloren"].includes(l.status));
+    const won = deals.filter(l => l.status === "gewonnen");
+    const lost = deals.filter(l => l.status === "verloren");
     const pipelineValue = active.reduce((s, l) => s + (parseFloat(l.estimated_value) || 0), 0);
     const wonValue = won.reduce((s, l) => s + (parseFloat(l.estimated_value) || 0), 0);
     const winRate = won.length + lost.length > 0 ? Math.round(won.length / (won.length + lost.length) * 100) : 0;
 
     let text = `# Pipeline Overzicht\n\n`;
-    text += `• **Actieve leads:** ${active.length} (€${pipelineValue.toLocaleString("nl-NL")})\n`;
+    text += `• **Actieve trajecten:** ${active.length} (€${pipelineValue.toLocaleString("nl-NL")})\n`;
     text += `• **Gewonnen:** ${won.length} (€${wonValue.toLocaleString("nl-NL")})\n`;
     text += `• **Verloren:** ${lost.length}\n`;
     text += `• **Win rate:** ${winRate}%\n`;
-    text += `• **Totaal leads:** ${leads.length}\n`;
+    text += `• **Totaal trajecten:** ${deals.length}\n`;
 
     // Per service type
     const byType = {};
-    leads.forEach(l => {
+    deals.forEach(l => {
       const t = l.service_type || "onbekend";
       if (!byType[t]) byType[t] = { total: 0, won: 0, lost: 0, value: 0 };
       byType[t].total++;
@@ -320,10 +333,70 @@ server.tool(
     text += `\n## Per Service Type\n`;
     Object.entries(byType).forEach(([type, d]) => {
       const wr = d.won + d.lost > 0 ? Math.round(d.won / (d.won + d.lost) * 100) : "-";
-      text += `• **${type}**: ${d.total} leads — €${d.value.toLocaleString("nl-NL")} — win rate: ${wr}%\n`;
+      text += `• **${type}**: ${d.total} trajecten — €${d.value.toLocaleString("nl-NL")} — win rate: ${wr}%\n`;
     });
 
     return { content: [{ type: "text", text }] };
+  }
+);
+
+// --- Trajecten ---
+const OPPORTUNITY_STATUSES = "nieuw, gekwalificeerd, inventarisatie, offerte_verstuurd, onderhandeling, gewonnen, verloren, geen_lead";
+
+server.tool(
+  "crm_create_opportunity",
+  "Start een nieuw traject (deal) bij een bestaand bedrijf in de 48-7 CRM. Eén bedrijf kan meerdere trajecten hebben, elk met eigen status, waarde en offertes.",
+  {
+    lead_id: z.string().optional().describe("UUID van het bedrijf (lead)"),
+    company_name: z.string().optional().describe("Bedrijfsnaam (als je geen ID hebt)"),
+    name: z.string().describe("Naam van het traject, bijv. 'Vacatureautomatisering'"),
+    status: z.string().optional().describe(`Status (default nieuw): ${OPPORTUNITY_STATUSES}`),
+    service_type: z.string().optional().describe("Service type"),
+    estimated_value: z.number().optional().describe("Geschatte waarde in euro"),
+  },
+  async ({ lead_id, company_name, name, status, service_type, estimated_value }) => {
+    let id = lead_id;
+    if (!id && company_name) {
+      const { data } = await supabase.from("leads").select("id").eq("tenant", "48-7").ilike("company_name", `%${company_name}%`).limit(1).single();
+      if (data) id = data.id;
+    }
+    if (!id) return { content: [{ type: "text", text: "Lead niet gevonden." }] };
+
+    const { data, error } = await supabase.from("opportunities").insert({
+      tenant: "48-7", lead_id: id, name, status: status || "nieuw",
+      service_type: service_type || null, estimated_value: estimated_value ?? null,
+    }).select().single();
+    if (error) return { content: [{ type: "text", text: `Fout: ${error.message}` }] };
+
+    await supabase.from("activities").insert({
+      lead_id: id, activity_type: "opportunity_created", description: `Nieuw traject: ${name}`,
+      metadata: { opportunity_id: data.id }, created_by: "MCP", tenant: "48-7",
+    });
+
+    return { content: [{ type: "text", text: `Traject aangemaakt: **${name}** (${data.id}) — status ${data.status}` }] };
+  }
+);
+
+server.tool(
+  "crm_update_opportunity",
+  "Werk een traject (deal) bij in de 48-7 CRM: status, naam, waarde of reden gewonnen/verloren.",
+  {
+    opportunity_id: z.string().describe("UUID van het traject (zie crm_get_lead)"),
+    name: z.string().optional().describe("Nieuwe naam"),
+    status: z.string().optional().describe(`Nieuwe status: ${OPPORTUNITY_STATUSES}`),
+    estimated_value: z.number().optional().describe("Geschatte waarde in euro"),
+    service_type: z.string().optional().describe("Service type"),
+    win_reason: z.string().optional().describe("Reden gewonnen"),
+    lost_reason: z.string().optional().describe("Reden verloren"),
+  },
+  async ({ opportunity_id, ...updates }) => {
+    const cleanUpdates = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined && v !== ""));
+    if (!Object.keys(cleanUpdates).length) return { content: [{ type: "text", text: "Geen wijzigingen opgegeven." }] };
+
+    const { data, error } = await supabase.from("opportunities").update(cleanUpdates).eq("id", opportunity_id).select().single();
+    if (error) return { content: [{ type: "text", text: `Fout: ${error.message}` }] };
+
+    return { content: [{ type: "text", text: `Traject **${data.name}** bijgewerkt: ${Object.keys(cleanUpdates).join(", ")}` }] };
   }
 );
 
@@ -334,11 +407,12 @@ server.tool(
   {
     lead_id: z.string().optional().describe("UUID van de lead"),
     company_name: z.string().optional().describe("Bedrijfsnaam (als je geen ID hebt)"),
+    opportunity_id: z.string().optional().describe("UUID van het traject (default: huidig traject van het bedrijf)"),
     amount: z.number().describe("Bedrag excl. BTW"),
     description: z.string().optional().describe("Omschrijving van de offerte"),
     vat_percentage: z.number().optional().describe("BTW percentage (default 21)").default(21),
   },
-  async ({ lead_id, company_name, amount, description, vat_percentage }) => {
+  async ({ lead_id, company_name, opportunity_id, amount, description, vat_percentage }) => {
     let id = lead_id;
     if (!id && company_name) {
       const { data } = await supabase.from("leads").select("id").ilike("company_name", `%${company_name}%`).limit(1).single();
@@ -350,8 +424,14 @@ server.tool(
     const { data: qNum } = await supabase.rpc("generate_quote_number");
     const quoteNumber = qNum || `OFT-${Date.now()}`;
 
+    let oppId = opportunity_id;
+    if (!oppId) {
+      const { data: current } = await supabase.rpc("current_opportunity_id", { p_lead_id: id });
+      oppId = current || null;
+    }
+
     const { data, error } = await supabase.from("quotes").insert({
-      lead_id: id, quote_number: quoteNumber, amount_excl_vat: amount,
+      lead_id: id, opportunity_id: oppId, quote_number: quoteNumber, amount_excl_vat: amount,
       vat_percentage, description, status: "concept", created_by: "MCP",
     }).select().single();
 

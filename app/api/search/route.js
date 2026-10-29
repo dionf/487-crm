@@ -1,9 +1,21 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Zoekt met ilike over leads en notities — duur per aanroep en de snelste
+  // manier om de hele database uit te lezen.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-search",
+    identifier: session.user_id,
+    scope: "/api/search",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q");

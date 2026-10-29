@@ -1,4 +1,5 @@
 import { getVerifiedSession } from "@/lib/auth";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
@@ -18,6 +19,17 @@ function getResendKey(tenant) {
 export async function POST(request, { params }) {
   const session = getVerifiedSession(request);
   if (!session) return Response.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  // Verstuurt e-mail namens het bedrijf. Ongelimiteerd is dat een mailbom-knop
+  // en een risico voor de afzenderreputatie.
+  const gate = await enforceRateLimit({
+    request,
+    policy: "session-expensive",
+    identifier: session.user_id,
+    scope: "/api/quotes/send-email",
+    tenant: session.tenant,
+  });
+  if (gate.response) return gate.response;
   const tenant = session.tenant;
   const resend = new Resend(getResendKey(tenant));
   const userName = session.name || "CRM";
@@ -127,23 +139,27 @@ export async function POST(request, { params }) {
         .eq("id", id);
     }
 
-    // Auto-update lead status to "offerte gestuurd/verstuurd"
+    // Traject van deze offerte naar "offerte gestuurd/verstuurd"
+    // (oude offertes zonder traject: via de lead, die het huidige traject bijwerkt)
     const quoteStatusId = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
-    const { data: currentLead } = await supabaseAdmin
-      .from("leads")
+    const target = quote.opportunity_id
+      ? { table: "opportunities", id: quote.opportunity_id }
+      : { table: "leads", id: quote.lead_id };
+    const { data: current } = await supabaseAdmin
+      .from(target.table)
       .select("status")
-      .eq("id", quote.lead_id)
+      .eq("id", target.id)
       .eq("tenant", tenant)
       .single();
 
-    // Only upgrade status if lead is still in an early stage
+    // Only upgrade status if the deal is still in an early stage
     const earlyStatuses = ["prospect", "nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
-    if (currentLead && earlyStatuses.includes(currentLead.status)) {
+    if (current && earlyStatuses.includes(current.status)) {
       await supabaseAdmin
-        .from("leads")
+        .from(target.table)
         .update({ status: quoteStatusId })
         .eq("tenant", tenant)
-        .eq("id", quote.lead_id);
+        .eq("id", target.id);
     }
 
     // Optional: schedule a reminder follow-up for the sender

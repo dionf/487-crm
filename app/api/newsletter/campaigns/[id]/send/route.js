@@ -1,4 +1,5 @@
 import { getCampaignForTenant, requireAdmin, syncAndSendCampaign } from "@/lib/newsletters";
+import { sendPersonalizedCampaign } from "@/lib/newsletter-personalized-send";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,8 @@ export async function POST(request, { params }) {
     if (["sent", "scheduled", "syncing", "batch_waiting", "paused"].includes(campaign.status)) {
       return Response.json({ error: "Deze campagne is al verzonden of wordt verwerkt" }, { status: 400 });
     }
-    const updated = await syncAndSendCampaign({ tenant, campaign, userName });
+    const send = campaign.mode === "personalized" ? sendPersonalizedCampaign : syncAndSendCampaign;
+    const updated = await send({ tenant, campaign, userName });
     return Response.json({ campaign: updated });
   } catch (error) {
     if (error instanceof Response) return error;

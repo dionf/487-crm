@@ -78,7 +78,7 @@ export async function POST(request, { params }) {
   // Find quote by hash (include lead + tenant info)
   const { data: quote, error: findError } = await supabaseAdmin
     .from("quotes")
-    .select("id, lead_id, quote_number, status, valid_until, accepted_at, amount_excl_vat, tenant, leads(id, company_name, contact_person, email, tenant)")
+    .select("id, lead_id, opportunity_id, quote_number, status, valid_until, accepted_at, amount_excl_vat, tenant, leads(id, company_name, contact_person, email, tenant)")
     .eq("public_hash", hash)
     .maybeSingle();
 
@@ -144,10 +144,11 @@ export async function POST(request, { params }) {
     const wonStatus = tenant === "hiphot" ? "offerte_gewonnen" : "gewonnen";
 
     // Bouw lead-update op met klant-input. Lege velden niet meesturen.
-    const leadUpdate = {
-      status: wonStatus,
-      won_at: new Date().toISOString(),
-    };
+    // Heeft de offerte een traject, dan wint dát traject (de lead volgt via de
+    // DB-trigger); oude offertes zonder traject zetten de lead zelf op gewonnen.
+    const leadUpdate = quote.opportunity_id
+      ? {}
+      : { status: wonStatus, won_at: new Date().toISOString() };
 
     for (const f of BILLING_FIELDS) {
       const v = cleanString(body[f]);
@@ -184,11 +185,20 @@ export async function POST(request, { params }) {
       }, {});
     }
 
-    await supabaseAdmin
-      .from("leads")
-      .update(leadUpdate)
-      .eq("id", quote.lead_id)
-      .eq("tenant", tenant);
+    if (quote.opportunity_id) {
+      await supabaseAdmin
+        .from("opportunities")
+        .update({ status: wonStatus, won_at: new Date().toISOString() })
+        .eq("id", quote.opportunity_id)
+        .eq("tenant", tenant);
+    }
+    if (Object.keys(leadUpdate).length > 0) {
+      await supabaseAdmin
+        .from("leads")
+        .update(leadUpdate)
+        .eq("id", quote.lead_id)
+        .eq("tenant", tenant);
+    }
 
     // Log activity
     const baseDescription = `Offerte ${quote.quote_number} geaccepteerd door klant via publieke link`;

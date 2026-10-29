@@ -139,23 +139,27 @@ export async function POST(request, { params }) {
         .eq("id", id);
     }
 
-    // Auto-update lead status to "offerte gestuurd/verstuurd"
+    // Traject van deze offerte naar "offerte gestuurd/verstuurd"
+    // (oude offertes zonder traject: via de lead, die het huidige traject bijwerkt)
     const quoteStatusId = tenant === "hiphot" ? "offerte_gestuurd" : "offerte_verstuurd";
-    const { data: currentLead } = await supabaseAdmin
-      .from("leads")
+    const target = quote.opportunity_id
+      ? { table: "opportunities", id: quote.opportunity_id }
+      : { table: "leads", id: quote.lead_id };
+    const { data: current } = await supabaseAdmin
+      .from(target.table)
       .select("status")
-      .eq("id", quote.lead_id)
+      .eq("id", target.id)
       .eq("tenant", tenant)
       .single();
 
-    // Only upgrade status if lead is still in an early stage
+    // Only upgrade status if the deal is still in an early stage
     const earlyStatuses = ["prospect", "nieuwe_aanvraag", "nieuw", "contact_gelegd", "in_behandeling", "voorstel_fase"];
-    if (currentLead && earlyStatuses.includes(currentLead.status)) {
+    if (current && earlyStatuses.includes(current.status)) {
       await supabaseAdmin
-        .from("leads")
+        .from(target.table)
         .update({ status: quoteStatusId })
         .eq("tenant", tenant)
-        .eq("id", quote.lead_id);
+        .eq("id", target.id);
     }
 
     // Optional: schedule a reminder follow-up for the sender

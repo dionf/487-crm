@@ -11,7 +11,7 @@
  *   --file=<pad>   Alternatief xlsx bestand (default: zonvenant_partners.xlsx in Documents/HIPHOT/Diversen/Rapporten)
  *
  * Vereist .env.local in de project root met NEXT_PUBLIC_SUPABASE_URL en
- * NEXT_PUBLIC_SUPABASE_ANON_KEY (of SUPABASE_SERVICE_ROLE_KEY).
+ * SUPABASE_SERVICE_ROLE_KEY (de anon key heeft geen toegang tot CRM-data).
  */
 
 import fs from "node:fs";
@@ -40,8 +40,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ Supabase credentials ontbreken. Check .env.local.");

@@ -205,16 +205,22 @@ BEGIN
     RETURN NULL;
   END IF;
 
+  -- Alleen velden die op de lead echt veranderden; service_type wordt niet
+  -- gespiegeld en mag het traject niet overschrijven bij een statuswijziging.
   PERFORM set_config('crm.opp_sync', 'on', true);
-  UPDATE opportunities
-     SET status = NEW.status,
-         estimated_value = NEW.estimated_value,
-         service_type = NEW.service_type,
-         won_at = NEW.won_at,
-         win_reason = NEW.win_reason,
-         lost_reason = NEW.lost_reason
-   WHERE id = opp_id;
+  UPDATE opportunities o
+     SET status = CASE WHEN OLD.status IS DISTINCT FROM NEW.status THEN NEW.status ELSE o.status END,
+         estimated_value = CASE WHEN OLD.estimated_value IS DISTINCT FROM NEW.estimated_value THEN NEW.estimated_value ELSE o.estimated_value END,
+         service_type = CASE WHEN OLD.service_type IS DISTINCT FROM NEW.service_type THEN NEW.service_type ELSE o.service_type END,
+         won_at = CASE WHEN OLD.won_at IS DISTINCT FROM NEW.won_at THEN NEW.won_at ELSE o.won_at END,
+         win_reason = CASE WHEN OLD.win_reason IS DISTINCT FROM NEW.win_reason THEN NEW.win_reason ELSE o.win_reason END,
+         lost_reason = CASE WHEN OLD.lost_reason IS DISTINCT FROM NEW.lost_reason THEN NEW.lost_reason ELSE o.lost_reason END
+   WHERE o.id = opp_id;
   PERFORM set_config('crm.opp_sync', 'off', true);
+
+  -- Sloot dit het huidige traject af, dan is een ander traject nu het huidige:
+  -- laat de lead dat traject spiegelen.
+  PERFORM sync_lead_from_opportunities(NEW.id);
   RETURN NULL;
 END;
 $$;

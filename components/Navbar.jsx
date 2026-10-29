@@ -23,6 +23,7 @@ import {
   Sparkles,
   Megaphone,
   ChevronDown,
+  Contact,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { useOrg } from "@/lib/org-context";
@@ -197,7 +198,10 @@ export default function Navbar() {
       ? [{ href: "/ai-regels", label: "AI-regels", icon: Sparkles }]
       : []),
     ...(isAdmin
-      ? [{ href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone }]
+      ? [
+          { href: "/relaties", label: "Relaties", icon: Contact },
+          { href: "/admin/nieuwsbrieven", label: "Nieuwsbrieven", icon: Megaphone },
+        ]
       : []),
   ];
 

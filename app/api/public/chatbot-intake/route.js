@@ -7,6 +7,7 @@ import {
 import { Resend } from "resend";
 import { wrapEmailHtml } from "@/lib/email-template";
 import { parseEmailList, logRejectedIntake } from "@/lib/public-intake";
+import { ensurePrimaryContactForLead } from "@/lib/contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -338,6 +339,7 @@ export async function POST(request) {
       }
 
       if (leadId) {
+        await ensurePrimaryContactForLead(leadId, tenant);
         await supabaseAdmin.from("activities").insert({
           lead_id: leadId,
           activity_type: "lead_created",

@@ -91,8 +91,14 @@ export async function PATCH(request, { params }) {
     const patch = {
       updated_at: new Date().toISOString(),
     };
-    for (const field of ["name", "subject", "preview_text", "body_html"]) {
+    for (const field of ["name", "subject", "preview_text", "body_html", "headline", "intro_text"]) {
       if (field in body) patch[field] = body[field] || null;
+    }
+    if ("personalization_layout" in body) {
+      if (!["intro", "per_item", "combined"].includes(body.personalization_layout)) {
+        return Response.json({ error: "Ongeldige opzet" }, { status: 400 });
+      }
+      patch.personalization_layout = body.personalization_layout;
     }
     let includeSegments = null;
     if ("included_segment_ids" in body || "segment_id" in body) {
@@ -133,7 +139,8 @@ export async function PATCH(request, { params }) {
       const effectiveIncludeSegments = includeSegments || await validateSegments(tenant, currentIncludedIds, "doelgroepen");
       patch.excluded_segment_ids = await cleanExcludedSegmentIds(tenant, body.excluded_segment_ids, effectiveIncludeSegments);
     }
-    if (patch.body_html === null || patch.subject === null || patch.name === null) {
+    const requiresHtml = currentCampaign.mode !== "personalized";
+    if ((requiresHtml && patch.body_html === null) || patch.subject === null || patch.name === null) {
       return Response.json({ error: "Naam, onderwerp en HTML mogen niet leeg zijn" }, { status: 400 });
     }
 
@@ -141,6 +148,9 @@ export async function PATCH(request, { params }) {
       ("subject" in patch && normalizeText(patch.subject) !== normalizeText(currentCampaign.subject)) ||
       ("preview_text" in patch && normalizeText(patch.preview_text) !== normalizeText(currentCampaign.preview_text)) ||
       ("body_html" in patch && normalizeText(patch.body_html) !== normalizeText(currentCampaign.body_html)) ||
+      ("headline" in patch && normalizeText(patch.headline) !== normalizeText(currentCampaign.headline)) ||
+      ("intro_text" in patch && normalizeText(patch.intro_text) !== normalizeText(currentCampaign.intro_text)) ||
+      ("personalization_layout" in patch && patch.personalization_layout !== currentCampaign.personalization_layout) ||
       ("included_segment_ids" in patch && !sameIdList(patch.included_segment_ids, currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []))) ||
       ("recipient_limit" in patch && Number(patch.recipient_limit || 0) !== Number(currentCampaign.recipient_limit || 0)) ||
       ("batch_mode" in patch && patch.batch_mode !== currentCampaign.batch_mode) ||
@@ -169,6 +179,15 @@ export async function PATCH(request, { params }) {
         { error: "Alleen concept-, test- en mislukte campagnes kunnen worden bewerkt" },
         { status: 400 }
       );
+    }
+    // Andere opzet = andere slots (intro, aantal itemregels): opnieuw genereren.
+    if ("personalization_layout" in patch && patch.personalization_layout !== currentCampaign.personalization_layout) {
+      const { error: slotError } = await supabaseAdmin
+        .from("newsletter_campaign_personalizations")
+        .delete()
+        .eq("tenant", tenant)
+        .eq("campaign_id", id);
+      if (slotError) throw new Error(slotError.message);
     }
     return Response.json({ campaign: data });
   } catch (error) {

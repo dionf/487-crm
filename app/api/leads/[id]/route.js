@@ -1,16 +1,15 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getRelationTypes } from "@/lib/constants";
 import {
   HIPHOT_HUBSPOT_DEAL_ORIGINS,
   HIPHOT_MARKETING_SEGMENTS,
   HIPHOT_MARKETING_STATUSES,
-  HIPHOT_RELATION_TYPES,
 } from "@/lib/hiphot-marketing";
 
 const HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS = new Set(HIPHOT_HUBSPOT_DEAL_ORIGINS.map((s) => s.id));
 const HIPHOT_MARKETING_SEGMENT_IDS = new Set(HIPHOT_MARKETING_SEGMENTS.map((s) => s.id));
 const HIPHOT_MARKETING_STATUS_IDS = new Set(HIPHOT_MARKETING_STATUSES.map((s) => s.id));
-const HIPHOT_RELATION_TYPE_IDS = new Set(HIPHOT_RELATION_TYPES.map((s) => s.id));
 const HIPHOT_MARKETING_FIELD_NAMES = [
   "marketing_consent",
   "marketing_segments",
@@ -70,16 +69,16 @@ function cleanMarketingPatch(body, tenant) {
   if ("marketing_consent_date" in body) patch.marketing_consent_date = cleanDate(body.marketing_consent_date);
   if ("marketing_unsubscribed_at" in body) patch.marketing_unsubscribed_at = cleanDate(body.marketing_unsubscribed_at);
   if ("marketing_hard_bounced" in body) patch.marketing_hard_bounced = body.marketing_hard_bounced === true;
+  if ("relationship_type" in body) {
+    patch.relationship_type = getRelationTypes(tenant).some((type) => type.id === body.relationship_type)
+      ? body.relationship_type
+      : null;
+  }
   if (tenant === "hiphot") {
     if ("hubspot_company_id" in body) patch.hubspot_company_id = body.hubspot_company_id || null;
     if ("hubspot_contact_ids" in body) patch.hubspot_contact_ids = cleanHubSpotIds(body.hubspot_contact_ids);
     if ("hubspot_subscription_status" in body) patch.hubspot_subscription_status = body.hubspot_subscription_status || null;
     if ("hubspot_imported_at" in body) patch.hubspot_imported_at = cleanDate(body.hubspot_imported_at);
-    if ("relationship_type" in body) {
-      patch.relationship_type = HIPHOT_RELATION_TYPE_IDS.has(body.relationship_type)
-        ? body.relationship_type
-        : null;
-    }
     if ("hubspot_deal_origin" in body) {
       patch.hubspot_deal_origin = HIPHOT_HUBSPOT_DEAL_ORIGIN_IDS.has(body.hubspot_deal_origin)
         ? body.hubspot_deal_origin
@@ -180,6 +179,7 @@ export async function PATCH(request, { params }) {
     if (body.billing_country !== undefined) body.delivery_country = body.billing_country;
   }
 
+  if ("in_pipeline" in body) body.in_pipeline = body.in_pipeline !== false;
   const marketingPatch = cleanMarketingPatch(body, tenant);
   removeMarketingFields(body);
   Object.assign(body, marketingPatch);

@@ -1,5 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { ensurePrimaryContactForLead } from "@/lib/contacts";
 
 // POST /api/admin/import — bulk import leads
 export async function POST(request) {
@@ -50,7 +51,7 @@ export async function POST(request) {
         }
       }
 
-      const { error } = await supabaseAdmin.from("leads").insert({
+      const { data: insertedLead, error } = await supabaseAdmin.from("leads").insert({
         company_name: lead.company_name || "Onbekend",
         contact_person: lead.contact_person || "-",
         email: lead.email || null,
@@ -63,7 +64,9 @@ export async function POST(request) {
         internal_notes: lead.internal_notes || null,
         status: default_status || "nieuwe_aanvraag",
         tenant,
-      });
+      }).select("id").single();
+
+      if (!error) await ensurePrimaryContactForLead(insertedLead.id, tenant);
 
       if (error) {
         results.errors++;

@@ -31,8 +31,9 @@ export default function StatsPanel({ leads }) {
   const wonStatuses = ["gewonnen", "offerte_gewonnen"];
   const lostStatuses = ["verloren", "offerte_verloren"];
 
+  // Relaties buiten de pipeline tellen niet als open pipeline, wel als gewonnen/verloren.
   const activePipeline = leads.filter(
-    (l) => !wonStatuses.includes(l.status) && !lostStatuses.includes(l.status)
+    (l) => l.in_pipeline !== false && !wonStatuses.includes(l.status) && !lostStatuses.includes(l.status)
   );
   const pipelineValue = activePipeline.reduce(
     (sum, l) => sum + (parseFloat(l.estimated_value) || 0),

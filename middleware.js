@@ -16,6 +16,8 @@ const PUBLIC_PATHS = [
   "/api/track/",        // Public tracking pixel
   "/api/public/",       // Public quote pages
   "/api/newsletter/webhook", // Resend webhook (Svix signature verified in route)
+  "/api/oauth/",        // OAuth voor de MCP-connector (eigen pincode- en PKCE-controle)
+  "/api/mcp",           // MCP-endpoint (eigen bearer token, zie lib/oauth.js)
 ];
 
 // Headers die alleen de middleware mag zetten. Een client die ze zelf meestuurt
@@ -29,6 +31,14 @@ const PUBLIC_PATHS = [
 // duwen kost verloren bounce- en klachtevents — en dus mail naar adressen die
 // al hard gebounced zijn.
 const SIGNED_WEBHOOK_PATHS = ["/api/newsletter/webhook"];
+
+// MCP en de OAuth-tokenuitwisseling worden voor claude.ai-gebruikers vanaf de
+// servers van Anthropic aangeroepen: alle collega's delen dan dezelfde paar
+// IP-adressen. De generieke IP-emmers met strafblokkade zouden één drukke
+// gebruiker iedereen laten buitensluiten. Deze paden krijgen een eigen ruime
+// emmer zonder blokkade; de echte limieten tellen per gebruiker in de route
+// (lib/rate-limit.js) en de pincode-tellers gelden ongewijzigd.
+const MCP_PATHS = ["/api/mcp", "/api/oauth/"];
 
 const SERVER_ONLY_HEADERS = [
   "x-auth-user-id",
@@ -63,6 +73,7 @@ const EDGE_LIMITS = {
   // maakt het endpoint een gratis databasepomp. blockSeconds 0: een 429 zolang
   // de emmer vol is, nooit een strafperiode voor een legitieme afzender.
   webhook: { limit: 6000, windowSeconds: 60, blockSeconds: 0 },
+  mcp: { limit: 600, windowSeconds: 60, blockSeconds: 0 },
 };
 
 function isPublicPath(pathname) {
@@ -71,6 +82,10 @@ function isPublicPath(pathname) {
 
 function isSignedWebhook(pathname) {
   return SIGNED_WEBHOOK_PATHS.some((p) => pathname.startsWith(p));
+}
+
+function isMcpPath(pathname) {
+  return MCP_PATHS.some((p) => pathname.startsWith(p));
 }
 
 function pathClass(pathname) {
@@ -96,12 +111,16 @@ function checkEdgeLimits(ip, pathname) {
   // Een ondertekende webhook telt alleen tegen zijn eigen emmer: de generieke
   // burst/sustained-emmers zijn gedimensioneerd op browserverkeer en een
   // campagne-burst gaat daar legitiem overheen.
+  if (isMcpPath(pathname)) return checkBuckets(ip, pathname, ["mcp"]);
   const buckets = isSignedWebhook(pathname) ? ["webhook"] : ["burst", "sustained"];
   if (!isSignedWebhook(pathname)) {
     const cls = pathClass(pathname);
     if (cls) buckets.push(cls);
   }
+  return checkBuckets(ip, pathname, buckets);
+}
 
+function checkBuckets(ip, pathname, buckets) {
   for (const name of buckets) {
     const key = `edge:${name}:${ip}`;
     const blocked = memoryBlockStatus(key);

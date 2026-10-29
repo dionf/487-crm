@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS opportunities (
 CREATE INDEX IF NOT EXISTS idx_opportunities_tenant_status ON opportunities (tenant, status);
 CREATE INDEX IF NOT EXISTS idx_opportunities_lead ON opportunities (lead_id);
 
--- Alleen de service role (API, server) leest en schrijft trajecten.
+-- RLS aan; de policy voor anon staat in 038 (zelfde patroon als leads).
 ALTER TABLE opportunities ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE quotes

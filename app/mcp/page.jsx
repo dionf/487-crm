@@ -150,7 +150,7 @@ function McpContent() {
         </h1>
         <p className="text-sm text-gray-500 mt-2">
           Met de CRM-connector werk je vanuit Claude (claude.ai, Claude Desktop of Claude Code) direct in het CRM:
-          leads opzoeken, notities en to-do&apos;s vastleggen, trajecten bijwerken en conceptoffertes maken. Claude
+          leads opzoeken, relaties en contacten toevoegen (bijvoorbeeld uit je mail), notities en to-do&apos;s vastleggen, trajecten bijwerken en conceptoffertes maken. Claude
           werkt daarbij <strong>als jou</strong>: alleen binnen {organization?.display_name || "je eigen organisatie"},
           en alles wat Claude aanmaakt of wijzigt staat op jouw naam.
         </p>
@@ -249,6 +249,10 @@ function McpContent() {
           <div>
             <dt className="font-medium">Limieten</dt>
             <dd className="text-gray-600">Dezelfde limieten als in het CRM zelf. Na vijf verkeerde pincodes is je account een kwartier geblokkeerd. Bijlagen via Claude mogen maximaal 3 MB zijn; grotere bestanden upload je in het CRM.</dd>
+          </div>
+          <div>
+            <dt className="font-medium">Contacten uit mijn mail toevoegen?</dt>
+            <dd className="text-gray-600">Koppel in Claude ook je mail (Gmail of Outlook) en vraag bijvoorbeeld &quot;scan mijn mail van deze week op nieuwe zakelijke contacten&quot;. Claude zoekt eerst of het bedrijf al bestaat en laat een voorstel zien; pas na jouw akkoord worden relaties aangemaakt, standaard buiten de pipeline en zonder nieuwsbrief. De nieuwsbrief gaat alleen aan met een reden, zoals &quot;bestaande klant&quot; of &quot;vroeg erom&quot;.</dd>
           </div>
           <div>
             <dt className="font-medium">Offertes versturen?</dt>

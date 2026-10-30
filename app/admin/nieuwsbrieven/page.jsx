@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
+import ImageField from "@/components/newsletter/ImageField";
 import PendingSubscriptions from "@/components/newsletter/PendingSubscriptions";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
@@ -93,6 +94,7 @@ function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
     personalization_layout: "combined",
     headline: "",
     intro_text: "",
+    hero_image_url: "",
   };
 }
 
@@ -420,6 +422,7 @@ export default function NieuwsbrievenPage() {
       personalization_layout: campaign.personalization_layout || "combined",
       headline: campaign.headline || "",
       intro_text: campaign.intro_text || "",
+      hero_image_url: campaign.hero_image_url || "",
     });
     setEditorMode("html");
     setActiveSection("campaigns");
@@ -542,7 +545,7 @@ export default function NieuwsbrievenPage() {
   // wordt per ontvanger opgebouwd. Het soort campagne ligt vast na aanmaken.
   function campaignPayload(form) {
     if (form.mode !== "personalized") {
-      const { mode, personalization_layout, headline, intro_text, ...rest } = form;
+      const { mode, personalization_layout, headline, intro_text, hero_image_url, ...rest } = form;
       return editingCampaignId ? rest : { ...rest, mode: "broadcast" };
     }
     const { body_html, scheduled_at, mode, ...rest } = form;
@@ -1255,10 +1258,20 @@ export default function NieuwsbrievenPage() {
                       <input
                         value={campaignForm.headline}
                         onChange={(e) => setCampaignForm({ ...campaignForm, headline: e.target.value })}
-                        placeholder="Bijv. Wat AI deze maand voor het mkb betekent"
+                        placeholder="Bijv. Wat AI deze maand *voor het mkb* betekent"
                         className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
                       />
                     </label>
+                    <p className="text-xs text-gray-500 -mt-2">Zet woorden tussen *sterretjes* voor het oranje accent.</p>
+                    <div className="block text-xs font-semibold text-gray-500 uppercase">
+                      Kopbeeld (optioneel)
+                      <div className="mt-1">
+                        <ImageField
+                          value={campaignForm.hero_image_url}
+                          onChange={(url) => setCampaignForm((current) => ({ ...current, hero_image_url: url }))}
+                        />
+                      </div>
+                    </div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase">
                       Algemene inleiding (optioneel, voor iedereen gelijk)
                       <textarea

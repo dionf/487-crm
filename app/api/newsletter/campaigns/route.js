@@ -123,6 +123,7 @@ export async function POST(request) {
         personalization_layout: layout,
         headline: String(body.headline || "").trim() || null,
         intro_text: String(body.intro_text || "").trim() || null,
+        hero_image_url: /^https:\/\//i.test(String(body.hero_image_url || "").trim()) ? String(body.hero_image_url).trim() : null,
         recipient_limit: recipientLimit,
         scheduled_at: scheduledAt,
         ...batchSettings,

@@ -91,8 +91,11 @@ export async function PATCH(request, { params }) {
     const patch = {
       updated_at: new Date().toISOString(),
     };
-    for (const field of ["name", "subject", "preview_text", "body_html", "headline", "intro_text"]) {
+    for (const field of ["name", "subject", "preview_text", "body_html", "headline", "intro_text", "hero_image_url"]) {
       if (field in body) patch[field] = body[field] || null;
+    }
+    if (patch.hero_image_url && !/^https:\/\//i.test(patch.hero_image_url)) {
+      return Response.json({ error: "Kopbeeld moet een https-adres zijn" }, { status: 400 });
     }
     if ("personalization_layout" in body) {
       if (!["intro", "per_item", "combined"].includes(body.personalization_layout)) {
@@ -150,6 +153,7 @@ export async function PATCH(request, { params }) {
       ("body_html" in patch && normalizeText(patch.body_html) !== normalizeText(currentCampaign.body_html)) ||
       ("headline" in patch && normalizeText(patch.headline) !== normalizeText(currentCampaign.headline)) ||
       ("intro_text" in patch && normalizeText(patch.intro_text) !== normalizeText(currentCampaign.intro_text)) ||
+      ("hero_image_url" in patch && normalizeText(patch.hero_image_url) !== normalizeText(currentCampaign.hero_image_url)) ||
       ("personalization_layout" in patch && patch.personalization_layout !== currentCampaign.personalization_layout) ||
       ("included_segment_ids" in patch && !sameIdList(patch.included_segment_ids, currentCampaign.included_segment_ids || (currentCampaign.segment_id ? [currentCampaign.segment_id] : []))) ||
       ("recipient_limit" in patch && Number(patch.recipient_limit || 0) !== Number(currentCampaign.recipient_limit || 0)) ||

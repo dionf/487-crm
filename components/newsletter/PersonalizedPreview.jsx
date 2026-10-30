@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Loader2, Mail, Send } from "lucide-react";
+import { CheckCircle, Copy, ExternalLink, Loader2, Mail, Send } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 const SENDABLE_STATUSES = new Set(["draft", "tested", "failed"]);
@@ -24,6 +24,8 @@ export default function PersonalizedPreview({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+  const realCompanies = companies.filter((company) => !company.sample);
 
   useEffect(() => {
     const first = data?.companies?.[0];
@@ -75,9 +77,20 @@ export default function PersonalizedPreview({
     }
   }
 
+  async function copyLink() {
+    if (!preview?.preview_url) return;
+    try {
+      await navigator.clipboard.writeText(preview.preview_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Kopieer de link", preview.preview_url);
+    }
+  }
+
   async function send() {
-    const recipientCount = companies.reduce((sum, company) => sum + company.recipients.length, 0);
-    if (!confirm(`"${campaign.name}" nu definitief versturen naar ${recipientCount} ontvangers bij ${companies.length} bedrijven?`)) return;
+    const recipientCount = realCompanies.reduce((sum, company) => sum + company.recipients.length, 0);
+    if (!confirm(`"${campaign.name}" nu definitief versturen naar ${recipientCount} ontvangers bij ${realCompanies.length} bedrijven?`)) return;
     setBusy("send");
     setError("");
     setMessage("");
@@ -112,11 +125,24 @@ export default function PersonalizedPreview({
             onChange={(e) => setLeadId(e.target.value)}
             className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
           >
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.company_name} {company.approval === "approved" ? "✓" : ""}
-              </option>
-            ))}
+            {realCompanies.length > 0 && (
+              <optgroup label="Ontvangers">
+                {realCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.company_name} {company.approval === "approved" ? "✓" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {companies.some((company) => company.sample) && (
+              <optgroup label="Voorbeelden (worden niet verzonden)">
+                {companies.filter((company) => company.sample).map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.company_name} {company.approval === "missing" ? "(nog niet gegenereerd)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
           {preview && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
@@ -142,12 +168,39 @@ export default function PersonalizedPreview({
 
         <div className="space-y-3">
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase">Link om te delen</p>
+            <p className="text-xs text-gray-500">De webversie voor {preview?.company_name || "dit bedrijf"}, zonder inloggen te openen.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={copyLink}
+                disabled={!preview?.preview_url}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-pill text-sm font-semibold border border-gray-200 bg-white hover:border-brand-amber disabled:opacity-50"
+              >
+                {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                {copied ? "Gekopieerd" : "Kopieer link"}
+              </button>
+              {preview?.preview_url && (
+                <a
+                  href={preview.preview_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center px-3 py-2 rounded-pill border border-gray-200 bg-white hover:border-brand-amber"
+                  title="Open webversie"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase">Testmail</p>
             <input
-              type="email"
+              type="text"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
-              placeholder="Testmail naar"
+              placeholder="Testmail naar (meerdere: komma ertussen)"
               className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
             />
             <button
@@ -159,7 +212,10 @@ export default function PersonalizedPreview({
               {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
               Test versie van dit bedrijf
             </button>
-            <p className="text-xs text-gray-500">De uitschrijflink in een testmail schrijft niemand uit.</p>
+            <p className="text-xs text-gray-500">
+              De uitschrijflink in een testmail schrijft niemand uit.
+              {preview?.sample ? " Een test van een voorbeeldbedrijf telt niet als test voor verzending." : ""}
+            </p>
             {campaign.test_sent_at && (
               <p className="flex items-center gap-1 text-xs font-semibold text-green-700">
                 <CheckCircle className="w-3.5 h-3.5" />

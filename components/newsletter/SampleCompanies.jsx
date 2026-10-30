@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 // Voorbeeldbedrijven: maak een versie voor een bedrijf dat niet in de
 // doelgroep zit (bijv. een klant waar een collega aan werkt), om als testmail
 // of preview-link te delen. Ze worden nooit echt verzonden.
-export default function SampleCompanies({ campaign, editable, onChanged }) {
+export default function SampleCompanies({ campaign, editable, recipientIds = [], onChanged }) {
   const [companies, setCompanies] = useState([]);
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState("");
@@ -46,7 +46,8 @@ export default function SampleCompanies({ campaign, editable, onChanged }) {
   }
 
   const byId = new Map(companies.map((company) => [company.id, company]));
-  const available = companies.filter((company) => !sampleIds.includes(company.id));
+  // Bedrijven die al ontvanger zijn, hebben hun eigen versie al.
+  const available = companies.filter((company) => !sampleIds.includes(company.id) && !recipientIds.includes(company.id));
 
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">

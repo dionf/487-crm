@@ -198,6 +198,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
       <SampleCompanies
         campaign={campaign}
         editable={editable}
+        recipientIds={companies.filter((company) => !company.sample).map((company) => company.id)}
         onChanged={async (updated) => {
           if (updated) onCampaignChange?.(updated);
           await onReload();

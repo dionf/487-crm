@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 export const NEWSLETTER_STATE_LABELS = {
   receives: { label: "Ontvangt nieuwsbrief", short: "Ontvangt", className: "bg-green-50 text-green-700 border-green-100" },
   company_off: { label: "Bedrijf niet ingeschreven", short: "Bedrijf uit", className: "bg-gray-50 text-gray-500 border-gray-100" },
+  no_consent: { label: "Nog geen toestemming (zie Nieuwsbrieven › Nog geen nieuwsbrief)", short: "Nog beslissen", className: "bg-amber-50 text-brand-orange border-amber-100" },
   unsubscribed: { label: "Uitgeschreven", short: "Uitgeschreven", className: "bg-red-50 text-red-600 border-red-100" },
   bounced: { label: "Geblokkeerd (bounce/klacht)", short: "Bounce", className: "bg-red-50 text-red-600 border-red-100" },
   no_email: { label: "Geen e-mailadres", short: "Geen e-mail", className: "bg-gray-50 text-gray-400 border-gray-100" },

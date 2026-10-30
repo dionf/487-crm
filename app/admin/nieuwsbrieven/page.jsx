@@ -1268,7 +1268,7 @@ export default function NieuwsbrievenPage() {
                       <div className="mt-1">
                         <ImageField
                           value={campaignForm.hero_image_url}
-                          onChange={(url) => setCampaignForm({ ...campaignForm, hero_image_url: url })}
+                          onChange={(url) => setCampaignForm((current) => ({ ...current, hero_image_url: url }))}
                         />
                       </div>
                     </div>

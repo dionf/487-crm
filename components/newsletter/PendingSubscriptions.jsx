@@ -17,6 +17,7 @@ export default function PendingSubscriptions({ tenant, onCountsChange }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState({});
   const [busy, setBusy] = useState(null);
+  const [confirming, setConfirming] = useState(null);
 
   async function load() {
     setError("");
@@ -65,11 +66,7 @@ export default function PendingSubscriptions({ tenant, onCountsChange }) {
 
   async function act(company, action) {
     const emails = action === "subscribe" ? selected[company.id] || [] : company.addresses.map((a) => a.email);
-    if (action === "decline" && !confirm(
-      company.company_pending
-        ? `${company.company_name} bewust geen nieuwsbrief sturen? Het bedrijf verdwijnt dan uit deze lijst.`
-        : `${emails.join(", ")} bewust geen nieuwsbrief sturen?`
-    )) return;
+    setConfirming(null);
     setBusy(company.id);
     setError("");
     try {
@@ -158,8 +155,8 @@ export default function PendingSubscriptions({ tenant, onCountsChange }) {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => act(company, "decline")}
-                    disabled={busy === company.id}
+                    onClick={() => setConfirming(company.id)}
+                    disabled={busy === company.id || confirming === company.id}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-pill border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -176,6 +173,31 @@ export default function PendingSubscriptions({ tenant, onCountsChange }) {
                   </button>
                 </div>
               </div>
+              {confirming === company.id && (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-100 text-sm">
+                  <span className="text-brand-black">
+                    {company.company_pending
+                      ? `${company.company_name} bewust geen nieuwsbrief sturen? Het bedrijf verdwijnt dan uit deze lijst.`
+                      : `${company.addresses.map((a) => a.email).join(", ")} bewust geen nieuwsbrief sturen?`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(null)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-pill border border-gray-200 text-gray-600 bg-white hover:bg-gray-50"
+                    >
+                      Annuleren
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => act(company, "decline")}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-pill bg-brand-black text-white hover:opacity-90"
+                    >
+                      Ja, geen nieuwsbrief
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="mt-2 space-y-1">
                 {company.addresses.length > 1 && (
                   <button

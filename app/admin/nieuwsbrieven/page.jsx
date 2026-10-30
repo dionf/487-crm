@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
-import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
+import { LAYOUT_OPTIONS } from "@/components/newsletter/CampaignSettings";
 import ImageField from "@/components/newsletter/ImageField";
 import PendingSubscriptions from "@/components/newsletter/PendingSubscriptions";
 import { apiFetch } from "@/lib/api";
@@ -97,12 +97,6 @@ function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
     hero_image_url: "",
   };
 }
-
-const LAYOUT_OPTIONS = [
-  { id: "combined", label: "Combinatie: intro-hook plus regel bij de 1-2 meest relevante items" },
-  { id: "intro", label: "Alleen intro-hook bovenaan" },
-  { id: "per_item", label: "Bij elk item een regel" },
-];
 
 function toDateTimeLocal(value) {
   if (!value) return "";
@@ -399,6 +393,11 @@ export default function NieuwsbrievenPage() {
 
   function startEditCampaign(campaign) {
     if (!canMutateCampaign(campaign)) return;
+    // Gepersonaliseerde nieuwsbrieven bewerk je op hun eigen pagina.
+    if (campaign.mode === "personalized") {
+      router.push(`/admin/nieuwsbrieven/${campaign.id}`);
+      return;
+    }
     const targetIds = campaignTargetIds(campaign);
     setEditingCampaignId(campaign.id);
     setCampaignForm({
@@ -572,6 +571,11 @@ export default function NieuwsbrievenPage() {
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || (isEditing ? "Campagne wijzigen mislukt" : "Campagne opslaan mislukt"));
+      // Een nieuwe gepersonaliseerde nieuwsbrief gaat direct verder op zijn eigen pagina.
+      if (!isEditing && json.campaign.mode === "personalized") {
+        router.push(`/admin/nieuwsbrieven/${json.campaign.id}`);
+        return;
+      }
       setCampaigns((current) => (
         isEditing
           ? current.map((item) => (item.id === json.campaign.id ? json.campaign : item))
@@ -627,13 +631,7 @@ export default function NieuwsbrievenPage() {
   }
 
   function openCampaign(campaign) {
-    setSelected(campaign);
-    setRecipients(null);
-  }
-
-  function updateCampaignInState(campaign) {
-    setCampaigns((current) => current.map((item) => (item.id === campaign.id ? campaign : item)));
-    setSelected((current) => (current?.id === campaign.id ? campaign : current));
+    router.push(`/admin/nieuwsbrieven/${campaign.id}`);
   }
 
   async function previewRecipients(campaign) {
@@ -1534,18 +1532,18 @@ export default function NieuwsbrievenPage() {
                     </span>
                   )}
                 </div>
-                {selected.mode === "personalized" ? (
-                  <PersonalizedCampaignPanel
-                    campaign={selected}
-                    resendReady={resendReady}
-                    testEmail={testEmail}
-                    setTestEmail={setTestEmail}
-                    accent={accent}
-                    onCampaignChange={updateCampaignInState}
-                  />
+                {selected.mode === "personalized" && !recipients ? (
+                  <button
+                    type="button"
+                    onClick={() => openCampaign(selected)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 hover:border-brand-amber"
+                  >
+                    <Sparkles className="w-4 h-4 text-brand-orange" />
+                    Nieuwsbrief openen
+                  </button>
                 ) : (
                 <>
-                {canMutateCampaign(selected) && (
+                {canMutateCampaign(selected) && selected.mode !== "personalized" && (
                   <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                       <input

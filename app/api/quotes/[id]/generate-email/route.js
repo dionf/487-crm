@@ -3,6 +3,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { emailClosing } from "@/lib/email-closings";
 import Anthropic from "@anthropic-ai/sdk";
+import { appBaseUrl } from "@/lib/app-url";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function POST(request, { params }) {
 
   const lead = quote.leads;
   const lang = quote.language || lead?.language || "nl";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.48-7.nl";
+  const baseUrl = appBaseUrl();
   const quoteUrl = quote.public_hash ? `${baseUrl}/offerte/${quote.public_hash}` : null;
 
   // Get notes for context

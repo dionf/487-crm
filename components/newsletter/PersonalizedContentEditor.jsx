@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Edit3, Loader2, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import ImageField from "@/components/newsletter/ImageField";
 
 export const SECTIONS = [
   { id: "company_news", label: "Nieuws van 48-7", hint: "Projecten, producten en diensten" },
@@ -79,7 +80,11 @@ function ItemForm({ campaignId, section, initial, onSave, onCancel, busy }) {
         <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="Link (https://...)" className={inputClass} />
         <input value={form.link_label} onChange={(e) => setForm({ ...form, link_label: e.target.value })} placeholder="Linktekst, bijv. Lees de case" className={inputClass} />
       </div>
-      <input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="Afbeelding-URL (optioneel)" className={inputClass} />
+      <ImageField
+        value={form.image_url}
+        onChange={(url) => setForm((current) => ({ ...current, image_url: url }))}
+        placeholder="Afbeelding (optioneel): plak een URL of upload"
+      />
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex gap-2">
         <button
@@ -244,6 +249,10 @@ export default function PersonalizedContentEditor({ campaign, editable, onChange
                 />
               ) : (
                 <div key={item.id} className="flex items-start gap-3 rounded-xl bg-gray-50 px-3 py-2">
+                  {item.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.image_url} alt="" className="w-16 h-12 shrink-0 rounded-lg object-cover border border-gray-100" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{item.title}</p>
                     <p className="text-xs text-gray-600 whitespace-pre-line">{item.body}</p>

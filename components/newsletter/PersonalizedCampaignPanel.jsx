@@ -81,7 +81,7 @@ export default function PersonalizedCampaignPanel({ campaign, resendReady, testE
 
       {tab === "content" && <PersonalizedContentEditor campaign={campaign} editable={editable} onChanged={reload} />}
       {tab === "review" && (
-        <PersonalizationReview campaign={campaign} editable={editable} data={data} items={items} onReload={reload} />
+        <PersonalizationReview campaign={campaign} editable={editable} data={data} items={items} onReload={reload} onCampaignChange={onCampaignChange} />
       )}
       {tab === "preview" && (
         <PersonalizedPreview

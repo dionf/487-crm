@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, RotateCcw, Save, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import CompanyLogo from "@/components/CompanyLogo";
+import SampleCompanies from "@/components/newsletter/SampleCompanies";
 
 const APPROVAL_BADGES = {
   approved: { label: "Goedgekeurd", className: "bg-green-50 text-green-700 border-green-100" },
@@ -84,7 +86,7 @@ function SlotEditor({ slot, editable, busy, onSaveText, onToggle }) {
 
 // Per ontvangend bedrijf: profiel naast de gegenereerde teksten, bewerken,
 // (opnieuw) genereren en goedkeuren.
-export default function PersonalizationReview({ campaign, editable, data, items, onReload }) {
+export default function PersonalizationReview({ campaign, editable, data, items, onReload, onCampaignChange }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState("");
   const [bulk, setBulk] = useState(null); // { done, total, current }
@@ -193,6 +195,15 @@ export default function PersonalizationReview({ campaign, editable, data, items,
         {!items.length && <p className="text-xs text-brand-orange">Voeg eerst items toe op het tabblad Inhoud.</p>}
       </div>
 
+      <SampleCompanies
+        campaign={campaign}
+        editable={editable}
+        onChanged={async (updated) => {
+          if (updated) onCampaignChange?.(updated);
+          await onReload();
+        }}
+      />
+
       {withoutProfile.length > 0 && (
         <div className="flex gap-2 px-3 py-2 rounded-xl bg-amber-50 text-sm text-brand-orange">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -225,14 +236,33 @@ export default function PersonalizationReview({ campaign, editable, data, items,
               >
                 <span className="flex items-center gap-2 min-w-0">
                   {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                  {company.logo_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={company.logo_url} alt="" className="h-5 max-w-16 object-contain shrink-0" />
+                  )}
                   <span className="text-sm font-semibold truncate">{company.company_name}</span>
-                  <span className="text-xs text-gray-400 shrink-0">{company.recipients.length} ontv.</span>
+                  {company.sample ? (
+                    <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill bg-blue-50 text-blue-700 border border-blue-100">Voorbeeld</span>
+                  ) : (
+                    <span className="text-xs text-gray-400 shrink-0">{company.recipients.length} ontv.</span>
+                  )}
                 </span>
                 <span className={`shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border ${badge.className}`}>{badge.label}</span>
               </button>
               {isOpen && (
                 <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-3 px-3 pb-3">
                   <div className="space-y-2">
+                    <div className="rounded-xl bg-gray-50 p-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Logo</p>
+                      <CompanyLogo
+                        leadId={company.id}
+                        logoUrl={company.logo_url}
+                        websiteUrl={company.website_url}
+                        size="sm"
+                        onChange={() => onReload()}
+                      />
+                      {!company.logo_url && <p className="text-xs text-gray-500 mt-1">Zonder logo toont de mail alleen de naam.</p>}
+                    </div>
                     <div className="rounded-xl bg-gray-50 p-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Profiel</p>
                       <p className="text-xs text-gray-600 whitespace-pre-line">{company.newsletter_profile || "Geen profiel"}</p>
@@ -241,12 +271,14 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                       )}
                       <Link href={`/leads/${company.id}`} className="inline-block text-xs text-brand-orange underline mt-2">Bedrijf openen</Link>
                     </div>
+                    {!company.sample && (
                     <div className="rounded-xl bg-gray-50 p-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ontvangers</p>
                       {company.recipients.map((recipient) => (
                         <p key={recipient.email} className="text-xs text-gray-600 truncate">{recipient.name || recipient.email}</p>
                       ))}
                     </div>
+                    )}
                     {editable && (
                       <div className="flex flex-col gap-2">
                         <button

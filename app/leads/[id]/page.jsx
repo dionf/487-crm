@@ -17,6 +17,7 @@ import AttachmentUpload from "@/components/AttachmentUpload";
 import ContactsPanel from "@/components/ContactsPanel";
 import NewsletterProfilePanel from "@/components/NewsletterProfilePanel";
 import OpportunitiesPanel from "@/components/OpportunitiesPanel";
+import CompanyLogo from "@/components/CompanyLogo";
 import { formatCurrency, formatDate, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import { LEAD_STATUSES, SERVICE_TYPES, NOTE_TYPES, QUOTE_STATUSES, getLeadStatuses, getRelationTypes, relationLabel, INDUSTRIES, SOURCES } from "@/lib/constants";
 import { setCompanyNewsletter } from "@/components/newsletter/contactNewsletter";
@@ -427,6 +428,13 @@ export default function LeadDetailPage() {
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div className="flex items-start gap-4">
+          <CompanyLogo
+            leadId={lead.id}
+            logoUrl={lead.logo_url}
+            websiteUrl={lead.website_url}
+            onChange={(logoUrl) => setData((current) => ({ ...current, lead: { ...current.lead, logo_url: logoUrl } }))}
+          />
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-brand-black">
@@ -463,6 +471,7 @@ export default function LeadDetailPage() {
               </a>
             )}
           </div>
+        </div>
         </div>
 
         <div className="flex items-center gap-2">

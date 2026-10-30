@@ -1,5 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { addContact } from "@/lib/contacts";
 
 export async function GET(request) {
   const session = getVerifiedSession(request);
@@ -47,48 +48,20 @@ export async function POST(request) {
     return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
   }
 
-  // If setting as primary, unset other primaries for this lead
-  if (is_primary) {
-    await supabaseAdmin
-      .from("contacts")
-      .update({ is_primary: false })
-      .eq("lead_id", lead_id)
-      .eq("tenant", tenant);
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("contacts")
-    .insert({
-      lead_id,
-      name,
-      email: email || null,
-      phone: phone || null,
-      role: role || null,
-      is_primary: is_primary || false,
+  let data;
+  try {
+    data = await addContact({
       tenant,
-      marketing_consent: marketing_consent || false,
-    })
-    .select()
-    .single();
-
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-
-  // Update lead's primary contact fields if this is primary
-  if (is_primary || data.is_primary) {
-    const nameParts = name.split(" ");
-    const firstName = nameParts[0] || "";
-    const lastName = nameParts.slice(1).join(" ") || "";
-    await supabaseAdmin
-      .from("leads")
-      .update({
-        contact_person: name,
-        contact_first_name: firstName,
-        contact_last_name: lastName,
-        email: email || undefined,
-        phone: phone || undefined,
-      })
-      .eq("id", lead_id)
-      .eq("tenant", tenant);
+      leadId: lead_id,
+      name,
+      email,
+      phone,
+      role,
+      isPrimary: is_primary,
+      marketingConsent: marketing_consent,
+    });
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 });
   }
 
   return Response.json({ contact: data });

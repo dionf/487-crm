@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
 import ImageField from "@/components/newsletter/ImageField";
+import PendingSubscriptions from "@/components/newsletter/PendingSubscriptions";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import {
@@ -180,6 +181,15 @@ export default function NieuwsbrievenPage() {
   const [campaignForm, setCampaignForm] = useState(emptyCampaign());
   const [editingCampaignId, setEditingCampaignId] = useState("");
   const [activeSection, setActiveSection] = useState("campaigns");
+  const [pendingCounts, setPendingCounts] = useState(null);
+
+  // Teller op het tabblad "Nog geen nieuwsbrief".
+  useEffect(() => {
+    apiFetch("/api/newsletter/pending")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => json && setPendingCounts({ companies: json.company_count, addresses: json.address_count }))
+      .catch(() => {});
+  }, []);
   const [editorMode, setEditorMode] = useState("html");
   const [testEmail, setTestEmail] = useState(user?.email || "");
   const [loading, setLoading] = useState(true);
@@ -745,6 +755,10 @@ export default function NieuwsbrievenPage() {
               { id: "campaigns", label: "Campagnes" },
               { id: "resend", label: "Resend" },
               { id: "segments", label: "Segmenten" },
+              {
+                id: "pending",
+                label: `Nog geen nieuwsbrief${pendingCounts ? ` (${pendingCounts.companies + pendingCounts.addresses ? `${pendingCounts.companies} bedrijven · ${pendingCounts.addresses} adressen` : "0"})` : ""}`,
+              },
             ].map((item) => (
               <button
                 key={item.id}
@@ -834,6 +848,10 @@ export default function NieuwsbrievenPage() {
                 </button>
               </div>
             </form>
+            )}
+
+            {activeSection === "pending" && (
+              <PendingSubscriptions tenant={organization?.slug} onCountsChange={setPendingCounts} />
             )}
 
             {activeSection === "segments" && (

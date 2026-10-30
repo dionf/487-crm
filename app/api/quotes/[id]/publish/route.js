@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { randomBytes } from "crypto";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
+import { appBaseUrl } from "@/lib/app-url";
 
 export async function POST(request, { params }) {
   const session = getVerifiedSession(request);
@@ -109,7 +110,7 @@ export async function POST(request, { params }) {
     });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.48-7.nl";
+  const baseUrl = appBaseUrl();
 
   return Response.json({
     quote: data,

@@ -3,6 +3,7 @@ import QuotePrintButtons from "@/components/QuotePrintButtons";
 import { generateQuoteHtml } from "@/lib/hiphot-quote-template";
 import { calculateLineTotals, calculateOrderTotals } from "@/lib/hiphot-pricing";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { appBaseUrl } from "@/lib/app-url";
 
 const BRAND = {
   hiphot: { name: "HipHot", url: "https://hiphot.nl", email: "hallo@hiphot.nl" },
@@ -117,7 +118,7 @@ export default async function PublicQuotePage({ params }) {
     .select("*", { count: "exact", head: true })
     .eq("quote_id", quote.id);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.48-7.nl";
+  const baseUrl = appBaseUrl();
   const trackUrl = `${baseUrl}/api/track/${params.hash}`;
 
   const lead = quote.leads || {};

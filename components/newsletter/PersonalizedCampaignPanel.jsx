@@ -15,7 +15,7 @@ const EDITABLE_STATUSES = new Set(["draft", "tested", "failed"]);
 
 // Werkruimte voor een gepersonaliseerde campagne: items schrijven,
 // personalisatie per bedrijf reviewen, voorbeeld bekijken en verzenden.
-export default function PersonalizedCampaignPanel({ campaign, resendReady, testEmail, setTestEmail, accent, onCampaignChange }) {
+export default function PersonalizedCampaignPanel({ campaign, refreshKey = 0, resendReady, testEmail, setTestEmail, accent, onCampaignChange }) {
   const [tab, setTab] = useState("content");
   const [items, setItems] = useState([]);
   const [data, setData] = useState(null);
@@ -45,8 +45,9 @@ export default function PersonalizedCampaignPanel({ campaign, resendReady, testE
       setError(err.message);
     }
     // onCampaignChange is een nieuwe functie bij elke render van de pagina.
+    // refreshKey: de pagina vraagt om opnieuw laden (bijv. na opslaan instellingen).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign.id]);
+  }, [campaign.id, refreshKey]);
 
   useEffect(() => {
     setData(null);

@@ -37,6 +37,8 @@ export default function NieuwsbriefCampagnePage() {
   const [resendReady, setResendReady] = useState(false);
   const [testEmail, setTestEmail] = useState(user?.email || "");
   const [error, setError] = useState("");
+  // Na opslaan van de instellingen: personalisatie en voorbeeld opnieuw laden.
+  const [refreshKey, setRefreshKey] = useState(0);
   const accent = organization?.theme?.accent || "#F5A623";
 
   useEffect(() => {
@@ -111,11 +113,19 @@ export default function NieuwsbriefCampagnePage() {
               )}
             </div>
 
-            <CampaignSettings campaign={campaign} targetNames={targetNames} onSaved={setCampaign} />
+            <CampaignSettings
+              campaign={campaign}
+              targetNames={targetNames}
+              onSaved={(saved) => {
+                setCampaign(saved);
+                setRefreshKey((key) => key + 1);
+              }}
+            />
 
             <div className="bg-white border border-gray-100 rounded-card p-5">
               <PersonalizedCampaignPanel
                 campaign={campaign}
+                refreshKey={refreshKey}
                 resendReady={resendReady}
                 testEmail={testEmail}
                 setTestEmail={setTestEmail}

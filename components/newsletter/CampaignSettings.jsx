@@ -33,12 +33,12 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
   const [saved, setSaved] = useState(false);
   const editable = EDITABLE_STATUSES.has(campaign.status);
 
-  // Alleen verversen als de opgeslagen campagne echt veranderde, zodat een
-  // herlaad elders op de pagina geen ingetypte wijzigingen wist.
+  // Alleen verversen als de opgeslagen instellingen zelf veranderden: een
+  // testmail of itemwijziging elders mag ingetypte wijzigingen niet wissen.
+  const persistedKey = JSON.stringify(formFromCampaign(campaign));
   useEffect(() => {
-    setForm(formFromCampaign(campaign));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaign.id, campaign.updated_at]);
+    setForm(JSON.parse(persistedKey));
+  }, [campaign.id, persistedKey]);
 
   const dirty = FIELDS.some((field) => (form[field] || "") !== (formFromCampaign(campaign)[field] || ""));
   const layoutChanged = form.personalization_layout !== (campaign.personalization_layout || "combined");

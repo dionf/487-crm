@@ -82,6 +82,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
             type="button"
             onClick={() => {
               if (dirty && !confirm("Je niet-opgeslagen wijziging gaat verloren. Toch vernieuwen?")) return;
+              if (!dirty && approved && !confirm("Deze tekst is goedgekeurd. Vervangen door een nieuwe versie (wordt weer concept)?")) return;
               onRegenerate();
             }}
             disabled={busy}

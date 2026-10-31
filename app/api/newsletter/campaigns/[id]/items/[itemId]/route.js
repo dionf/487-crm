@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/newsletters";
 import {
+  articleFields,
   getPersonalizedCampaign,
   invalidateCampaignApprovals,
   itemSlot,
@@ -16,6 +17,19 @@ export async function PATCH(request, { params }) {
     await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
     const patch = { ...normalizeItemInput(body, { partial: true }), updated_at: new Date().toISOString() };
+    // Het formulier stuurt de URL altijd mee; alleen een andere URL wordt opnieuw gelezen.
+    if ("url" in patch) {
+      const { data: current, error: currentError } = await supabaseAdmin
+        .from("newsletter_campaign_items")
+        .select("url")
+        .eq("tenant", tenant)
+        .eq("campaign_id", id)
+        .eq("id", itemId)
+        .maybeSingle();
+      if (currentError) throw new Error(currentError.message);
+      if (!current) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
+      if (current.url !== patch.url) Object.assign(patch, await articleFields(patch.url));
+    }
     const { data, error } = await supabaseAdmin
       .from("newsletter_campaign_items")
       .update(patch)

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/newsletters";
 import {
+  articleFields,
   fetchCampaignItems,
   getPersonalizedCampaign,
   invalidateCampaignApprovals,
@@ -14,7 +15,9 @@ export async function GET(request, { params }) {
     const { tenant } = requireAdmin(request);
     const { id } = await params;
     await getPersonalizedCampaign(tenant, id);
-    return Response.json({ items: await fetchCampaignItems(tenant, id) });
+    // De bewaarde artikeltekst is alleen voor de personalisatie, niet voor de editor.
+    const items = await fetchCampaignItems(tenant, id);
+    return Response.json({ items: items.map(({ article_text, ...item }) => item) });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: error.message }, { status: 500 });
@@ -32,6 +35,7 @@ export async function POST(request, { params }) {
       const existing = await fetchCampaignItems(tenant, id);
       item.sort_order = existing.filter((other) => other.section === item.section).length;
     }
+    if (item.url) Object.assign(item, await articleFields(item.url));
     const { data, error } = await supabaseAdmin
       .from("newsletter_campaign_items")
       .insert({ ...item, tenant, campaign_id: id })

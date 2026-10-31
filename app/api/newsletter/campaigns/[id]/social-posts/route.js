@@ -39,10 +39,11 @@ export async function POST(request, { params }) {
     const body = await request.json();
     if (!SOCIAL_CHANNEL_IDS.includes(body.channel)) return Response.json({ error: "Onbekend kanaal" }, { status: 400 });
     if (!body.item_id) return Response.json({ error: "item_id is verplicht" }, { status: 400 });
+    const itemReadAt = new Date().toISOString();
     const item = await fetchCampaignItem(tenant, id, body.item_id);
     if (!item) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
 
-    const post = await generateSocialPost(tenant, id, item, body.channel, userName);
+    const post = await generateSocialPost(tenant, id, item, body.channel, userName, itemReadAt);
     return Response.json({ post });
   } catch (error) {
     if (error instanceof Response) return error;

@@ -84,7 +84,13 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
     onRegenerate(post.item_id, post.channel);
   }
 
-  const field = (name) => ({ value: form[name] || "", onChange: (e) => setForm({ ...form, [name]: e.target.value }) });
+  // Tijdens opnieuw genereren niets bewerken: het resultaat overschrijft de post.
+  const locked = Boolean(busy) || regenerating;
+  const field = (name) => ({
+    value: form[name] || "",
+    onChange: (e) => setForm({ ...form, [name]: e.target.value }),
+    disabled: regenerating,
+  });
 
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-3 space-y-2">
@@ -133,12 +139,12 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
           {copied ? "Gekopieerd" : "Kopieer"}
         </button>
         {dirty && (
-          <button type="button" onClick={save} disabled={Boolean(busy)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-50">
+          <button type="button" onClick={save} disabled={locked} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-50">
             {busy === "save" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Opslaan
           </button>
         )}
-        <button type="button" onClick={regenerate} disabled={Boolean(busy) || regenerating || !item} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-50">
+        <button type="button" onClick={regenerate} disabled={locked || !item} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-50">
           {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           Opnieuw
         </button>
@@ -148,7 +154,7 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
             Beeld openen
           </a>
         )}
-        <button type="button" onClick={remove} disabled={Boolean(busy)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold text-gray-500 hover:text-red-600 disabled:opacity-50">
+        <button type="button" onClick={remove} disabled={locked} className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold text-gray-500 hover:text-red-600 disabled:opacity-50">
           {busy === "delete" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
           Verwijderen
         </button>

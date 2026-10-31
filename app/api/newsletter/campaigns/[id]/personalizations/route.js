@@ -6,6 +6,7 @@ import {
   fetchCampaignPersonalizations,
   generatePersonalizationForLead,
   getPersonalizedCampaign,
+  regenerateSlotForLead,
   resetCampaignTest,
   summarizeCompanyApproval,
 } from "@/lib/newsletter-personalize";
@@ -54,6 +55,7 @@ export async function GET(request, { params }) {
 }
 
 // Genereert (opnieuw) de personalisatie voor één bedrijf: { lead_id }.
+// Met { lead_id, slot } wordt alleen dat ene onderdeel vernieuwd.
 // De UI loopt zelf over de bedrijven, zodat één request binnen de timeout blijft.
 export async function POST(request, { params }) {
   try {
@@ -75,10 +77,12 @@ export async function POST(request, { params }) {
     if (!company) return Response.json({ error: "Dit bedrijf ontvangt deze campagne niet" }, { status: 404 });
 
     const items = await fetchCampaignItems(tenant, id);
-    const slots = await generatePersonalizationForLead(tenant, campaign, items, company, userName);
+    const result = body.slot
+      ? { slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName) }
+      : { slots: await generatePersonalizationForLead(tenant, campaign, items, company, userName) };
     // Een voorbeeldbedrijf wordt niet verzonden; de testmail blijft geldig.
     if (!company.sample) await resetCampaignTest(tenant, id);
-    return Response.json({ slots });
+    return Response.json(result);
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: error.message }, { status: 502 });

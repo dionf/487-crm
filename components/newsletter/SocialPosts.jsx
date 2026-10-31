@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, Loader2, RefreshCw, Save, Sparkles, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { SECTIONS } from "@/components/newsletter/PersonalizedContentEditor";
-import { SOCIAL_CHANNELS, formatSocialPost } from "@/lib/newsletter-social-shared";
+import { SOCIAL_CHANNELS, formatSocialPost, normalizeHashtags } from "@/lib/newsletter-social-shared";
 
 const inputClass = "w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber";
 const CHANNEL_LABELS = Object.fromEntries(SOCIAL_CHANNELS.map((channel) => [channel.id, channel.label]));
@@ -70,7 +70,7 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
   async function copy() {
     setError("");
     try {
-      const content = { ...form, hashtags: String(form.hashtags || "").split(/\s+/).filter(Boolean) };
+      const content = { ...form, hashtags: normalizeHashtags(form.hashtags) };
       await navigator.clipboard.writeText(formatSocialPost(post.channel, content));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -187,6 +187,7 @@ export default function SocialPosts({ campaign, items }) {
 
   const existing = useMemo(() => new Set(posts.map((post) => key(post.item_id, post.channel))), [posts]);
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const selectedCount = [...selected].filter((entry) => itemsById.has(entry.split(":")[0])).length;
   const orderedPosts = useMemo(() => {
     const order = new Map(items.map((item, index) => [item.id, index]));
     const channelOrder = SOCIAL_CHANNELS.map((channel) => channel.id);
@@ -224,7 +225,8 @@ export default function SocialPosts({ campaign, items }) {
   }
 
   async function generateSelected() {
-    const todo = [...selected].map((entry) => entry.split(":"));
+    // Alleen items die er nog zijn (een item kan intussen bij Inhoud verwijderd zijn).
+    const todo = [...selected].map((entry) => entry.split(":")).filter(([itemId]) => itemsById.has(itemId));
     setError("");
     setRunning({ done: 0, total: todo.length });
     const failed = [];
@@ -312,13 +314,15 @@ export default function SocialPosts({ campaign, items }) {
         <button
           type="button"
           onClick={generateSelected}
-          disabled={!selected.size || Boolean(running)}
+          disabled={!selectedCount || Boolean(running)}
           className="flex items-center gap-2 px-4 py-2 rounded-pill text-xs font-semibold text-white bg-brand-black disabled:opacity-50"
         >
           {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
           {running
             ? `Posts maken... ${running.done}/${running.total}`
-            : `Genereer ${selected.size || ""} ${selected.size === 1 ? "post" : "posts"}`.replace("  ", " ")}
+            : selectedCount
+              ? `Genereer ${selectedCount} ${selectedCount === 1 ? "post" : "posts"}`
+              : "Genereer posts"}
         </button>
       </div>
 

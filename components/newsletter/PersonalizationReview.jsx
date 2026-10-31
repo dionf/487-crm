@@ -35,7 +35,7 @@ function orderedSlots(company, items) {
   return rows;
 }
 
-function SlotEditor({ slot, editable, busy, onSaveText, onToggle }) {
+function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, onRegenerate }) {
   const [text, setText] = useState(slot.content?.text || "");
   const dirty = text.trim() !== (slot.content?.text || "").trim();
   const approved = slot.status === "approved";
@@ -78,6 +78,19 @@ function SlotEditor({ slot, editable, busy, onSaveText, onToggle }) {
               {approved ? "Terug naar concept" : "Goedkeuren"}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              if (dirty && !confirm("Je niet-opgeslagen wijziging gaat verloren. Toch vernieuwen?")) return;
+              onRegenerate();
+            }}
+            disabled={busy}
+            title="Alleen deze tekst opnieuw laten schrijven"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 text-gray-600 hover:border-brand-amber disabled:opacity-50"
+          >
+            {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Vernieuwen
+          </button>
         </div>
       )}
     </div>
@@ -116,9 +129,14 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     }
   }
 
-  const generate = (company) => run(`generate-${company.id}`, () => request("POST", { lead_id: company.id }, "Genereren mislukt"));
+  const generate = (company) => {
+    if (company.approval !== "missing" && !confirm(`Alle teksten van ${company.company_name} opnieuw laten schrijven? Bewerkingen en goedkeuringen vervallen. Wil je één tekst vernieuwen, gebruik dan Vernieuwen bij dat blok.`)) return;
+    run(`generate-${company.id}`, () => request("POST", { lead_id: company.id }, "Genereren mislukt"));
+  };
   const approveAll = (company) => run(`approve-${company.id}`, () => request("PATCH", { lead_id: company.id, approve_all: true }, "Goedkeuren mislukt"));
   const saveText = (company, slot, text) => run(`slot-${slot.id}`, () => request("PATCH", { lead_id: company.id, slot: slot.slot, text }, "Opslaan mislukt"));
+  const regenerateSlot = (company, slot) =>
+    run(`regen-${slot.id}`, () => request("POST", { lead_id: company.id, slot: slot.slot }, "Vernieuwen mislukt"));
   const toggle = (company, slot) => run(`slot-${slot.id}`, () => request(
     "PATCH",
     { lead_id: company.id, slot: slot.slot, status: slot.status === "approved" ? "draft" : "approved" },
@@ -289,7 +307,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                           className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-50"
                         >
                           {busy === `generate-${company.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                          {company.approval === "missing" ? "Genereren" : "Opnieuw genereren"}
+                          {company.approval === "missing" ? "Genereren" : "Alles vernieuwen"}
                         </button>
                         {company.approval === "draft" && (
                           <button
@@ -313,9 +331,11 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                         key={`${slot.id}-${slot.updated_at}`}
                         slot={slot}
                         editable={editable}
-                        busy={Boolean(busy)}
+                        busy={Boolean(busy) || Boolean(bulk)}
+                        regenerating={busy === `regen-${slot.id}`}
                         onSaveText={(text) => saveText(company, slot, text)}
                         onToggle={() => toggle(company, slot)}
+                        onRegenerate={() => regenerateSlot(company, slot)}
                       />
                     ))}
                   </div>

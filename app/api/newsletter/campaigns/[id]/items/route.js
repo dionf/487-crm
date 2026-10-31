@@ -15,7 +15,9 @@ export async function GET(request, { params }) {
     const { tenant } = requireAdmin(request);
     const { id } = await params;
     await getPersonalizedCampaign(tenant, id);
-    return Response.json({ items: await fetchCampaignItems(tenant, id) });
+    // De bewaarde artikeltekst is alleen voor de personalisatie, niet voor de editor.
+    const items = await fetchCampaignItems(tenant, id);
+    return Response.json({ items: items.map(({ article_text, ...item }) => item) });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: error.message }, { status: 500 });

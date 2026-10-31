@@ -16,7 +16,12 @@ export async function PATCH(request, { params }) {
     const { id, itemId } = await params;
     await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
-    const patch = { ...normalizeItemInput(body, { partial: true }), updated_at: new Date().toISOString() };
+    const patch = normalizeItemInput(body, { partial: true });
+    if (!Object.keys(patch).length) return Response.json({ error: "Niets te wijzigen" }, { status: 400 });
+    // Alleen een volgordewijziging verandert niets aan de inhoud.
+    const contentChanged = Object.keys(patch).some((key) => key !== "sort_order");
+    // updated_at volgt de inhoud: social posts tonen zo of hun item na genereren is gewijzigd.
+    if (contentChanged) patch.updated_at = new Date().toISOString();
     // Het formulier stuurt de URL altijd mee; alleen een andere URL wordt opnieuw gelezen.
     if ("url" in patch) {
       const { data: current, error: currentError } = await supabaseAdmin
@@ -40,10 +45,7 @@ export async function PATCH(request, { params }) {
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
-    // Alleen een volgordewijziging verandert niets aan de inhoud.
-    if (Object.keys(patch).some((key) => !["sort_order", "updated_at"].includes(key))) {
-      await invalidateCampaignApprovals(tenant, id);
-    }
+    if (contentChanged) await invalidateCampaignApprovals(tenant, id);
     return Response.json({ item: data });
   } catch (error) {
     if (error instanceof Response) return error;

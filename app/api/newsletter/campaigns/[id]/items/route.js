@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/newsletters";
 import {
+  articleFields,
   fetchCampaignItems,
   getPersonalizedCampaign,
   invalidateCampaignApprovals,
@@ -32,6 +33,7 @@ export async function POST(request, { params }) {
       const existing = await fetchCampaignItems(tenant, id);
       item.sort_order = existing.filter((other) => other.section === item.section).length;
     }
+    if (item.url) Object.assign(item, await articleFields(item.url));
     const { data, error } = await supabaseAdmin
       .from("newsletter_campaign_items")
       .insert({ ...item, tenant, campaign_id: id })

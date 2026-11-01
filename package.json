@@ -41,6 +41,7 @@
     "react-dom": "^18",
     "recharts": "^3.8.0",
     "resend": "^6.10.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5",
     "zod": "^4.6.7"

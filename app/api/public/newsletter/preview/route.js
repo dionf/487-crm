@@ -29,7 +29,7 @@ export async function GET(request) {
   if (!campaign) return notFound();
   const { data: company } = await supabaseAdmin
     .from("leads")
-    .select("id, company_name, logo_url")
+    .select("id, company_name, logo_url, logo_width, logo_height")
     .eq("id", leadId)
     .eq("tenant", campaign.tenant)
     .maybeSingle();

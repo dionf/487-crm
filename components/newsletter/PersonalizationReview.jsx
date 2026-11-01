@@ -22,6 +22,15 @@ const FIXED_SLOTS = [
   { slot: "intro", label: "Intro: In deze nieuwsbrief voor ..." },
 ];
 
+// Bedrijven per request bij bulkgenereren (server staat er maximaal 5 toe).
+// Een volledige generatie is zwaar; met 3 parallel blijft een request ruim
+// binnen de 60 s en 50 bedrijven binnen de rate limit (17 requests).
+const BATCH_SIZE = 3;
+// Hoe vaak een portie na een 429 opnieuw wordt geprobeerd.
+const RATE_LIMIT_RETRIES = 2;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function readJson(res, fallback) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || fallback);
@@ -115,7 +124,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
 export default function PersonalizationReview({ campaign, editable, data, items, onReload, onCampaignChange }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState("");
-  const [bulk, setBulk] = useState(null); // { done, total, current }
+  const [bulk, setBulk] = useState(null); // { done, chunk, total, current, waiting? }
   const [error, setError] = useState("");
   const base = `/api/newsletter/campaigns/${campaign.id}/personalizations`;
   const companies = data?.companies || [];
@@ -161,7 +170,25 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     "Status wijzigen mislukt"
   ));
 
-  // Eén request per bedrijf, zodat elke call binnen de serverlimiet blijft.
+  // Eén portie bedrijven in één request. Raakt de rate limit toch (bv. door
+  // andere acties tussendoor), dan wachten we tot de teller weer ruimte heeft.
+  async function generateBatch(chunk, onWait) {
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await apiFetch(base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_ids: chunk.map((company) => company.id) }),
+      });
+      if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) return readJson(res, "Genereren mislukt");
+      const json = await res.json().catch(() => ({}));
+      const seconds = Math.min(Math.max(Number(json.retry_after) || 60, 5), 300);
+      onWait(seconds);
+      await wait(seconds * 1000);
+    }
+  }
+
+  // In porties van een paar bedrijven, zodat elke call binnen de timeout en de
+  // rate limit blijft, ook bij 50+ bedrijven.
   async function generateMany(onlyMissing) {
     const targets = companies.filter((company) => company.newsletter_profile && (!onlyMissing || company.approval === "missing"));
     if (!targets.length) return;
@@ -173,16 +200,20 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     }))) return;
     setError("");
     const failures = [];
-    for (const [index, company] of targets.entries()) {
-      setBulk({ done: index, total: targets.length, current: company.company_name });
+    for (let index = 0; index < targets.length; index += BATCH_SIZE) {
+      const chunk = targets.slice(index, index + BATCH_SIZE);
+      const status = { done: index, chunk: chunk.length, total: targets.length, current: chunk.map((company) => company.company_name).join(", ") };
+      setBulk(status);
       try {
-        await request("POST", { lead_id: company.id }, "Genereren mislukt");
+        const json = await generateBatch(chunk, (seconds) => setBulk({ ...status, waiting: seconds }));
+        failures.push(...(json.failures || []));
       } catch (err) {
-        failures.push(`${company.company_name}: ${err.message}`);
+        // De hele portie faalde (bv. timeout); een deel kan toch gelukt zijn.
+        failures.push(`${status.current}: ${err.message} (controleer of ze toch gegenereerd zijn)`);
       }
     }
     setBulk(null);
-    if (failures.length) setError(failures.join(" · "));
+    if (failures.length) setError(`Niet alles is gelukt: ${failures.join(" · ")}`);
     await onReload();
   }
 
@@ -234,7 +265,9 @@ export default function PersonalizationReview({ campaign, editable, data, items,
         {bulk && (
           <p className="flex items-center gap-2 text-xs text-gray-600">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Bezig met {bulk.current} ({bulk.done + 1}/{bulk.total})
+            {bulk.waiting
+              ? `Even wachten op de limiet van de server (ca. ${bulk.waiting} s), daarna verder met ${bulk.current}`
+              : `Bezig met ${bulk.current} (${bulk.done + 1}–${bulk.done + bulk.chunk} van ${bulk.total})`}
           </p>
         )}
         {!items.length && <p className="text-xs text-brand-orange">Voeg eerst items toe op het tabblad Inhoud.</p>}

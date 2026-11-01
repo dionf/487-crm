@@ -65,10 +65,12 @@ export async function GET(request, { params }) {
 
 // Genereert (opnieuw) de personalisatie voor één bedrijf: { lead_id }.
 // Met { lead_id, slot } wordt alleen dat ene onderdeel vernieuwd.
-// Met { lead_ids, slot: "item:<id>" } wordt bij een paar bedrijven tegelijk de
-// regel bij dat item geschreven, alleen waar hij nog ontbreekt (kolomactie in
-// het overzicht). De UI loopt zelf over de bedrijven, in kleine porties, zodat
-// één request binnen de timeout en de rate limit blijft.
+// Met { lead_ids } wordt bij een paar bedrijven tegelijk alles (opnieuw)
+// gegenereerd (Genereer ontbrekende / Alles opnieuw). Met { lead_ids, slot:
+// "item:<id>" } wordt bij die bedrijven de regel bij dat item geschreven, alleen
+// waar hij nog ontbreekt (kolomactie in het overzicht). De UI loopt zelf over
+// de bedrijven, in kleine porties, zodat één request binnen de timeout en de
+// rate limit blijft.
 const MAX_BATCH_LEADS = 5;
 
 export async function POST(request, { params }) {
@@ -87,7 +89,11 @@ export async function POST(request, { params }) {
     const campaign = await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
     const companies = await fetchCampaignCompanies(tenant, campaign, { includeSamples: true });
-    if (Array.isArray(body.lead_ids)) return generateItemForLeads(tenant, campaign, companies, body, userName);
+    if (Array.isArray(body.lead_ids)) {
+      return await (body.slot
+        ? generateItemForLeads(tenant, campaign, companies, body, userName)
+        : generateAllForLeads(tenant, campaign, companies, body, userName));
+    }
     const company = companies.find((candidate) => candidate.id === body.lead_id);
     if (!company) return Response.json({ error: "Dit bedrijf ontvangt deze campagne niet" }, { status: 404 });
 
@@ -104,25 +110,23 @@ export async function POST(request, { params }) {
   }
 }
 
-async function generateItemForLeads(tenant, campaign, companies, body, userName) {
-  const itemId = slotItemId(body.slot);
+function batchLeadIds(body) {
   const leadIds = [...new Set(body.lead_ids)];
-  if (!itemId) return Response.json({ error: "Kies een item" }, { status: 400 });
   if (!leadIds.length || leadIds.length > MAX_BATCH_LEADS) {
-    return Response.json({ error: `Kies 1 tot ${MAX_BATCH_LEADS} bedrijven per keer` }, { status: 400 });
+    throw Response.json({ error: `Kies 1 tot ${MAX_BATCH_LEADS} bedrijven per keer` }, { status: 400 });
   }
-  const items = await fetchCampaignItems(tenant, campaign.id);
-  if (!items.some((item) => item.id === itemId)) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
-  const existing = await fetchCampaignPersonalizations(tenant, campaign.id, leadIds);
-  const done = new Set(existing.filter((slot) => slot.slot === body.slot).map((slot) => slot.lead_id));
-  const articles = await fetchArticles(tenant, items);
+  return leadIds;
+}
 
+// Voert `work(company)` parallel uit per bedrijf en meldt mislukte bedrijven
+// per naam. `work` geeft de nieuwe slots terug, of null als er niets is gedaan.
+// Let op: de rate limit telt per request, dus een portie telt als één hit.
+async function runForLeads(tenant, campaign, companies, leadIds, work) {
   const results = await Promise.allSettled(
     leadIds.map(async (leadId) => {
       const company = companies.find((candidate) => candidate.id === leadId);
       if (!company) throw new Error("ontvangt deze campagne niet");
-      if (done.has(leadId)) return { company, slot: null };
-      return { company, slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName, articles) };
+      return { company, slots: await work(company) };
     })
   );
   const slots = [];
@@ -130,8 +134,8 @@ async function generateItemForLeads(tenant, campaign, companies, body, userName)
   let realChanged = false;
   for (const [index, result] of results.entries()) {
     if (result.status === "fulfilled") {
-      if (result.value.slot) {
-        slots.push(result.value.slot);
+      if (result.value.slots) {
+        slots.push(...result.value.slots);
         if (!result.value.company.sample) realChanged = true;
       }
       continue;
@@ -144,6 +148,29 @@ async function generateItemForLeads(tenant, campaign, companies, body, userName)
   }
   if (realChanged) await resetCampaignTest(tenant, campaign.id);
   return Response.json({ slots, failures });
+}
+
+async function generateAllForLeads(tenant, campaign, companies, body, userName) {
+  const leadIds = batchLeadIds(body);
+  const items = await fetchCampaignItems(tenant, campaign.id);
+  const articles = await fetchArticles(tenant, items);
+  return runForLeads(tenant, campaign, companies, leadIds, (company) =>
+    generatePersonalizationForLead(tenant, campaign, items, company, userName, articles)
+  );
+}
+
+async function generateItemForLeads(tenant, campaign, companies, body, userName) {
+  const itemId = slotItemId(body.slot);
+  if (!itemId) return Response.json({ error: "Kies een item" }, { status: 400 });
+  const leadIds = batchLeadIds(body);
+  const items = await fetchCampaignItems(tenant, campaign.id);
+  if (!items.some((item) => item.id === itemId)) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
+  const existing = await fetchCampaignPersonalizations(tenant, campaign.id, leadIds);
+  const done = new Set(existing.filter((slot) => slot.slot === body.slot).map((slot) => slot.lead_id));
+  const articles = await fetchArticles(tenant, items);
+  return runForLeads(tenant, campaign, companies, leadIds, async (company) =>
+    done.has(company.id) ? null : [await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName, articles)]
+  );
 }
 
 // Bewerk of keur goed.

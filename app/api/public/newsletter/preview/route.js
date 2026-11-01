@@ -13,16 +13,19 @@ function notFound() {
   });
 }
 
-// Alleen bedrijven die de campagne (gaan) ontvangen hebben een webversie. Na
-// verzending telt de vastgelegde ontvangerslijst, anders de huidige doelgroep.
+// Alleen bedrijven die de campagne (gaan) ontvangen hebben een webversie. Is er
+// echt verzonden, dan telt de vastgelegde ontvangerslijst; anders de huidige
+// doelgroep. Een snapshot van een mislukte poging zonder verzonden mails telt
+// niet: de doelgroep kan daarna nog veranderen.
 async function isCampaignRecipient(campaign, leadId) {
   const { data: snapshot, error } = await supabaseAdmin
     .from("newsletter_campaign_recipients")
-    .select("lead_id")
+    .select("lead_id, status")
     .eq("tenant", campaign.tenant)
     .eq("campaign_id", campaign.id);
   if (error) throw new Error(error.message);
-  if (snapshot?.length) return snapshot.some((row) => row.lead_id === leadId);
+  const sent = (snapshot || []).some((row) => !["planned", "synced"].includes(row.status));
+  if (sent) return snapshot.some((row) => row.lead_id === leadId);
   const companies = await fetchCampaignCompanies(campaign.tenant, campaign);
   return companies.some((company) => company.id === leadId);
 }

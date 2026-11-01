@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
 
 const SOURCE_TYPES = [
   { id: "all_marketing", label: "Alle marketingcontacten" },
@@ -1016,12 +1017,16 @@ export default function NieuwsbrievenPage() {
                   placeholder="Interne campagnenaam"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
                 />
+                {campaignForm.mode === "personalized" ? (
+                  <p className="text-xs text-gray-500">Onderwerp staat vast: {PERSONALIZED_SUBJECT_TEMPLATE}.</p>
+                ) : (
                 <input
                   value={campaignForm.subject}
                   onChange={(e) => setCampaignForm({ ...campaignForm, subject: e.target.value })}
                   placeholder="Titel / onderwerp"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
                 />
+                )}
                 <input
                   value={campaignForm.preview_text}
                   onChange={(e) => setCampaignForm({ ...campaignForm, preview_text: e.target.value })}

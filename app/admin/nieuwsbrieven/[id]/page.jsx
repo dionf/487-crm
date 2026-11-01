@@ -15,6 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { campaignTargetIds } from "@/lib/newsletter-audience";
 import { statusClass, statusLabel } from "@/lib/newsletter-status";
 import { useOrg } from "@/lib/org-context";
+import { campaignSubjectLabel } from "@/lib/newsletter-subject";
 
 // Eén nieuwsbrief. Gepersonaliseerd: instellingen bovenaan, daaronder de
 // stappen inhoud, personalisatie, voorbeeld/verzenden en social posts.
@@ -99,7 +100,7 @@ export default function NieuwsbriefCampagnePage() {
                   ) : (
                     <Code2 className="w-3.5 h-3.5 text-gray-400" />
                   )}
-                  {personalized ? "Gepersonaliseerd per bedrijf" : "Standaard (eigen HTML)"} · {campaign.subject}
+                  {personalized ? "Gepersonaliseerd per bedrijf" : "Standaard (eigen HTML)"} · {campaignSubjectLabel(campaign)}
                 </p>
               </div>
               <div className="flex items-center gap-3">

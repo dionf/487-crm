@@ -14,7 +14,8 @@ const APPROVAL_BADGES = {
 };
 
 const FIXED_SLOTS = [
-  { slot: "subject", label: "Onderwerpregel" },
+  // Oud slot van vóór het vaste onderwerp; verdwijnt bij Alles vernieuwen.
+  { slot: "subject", label: "Onderwerpregel (oud, vervalt bij Alles vernieuwen)" },
   { slot: "preheader", label: "Preheader" },
   { slot: "intro", label: "Intro: In deze nieuwsbrief voor ..." },
 ];
@@ -78,7 +79,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
               {approved ? "Terug naar concept" : "Goedkeuren"}
             </button>
           )}
-          <button
+          {slot.slot !== "subject" && <button
             type="button"
             onClick={() => {
               if (dirty && !confirm("Je niet-opgeslagen wijziging gaat verloren. Toch vernieuwen?")) return;
@@ -91,7 +92,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
           >
             {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             Vernieuwen
-          </button>
+          </button>}
         </div>
       )}
     </div>

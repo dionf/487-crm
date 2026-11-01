@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, MoreHorizontal, Plus, Search, Sparkles, Trash2, Users } from "lucide-react";
 import { excludedSegmentNames, targetSegmentNames } from "@/lib/newsletter-audience";
+import { campaignSubjectLabel } from "@/lib/newsletter-subject";
 import {
   STATUS_GROUPS,
   campaignDateLabel,
@@ -140,7 +141,7 @@ function CampaignTable({ campaigns, segments, busy, onShowRecipients, onDelete }
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-gray-500">{campaign.subject}</p>
+                  <p className="text-xs text-gray-500">{campaignSubjectLabel(campaign)}</p>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   <p>{targetSegmentNames(campaign, segments).join(", ") || "Geen doelgroep"}</p>
@@ -209,7 +210,7 @@ export default function CampaignList({ campaigns, segments, busy, onShowRecipien
     const needle = query.trim().toLowerCase();
     if (!needle) return campaigns;
     return campaigns.filter((campaign) => (
-      `${campaign.name || ""} ${campaign.subject || ""}`.toLowerCase().includes(needle)
+      `${campaign.name || ""} ${campaignSubjectLabel(campaign)}`.toLowerCase().includes(needle)
     ));
   }, [campaigns, query]);
 

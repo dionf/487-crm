@@ -5,6 +5,7 @@ import { CheckCircle, Loader2, Save } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
 import ImageField from "@/components/newsletter/ImageField";
+import { personalizedSubject } from "@/lib/newsletter-subject";
 
 export const LAYOUT_OPTIONS = [
   { id: "combined", label: "Combinatie: intro-hook plus regel bij de 1-2 meest relevante items" },
@@ -12,7 +13,7 @@ export const LAYOUT_OPTIONS = [
   { id: "per_item", label: "Bij elk item een regel" },
 ];
 
-const FIELDS = ["name", "subject", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
+const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
 
 const labelClass = "block text-xs font-semibold text-gray-500 uppercase";
 const inputClass = "mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber disabled:bg-gray-50";
@@ -74,7 +75,7 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
           <button
             type="button"
             onClick={save}
-            disabled={!dirty || busy || !form.name.trim() || !form.subject.trim()}
+            disabled={!dirty || busy || !form.name.trim()}
             className="flex items-center gap-2 px-4 py-2 rounded-pill text-xs font-semibold text-white bg-brand-black disabled:opacity-40"
           >
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
@@ -91,13 +92,13 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
             Interne campagnenaam
             <input value={form.name} onChange={set("name")} disabled={!editable} className={inputClass} />
           </label>
-          <label className={labelClass}>
+          <div className={labelClass}>
             Onderwerp
-            <input value={form.subject} onChange={set("subject")} disabled={!editable} className={inputClass} />
+            <p className="mt-1 text-sm font-normal normal-case text-brand-black">{personalizedSubject(campaign, "[bedrijf]")}</p>
             <span className="block mt-1 text-xs font-normal normal-case text-gray-500">
-              Basis voor de onderwerpregel per bedrijf. [bedrijf] wordt vervangen door de bedrijfsnaam.
+              Vast onderwerp: het weeknummer komt van de verzenddatum (anders vandaag), [bedrijf] wordt de bedrijfsnaam.
             </span>
-          </label>
+          </div>
           <label className={labelClass}>
             Previewtekst
             <input value={form.preview_text} onChange={set("preview_text")} disabled={!editable} className={inputClass} />

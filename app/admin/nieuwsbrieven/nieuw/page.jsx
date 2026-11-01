@@ -13,6 +13,7 @@ import { LAYOUT_OPTIONS } from "@/components/newsletter/CampaignSettings";
 import ImageField from "@/components/newsletter/ImageField";
 import { apiFetch } from "@/lib/api";
 import { campaignTargetIds } from "@/lib/newsletter-audience";
+import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
 import { useOrg } from "@/lib/org-context";
 
 const TYPES = [
@@ -179,7 +180,11 @@ export default function NieuweCampagnePage() {
                 <div className="grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-5 items-start">
                   <div className="space-y-3">
                     <input value={form.name} onChange={set("name")} placeholder="Interne campagnenaam" className={inputClass} />
-                    <input value={form.subject} onChange={set("subject")} placeholder="Titel / onderwerp" className={inputClass} />
+                    {mode === "personalized" ? (
+                      <p className="text-xs text-gray-500">Onderwerp staat vast: {PERSONALIZED_SUBJECT_TEMPLATE}.</p>
+                    ) : (
+                      <input value={form.subject} onChange={set("subject")} placeholder="Titel / onderwerp" className={inputClass} />
+                    )}
                     <input value={form.preview_text} onChange={set("preview_text")} placeholder="Previewtekst" className={inputClass} />
                     {mode === "broadcast" && <ScheduleField form={form} setForm={setForm} />}
                     <AudienceFields segments={segments || []} form={form} setForm={setForm} />

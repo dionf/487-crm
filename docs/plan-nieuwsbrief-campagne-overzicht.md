@@ -120,7 +120,7 @@ Een nieuw bestand `lib/newsletter-status.js` (zonder serverimports, dus bruikbaa
 Elke PR krijgt vooraf een `code-review`, wordt lokaal getest op beide tenants en gaat alleen met akkoord van Dion naar main.
 
 1. **PR 1: overzicht, `/nieuw` als apart scherm en de campagnepagina voor standaardcampagnes** (gebouwd). `lib/newsletter-status.js`, `lib/newsletter-audience.js`, `CampaignList` (filterchips, groepen, datumkolom, `?status=` in de URL), `RecipientsDrawer`, `/admin/nieuwsbrieven/nieuw` met `AudienceFields`, en `BroadcastCampaignEditor` op `/[id]`. De tijdelijke route `/nieuw?edit=` uit de eerste versie van dit plan is niet nodig: de editor voor standaardcampagnes kwam meteen op `/[id]`. Testmail, verzenden en bewerken zitten niet meer in het overzicht.
-2. **PR 2: afronding.** Eén actiebalk ook voor gepersonaliseerde campagnes (die naar stap 3 verwijst), een rijkere alleen-lezenweergave voor verzonden campagnes, en de personalisatievelden van `/nieuw` delen met `CampaignSettings` in plaats van ze te kopiëren.
+2. **PR 2: afronding** (gebouwd, gestapeld op PR 1). Plus: resultaatblok (afgeleverd, bounces, klachten, mislukt, uitgeschreven) en werkelijke ontvangers met status na verzenden. Eén actiebalk ook voor gepersonaliseerde campagnes (die naar stap 3 verwijst), een rijkere alleen-lezenweergave voor verzonden campagnes, en de personalisatievelden van `/nieuw` delen met `CampaignSettings` in plaats van ze te kopiëren.
 3. **Optioneel: Dupliceren** (zie open vraag 2).
 
 ## 9. Open vragen voor Dion

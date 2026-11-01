@@ -3,19 +3,40 @@
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { hasSendStarted } from "@/lib/newsletter-status";
 
-// Zijpaneel met de ontvangers van een campagne. Sluit met de knop, Escape of
-// een klik naast het paneel.
+const RECIPIENT_STATUS_LABELS = {
+  planned: "Gepland",
+  sent: "Verstuurd",
+  delivered: "Afgeleverd",
+  delivery_delayed: "Vertraagd",
+  bounced: "Bounce",
+  complained: "Spamklacht",
+  suppressed: "Geblokkeerd",
+  failed: "Mislukt",
+  unsubscribed: "Uitgeschreven",
+};
+
+function recipientStatusClass(status) {
+  if (status === "delivered") return "text-green-700";
+  if (["bounced", "complained", "suppressed", "failed", "unsubscribed"].includes(status)) return "text-red-600";
+  return "text-gray-500";
+}
+
+// Zijpaneel met de ontvangers van een campagne. Voor verzenden: wie de
+// doelgroep nu oplevert. Tijdens en na verzenden: wie de mail echt kreeg, met
+// de status per adres. Sluit met de knop, Escape of een klik naast het paneel.
 export default function RecipientsDrawer({ campaign, onClose }) {
   const [recipients, setRecipients] = useState(null);
   const [error, setError] = useState("");
+  const actual = hasSendStarted(campaign);
 
   useEffect(() => {
     if (!campaign) return undefined;
     let cancelled = false;
     setRecipients(null);
     setError("");
-    apiFetch(`/api/newsletter/campaigns/${campaign.id}/recipients`)
+    apiFetch(`/api/newsletter/campaigns/${campaign.id}/${actual ? "results" : "recipients"}`)
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Ontvangers laden mislukt");
@@ -25,7 +46,7 @@ export default function RecipientsDrawer({ campaign, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [campaign]);
+  }, [campaign, actual]);
 
   useEffect(() => {
     if (!campaign) return undefined;
@@ -56,7 +77,30 @@ export default function RecipientsDrawer({ campaign, onClose }) {
           {!recipients && !error && (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
           )}
-          {recipients && (
+          {recipients && actual && (
+            <>
+              <p className="mb-3 text-sm font-medium">
+                {recipients.recipients_total} ontvangers
+                {recipients.truncated && <span className="ml-2 text-xs font-normal text-gray-400">Eerste {recipients.recipients.length} getoond</span>}
+              </p>
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <table className="w-full">
+                  <tbody>
+                    {recipients.recipients.map((recipient) => (
+                      <tr key={recipient.email} className="border-b border-gray-50">
+                        <td className="px-3 py-2 text-sm font-medium break-all">{recipient.email}</td>
+                        <td className="px-3 py-2 text-sm text-gray-500">{recipient.company_name || recipient.name || "—"}</td>
+                        <td className={`px-3 py-2 text-xs font-semibold whitespace-nowrap ${recipientStatusClass(recipient.status)}`}>
+                          {RECIPIENT_STATUS_LABELS[recipient.status] || recipient.status}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          {recipients && !actual && (
             <>
               <div className="mb-3 space-y-0.5">
                 <p className="text-sm font-medium">

@@ -4,19 +4,10 @@ import { useEffect, useState } from "react";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
-import ImageField from "@/components/newsletter/ImageField";
+import PersonalizedFields, { LayoutSelect, inputClass, labelClass } from "@/components/newsletter/PersonalizedFields";
 import { personalizedSubject } from "@/lib/newsletter-subject";
 
-export const LAYOUT_OPTIONS = [
-  { id: "combined", label: "Combinatie: intro-hook plus regel bij de 1-2 meest relevante items" },
-  { id: "intro", label: "Alleen intro-hook bovenaan" },
-  { id: "per_item", label: "Bij elk item een regel" },
-];
-
 const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
-
-const labelClass = "block text-xs font-semibold text-gray-500 uppercase";
-const inputClass = "mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber disabled:bg-gray-50";
 
 function formFromCampaign(campaign) {
   return Object.fromEntries(
@@ -103,48 +94,14 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
             Previewtekst
             <input value={form.preview_text} onChange={set("preview_text")} disabled={!editable} className={inputClass} />
           </label>
-          <label className={labelClass}>
-            Opzet
-            <select value={form.personalization_layout} onChange={set("personalization_layout")} disabled={!editable} className={inputClass}>
-              {LAYOUT_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-          </label>
+          <LayoutSelect form={form} setForm={setForm} disabled={!editable} />
           <div className={labelClass}>
             Doelgroep
             <p className="mt-1 text-sm font-normal normal-case text-brand-black">{targetNames.length ? targetNames.join(", ") : "—"}</p>
           </div>
         </div>
         <div className="space-y-3">
-          <label className={labelClass}>
-            Kop bovenaan
-            <input
-              value={form.headline}
-              onChange={set("headline")}
-              disabled={!editable}
-              placeholder="Bijv. Wat AI deze maand *voor jullie* betekent"
-              className={inputClass}
-            />
-            <span className="block mt-1 text-xs font-normal normal-case text-gray-500">Zet woorden tussen *sterretjes* voor het oranje accent.</span>
-          </label>
-          <div className={labelClass}>
-            Kopbeeld
-            <div className="mt-1">
-              {editable ? (
-                <ImageField value={form.hero_image_url} onChange={(url) => setForm((current) => ({ ...current, hero_image_url: url }))} />
-              ) : form.hero_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.hero_image_url} alt="" className="h-24 rounded-xl border border-gray-100 object-cover" />
-              ) : (
-                <p className="text-sm font-normal normal-case text-gray-400">Geen kopbeeld</p>
-              )}
-            </div>
-          </div>
-          <label className={labelClass}>
-            Algemene inleiding (voor iedereen gelijk)
-            <textarea value={form.intro_text} onChange={set("intro_text")} disabled={!editable} rows={4} className={inputClass} />
-          </label>
+          <PersonalizedFields form={form} setForm={setForm} disabled={!editable} />
         </div>
       </div>
       {editable && dirty && (

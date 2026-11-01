@@ -17,9 +17,23 @@ const TABS = [
 
 // Werkruimte voor een gepersonaliseerde campagne: items schrijven,
 // personalisatie per bedrijf reviewen, voorbeeld bekijken en verzenden, en
-// optioneel social posts bij items maken.
-export default function PersonalizedCampaignPanel({ campaign, refreshKey = 0, resendReady, testEmail, setTestEmail, accent, onCampaignChange }) {
-  const [tab, setTab] = useState("content");
+// optioneel social posts bij items maken. tab/onTabChange zijn optioneel: de
+// campagnepagina gebruikt ze om vanuit de actiebalk naar stap 3 te springen.
+export default function PersonalizedCampaignPanel({
+  campaign,
+  refreshKey = 0,
+  resendReady,
+  testEmail,
+  setTestEmail,
+  accent,
+  onCampaignChange,
+  tab: controlledTab,
+  onTabChange,
+  onProgress,
+}) {
+  const [ownTab, setOwnTab] = useState("content");
+  const tab = controlledTab ?? ownTab;
+  const setTab = onTabChange ?? setOwnTab;
   const [items, setItems] = useState([]);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -42,12 +56,13 @@ export default function PersonalizedCampaignPanel({ campaign, refreshKey = 0, re
       if (!personalizationRes.ok) throw new Error(personalizationJson.error || "Personalisatie laden mislukt");
       setItems(itemsJson.items || []);
       setData(personalizationJson);
+      onProgress?.(personalizationJson.progress || null);
       // Inhoud wijzigen kan de status terugzetten (testmail vervalt).
       if (campaignRes.ok && campaignJson.campaign) onCampaignChange(campaignJson.campaign);
     } catch (err) {
       setError(err.message);
     }
-    // onCampaignChange is een nieuwe functie bij elke render van de pagina.
+    // onCampaignChange en onProgress zijn nieuwe functies bij elke render van de pagina.
     // refreshKey: de pagina vraagt om opnieuw laden (bijv. na opslaan instellingen).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign.id, refreshKey]);

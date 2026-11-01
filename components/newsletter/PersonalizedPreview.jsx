@@ -26,7 +26,6 @@ export default function PersonalizedPreview({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
-  const realCompanies = companies.filter((company) => !company.sample);
 
   useEffect(() => {
     const first = data?.companies?.[0];
@@ -97,10 +96,10 @@ export default function PersonalizedPreview({
   }
 
   async function send() {
-    const recipientCount = realCompanies.reduce((sum, company) => sum + company.recipients.length, 0);
+    const recipientCount = companies.reduce((sum, company) => sum + company.recipients.length, 0);
     if (!(await confirmDialog({
       title: `"${campaign.name}" nu definitief versturen?`,
-      message: `De nieuwsbrief gaat naar ${recipientCount} ontvangers bij ${realCompanies.length} bedrijven. Dit kan niet worden teruggedraaid.`,
+      message: `De nieuwsbrief gaat naar ${recipientCount} ontvangers bij ${companies.length} bedrijven. Dit kan niet worden teruggedraaid.`,
       confirmLabel: "Definitief versturen",
     }))) return;
     setBusy("send");
@@ -137,24 +136,11 @@ export default function PersonalizedPreview({
             onChange={(e) => setLeadId(e.target.value)}
             className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
           >
-            {realCompanies.length > 0 && (
-              <optgroup label="Ontvangers">
-                {realCompanies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.company_name} {company.approval === "approved" ? "✓" : ""}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {companies.some((company) => company.sample) && (
-              <optgroup label="Voorbeelden (worden niet verzonden)">
-                {companies.filter((company) => company.sample).map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.company_name} {company.approval === "missing" ? "(nog niet gegenereerd)" : ""}
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.company_name} {company.approval === "approved" ? "✓" : ""}
+              </option>
+            ))}
           </select>
           {preview && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
@@ -226,7 +212,6 @@ export default function PersonalizedPreview({
             </button>
             <p className="text-xs text-gray-500">
               De uitschrijflink in een testmail schrijft niemand uit.
-              {preview?.sample ? " Een test van een voorbeeldbedrijf telt niet als test voor verzending." : ""}
             </p>
             {campaign.test_sent_at && (
               <p className="flex items-center gap-1 text-xs font-semibold text-green-700">

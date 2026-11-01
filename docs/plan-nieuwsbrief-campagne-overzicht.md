@@ -9,7 +9,7 @@ Mockup: [`docs/mockup-nieuwsbrief-campagne-overzicht.html`](mockup-nieuwsbrief-c
 |---|---|---|
 | Pagina Nieuwsbrieven | `app/admin/nieuwsbrieven/page.jsx` (1636 regels) | Tabs Campagnes, Resend, Segmenten en Nog geen nieuwsbrief. In de tab Campagnes staat bovenaan het formulier "Nieuwe campagne" of "Campagne bewerken" (beide modi), daaronder de tabel "Campagnes" met het veld "Testmail naar", en daaronder een paneel met de gekozen campagne en de ontvangers. |
 | Campagnepagina | `app/admin/nieuwsbrieven/[id]/page.jsx` | Alleen voor `mode = personalized` (een standaardcampagne geeft een foutmelding). Bovenaan `CampaignSettings`, daaronder `PersonalizedCampaignPanel` met de stappen 1. Inhoud, 2. Personalisatie, 3. Voorbeeld en verzenden, en 4. Social posts (PR #45). |
-| Gepersonaliseerde flow | `components/newsletter/*` | `PersonalizedContentEditor` (items plus artikeltekst, PR #44), `PersonalizationReview`, `PersonalizedPreview` (testmail en verzenden), `SocialPosts`, `SampleCompanies`, `CampaignSettings`. |
+| Gepersonaliseerde flow | `components/newsletter/*` | `PersonalizedContentEditor` (items plus artikeltekst, PR #44), `PersonalizationReview`, `PersonalizedPreview` (testmail en verzenden), `SocialPosts`, `CampaignSettings`. |
 | API | `app/api/newsletter/campaigns/route.js` (GET lijst, POST nieuw), `[id]/route.js` (GET, PATCH, DELETE), `[id]/test`, `[id]/send`, `[id]/recipients` | GET geeft alle campagnes van de tenant terug, nieuwste eerst, zonder filter. POST eist voor `broadcast` een naam, onderwerp en HTML, en voor `personalized` alleen een naam en onderwerp. |
 | Menu | `components/Navbar.jsx:208` | `/admin/nieuwsbrieven` |
 

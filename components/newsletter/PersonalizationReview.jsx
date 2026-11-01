@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, RotateCcw, Save, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import CompanyLogo from "@/components/CompanyLogo";
-import SampleCompanies from "@/components/newsletter/SampleCompanies";
 import RelevanceOverview from "@/components/newsletter/RelevanceOverview";
 import { confirmDialog } from "@/components/Dialogs";
 
@@ -121,7 +120,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
 
 // Per ontvangend bedrijf: profiel naast de gegenereerde teksten, bewerken,
 // (opnieuw) genereren en goedkeuren.
-export default function PersonalizationReview({ campaign, editable, data, items, onReload, onCampaignChange }) {
+export default function PersonalizationReview({ campaign, editable, data, items, onReload }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState("");
   const [bulk, setBulk] = useState(null); // { done, chunk, total, current, waiting? }
@@ -273,16 +272,6 @@ export default function PersonalizationReview({ campaign, editable, data, items,
         {!items.length && <p className="text-xs text-brand-orange">Voeg eerst items toe op het tabblad Inhoud.</p>}
       </div>
 
-      <SampleCompanies
-        campaign={campaign}
-        editable={editable}
-        recipientIds={companies.filter((company) => !company.sample).map((company) => company.id)}
-        onChanged={async (updated) => {
-          if (updated) onCampaignChange?.(updated);
-          await onReload();
-        }}
-      />
-
       {withoutProfile.length > 0 && (
         <div className="flex gap-2 px-3 py-2 rounded-xl bg-amber-50 text-sm text-brand-orange">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -332,11 +321,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                     <img src={company.logo_url} alt="" className="h-5 max-w-16 object-contain shrink-0" />
                   )}
                   <span className="text-sm font-semibold truncate">{company.company_name}</span>
-                  {company.sample ? (
-                    <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill bg-blue-50 text-blue-700 border border-blue-100">Voorbeeld</span>
-                  ) : (
-                    <span className="text-xs text-gray-400 shrink-0">{company.recipients.length} ontv.</span>
-                  )}
+                  <span className="text-xs text-gray-400 shrink-0">{company.recipients.length} ontv.</span>
                 </span>
                 <span className={`shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border ${badge.className}`}>{badge.label}</span>
               </button>
@@ -362,14 +347,12 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                       )}
                       <Link href={`/leads/${company.id}`} className="inline-block text-xs text-brand-orange underline mt-2">Bedrijf openen</Link>
                     </div>
-                    {!company.sample && (
                     <div className="rounded-xl bg-gray-50 p-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ontvangers</p>
                       {company.recipients.map((recipient) => (
                         <p key={recipient.email} className="text-xs text-gray-600 truncate">{recipient.name || recipient.email}</p>
                       ))}
                     </div>
-                    )}
                     {editable && (
                       <div className="flex flex-col gap-2">
                         <button

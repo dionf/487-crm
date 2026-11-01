@@ -5,16 +5,19 @@ import { apiFetch } from "@/lib/api";
 import PersonalizedContentEditor from "@/components/newsletter/PersonalizedContentEditor";
 import PersonalizationReview from "@/components/newsletter/PersonalizationReview";
 import PersonalizedPreview from "@/components/newsletter/PersonalizedPreview";
+import SocialPosts from "@/components/newsletter/SocialPosts";
 
 const TABS = [
   { id: "content", label: "1. Inhoud" },
   { id: "review", label: "2. Personalisatie" },
   { id: "preview", label: "3. Voorbeeld en verzenden" },
+  { id: "social", label: "4. Social posts (optioneel)" },
 ];
 const EDITABLE_STATUSES = new Set(["draft", "tested", "failed"]);
 
 // Werkruimte voor een gepersonaliseerde campagne: items schrijven,
-// personalisatie per bedrijf reviewen, voorbeeld bekijken en verzenden.
+// personalisatie per bedrijf reviewen, voorbeeld bekijken en verzenden, en
+// optioneel social posts bij items maken.
 export default function PersonalizedCampaignPanel({ campaign, refreshKey = 0, resendReady, testEmail, setTestEmail, accent, onCampaignChange }) {
   const [tab, setTab] = useState("content");
   const [items, setItems] = useState([]);
@@ -95,6 +98,7 @@ export default function PersonalizedCampaignPanel({ campaign, refreshKey = 0, re
           onCampaignChange={onCampaignChange}
         />
       )}
+      {tab === "social" && <SocialPosts campaign={campaign} items={items} />}
     </div>
   );
 }

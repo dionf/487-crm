@@ -1,7 +1,7 @@
 # Plan: campagne-overzicht los van "Nieuwe campagne"
 
 Status: **plan, nog niet gebouwd**. Wacht op akkoord van Dion.
-Mockup: [`docs/mockup-nieuwsbrief-campagne-overzicht.html`](mockup-nieuwsbrief-campagne-overzicht.html) (open hem in de browser).
+Mockup: [`docs/mockup-nieuwsbrief-campagne-overzicht.html`](mockup-nieuwsbrief-campagne-overzicht.html) (open hem in de browser). De mockup toont één scherm tegelijk, net als in de app; met de knoppen bovenaan wissel je tussen Overzicht, Nieuwe campagne en Campagnepagina.
 
 ## 1. Hoe het nu zit
 
@@ -34,7 +34,7 @@ Er zijn drie schermen. De tabs Resend, Segmenten en Nog geen nieuwsbrief blijven
 
 ### B. Nieuwe campagne: `/admin/nieuwsbrieven/nieuw`
 
-Een eigen route, zodat het formulier niet meer altijd in beeld staat. Er zijn twee stappen op één pagina.
+Een **apart scherm** met een eigen route. Op dit scherm staan géén lopende of verzonden campagnes, en het formulier staat nooit onder of boven de lijsten in het overzicht. Er zijn twee stappen op dit ene scherm.
 
 1. **Soort kiezen** met twee grote kaarten: *Standaard (eigen HTML)* en *Gepersonaliseerd per bedrijf*, elk met een regel uitleg.
 2. **Basisgegevens**: interne naam, onderwerp, previewtekst, doelgroepen ("Mailen naar") en uitsluitingen ("Niet mailen naar").
@@ -110,7 +110,7 @@ Een nieuw bestand `lib/newsletter-status.js` (zonder serverimports, dus bruikbaa
 - **Gedrag van standaardcampagnes verschuift.** De regels voor testen, opnieuw testen, plannen en batches (`formNeedsRetest`, `canSaveAndPlanFromForm`, `hasExpiredSchedule`) gaan mee naar een ander component. Een fout daarin kan betekenen dat er verstuurd wordt zonder geldige test. Daarom verplaatsen we ze ongewijzigd naar `lib/newsletter-status.js` of de editor, en testen we ze per pad met een testsegment. Er wordt niets echt verzonden.
 - **Twee testmail- of verzendknoppen bij een gepersonaliseerde campagne.** Opgelost door de actiebalk daar naar stap 3 te laten verwijzen.
 - **Gewenning.** Wie gewend is aan het formulier bovenaan, zoekt even. De knop "Nieuwe campagne" staat prominent rechtsboven.
-- **Werk dat parallel loopt aan de nieuwsbrief** (PR's #38 tot en met #45 in één week). Kleine PR's beperken de kans op mergeconflicten in `page.jsx`.
+- **Werk dat parallel loopt aan de nieuwsbrief** (PR's #38 tot en met #45 in één week). Drie kleine PR's beperken de kans op mergeconflicten in `page.jsx`.
 - **Tenantverschil.** HipHot gebruikt vooral standaardcampagnes met batches. Dat pad moet op de `hiphot`-tenant net zo goed werken als nu.
 - **De weekstart van maandag.** Niets hiervan is nodig om de voorbeelden te versturen; die lopen via de bestaande campagnepagina. Bouwen kan dus na maandag, zonder risico voor de voorbeelden.
 
@@ -118,10 +118,9 @@ Een nieuw bestand `lib/newsletter-status.js` (zonder serverimports, dus bruikbaa
 
 Elke PR krijgt vooraf een `code-review`, wordt lokaal getest op beide tenants en gaat alleen met akkoord van Dion naar main.
 
-1. **PR 1: gedeelde status-lib en het overzicht.** `lib/newsletter-status.js` en `CampaignList` met de filterchips, de groepen, de datumkolom en `?status=` in de URL. Het formulier blijft er in deze PR nog boven staan, achter een uitgeklapte knop "Nieuwe campagne" (een tussenstap die al minder rommelig is). Dit levert het meeste op voor het minste risico.
-2. **PR 2: `/nieuw` als eigen route.** Het aanmaakformulier verhuist naar de nieuwe route en wordt `AudienceFields`. In het overzicht staat alleen nog de knop.
-3. **PR 3: de campagnepagina voor standaardcampagnes.** `BroadcastCampaignEditor` en `CampaignActionBar` op `/[id]`. Bewerken, testmail en verzenden gaan weg uit het overzicht. Ontvangers komen in het zijpaneel.
-4. **PR 4: afronding.** Alleen-lezenweergave voor verzonden campagnes met de statistieken, lege staten, (optioneel) Dupliceren, en de oude code opruimen uit `page.jsx`.
+1. **PR 1: overzicht en `/nieuw` als apart scherm.** `lib/newsletter-status.js`, `CampaignList` (filterchips, groepen, datumkolom, `?status=` in de URL) en de route `/admin/nieuwsbrieven/nieuw` met `AudienceFields`. Het aanmaakformulier staat vanaf deze PR nooit meer op dezelfde pagina als de lijsten met lopende en verzonden campagnes, ook niet uitklapbaar. In het overzicht staat alleen de knop "+ Nieuwe campagne". Bewerken van een standaardcampagne opent in deze PR tijdelijk nog het bestaande formulier, maar ook dan op een eigen scherm (`/nieuw?edit=<id>`) en niet boven de lijst.
+2. **PR 2: de campagnepagina voor standaardcampagnes.** `BroadcastCampaignEditor` en `CampaignActionBar` op `/[id]`. Bewerken, testmail en verzenden gaan weg uit het overzicht, en `?edit=` vervalt. Ontvangers komen in het zijpaneel.
+3. **PR 3: afronding.** Alleen-lezenweergave voor verzonden campagnes met de statistieken, lege staten, (optioneel) Dupliceren, en de oude code opruimen uit `page.jsx`.
 
 ## 9. Open vragen voor Dion
 

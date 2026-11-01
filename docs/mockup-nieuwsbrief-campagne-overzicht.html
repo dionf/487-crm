@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup nieuwsbrieven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 48-7-huisstijl, gelijk aan tailwind.config.js van de CRM */
+  :root {
+    --amber: #FAB868; --amber-hover: #E5A04D; --orange: #D4731C;
+    --black: #0D0D0F; --dark-gray: #292828; --light-gray: #F4F4F4;
+    --warm-white: #FAF8F5; --beige: #F5F0E8;
+    --line: #EDEBE7; --muted: #6B6B6B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Geist", system-ui, sans-serif; background: var(--warm-white); color: var(--black); }
+  .note { max-width: 1120px; margin: 24px auto 0; padding: 0 16px; font-size: 13px; color: var(--muted); }
+  .screen-label { max-width: 1120px; margin: 32px auto 8px; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--orange); }
+  .frame { max-width: 1120px; margin: 0 auto; padding: 24px 16px; background: var(--warm-white); border-top: 1px solid var(--line); }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 24px; margin: 0; }
+  .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .back { font-size: 13px; color: var(--muted); margin-bottom: 12px; display: inline-block; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 9px 18px; font-size: 14px; font-weight: 600; border: 1px solid #DDD; background: #fff; color: var(--black); cursor: default; }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: var(--black); }
+  .btn.small { padding: 6px 12px; font-size: 12px; }
+  .tabs, .chips { display: inline-flex; gap: 4px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
+  .tab, .chip { padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .tab.on, .chip.on { background: #FFF4E6; color: var(--orange); }
+  .chip .n { font-weight: 500; color: #A0A0A0; margin-left: 4px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+  .search { padding: 8px 12px; border: 1px solid #DDD; border-radius: 12px; font: inherit; font-size: 13px; width: 240px; max-width: 100%; background: #fff; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; margin-bottom: 16px; }
+  .card h2 { font-size: 14px; margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+  .card h2 span { font-weight: 500; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 10px 16px; }
+  td { padding: 12px 16px; border-top: 1px solid #F3F1EE; font-size: 13px; vertical-align: top; }
+  tr.row:hover td { background: var(--warm-white); }
+  .name { font-weight: 600; font-size: 14px; }
+  .muted { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 9999px; border: 1px solid; }
+  .b-grey { background: #F7F7F7; color: #555; border-color: #EEE; }
+  .b-blue { background: #EFF6FF; color: #1D4ED8; border-color: #DBEAFE; }
+  .b-amber { background: #FFF7ED; color: var(--orange); border-color: #FDE7C8; }
+  .b-green { background: #F0FDF4; color: #15803D; border-color: #DCFCE7; }
+  .b-red { background: #FEF2F2; color: #DC2626; border-color: #FEE2E2; }
+  .tag { margin-left: 6px; vertical-align: middle; }
+  .right { text-align: right; white-space: nowrap; }
+  .kebab { display: inline-block; padding: 6px 10px; color: #999; font-weight: 700; }
+  /* Nieuwe campagne */
+  .types { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .type { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 18px; }
+  .type.on { border-color: var(--amber); background: #FFFBF5; }
+  .type h3 { margin: 0 0 4px; font-size: 15px; }
+  .type p { margin: 0; font-size: 13px; color: var(--muted); }
+  .step { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin: 4px 0 8px; }
+  .form { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .field { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .input { margin-top: 4px; width: 100%; padding: 9px 12px; border: 1px solid #DDD; border-radius: 12px; font: inherit; font-size: 13px; color: #999; text-transform: none; font-weight: 400; background: #fff; }
+  .box { background: var(--warm-white); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 13px; }
+  .box label { display: block; margin: 6px 0; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  /* Campagnepagina */
+  .actionbar { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .actionbar .search { flex: 1; min-width: 200px; }
+  .placeholder { background: #fff; border: 1px dashed #DDD; border-radius: 16px; padding: 28px; text-align: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 640px) { .search { width: 100%; } }
+</style>
+</head>
+<body>
+
+<p class="note">Mockup bij <code>docs/plan-nieuwsbrief-campagne-overzicht.md</code>. Dit is een statische schets met voorbeelddata en zonder werkende knoppen. Kleuren en lettertype komen uit de CRM (48-7-huisstijl).</p>
+
+<!-- ============ A. OVERZICHT ============ -->
+<div class="screen-label">A · Overzicht: /admin/nieuwsbrieven</div>
+<div class="frame">
+  <div class="topbar">
+    <div><h1>Nieuwsbrieven</h1><div class="sub">48-7 AI Professionals</div></div>
+    <span class="btn primary">+ Nieuwe campagne</span>
+  </div>
+
+  <div class="tabs">
+    <span class="tab on">Campagnes</span><span class="tab">Resend</span><span class="tab">Segmenten</span><span class="tab">Nog geen nieuwsbrief (4 bedrijven · 12 adressen)</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="chips">
+      <span class="chip on">Alle<span class="n">7</span></span>
+      <span class="chip">Concept<span class="n">3</span></span>
+      <span class="chip">Ingepland<span class="n">1</span></span>
+      <span class="chip">Bezig met verzenden<span class="n">0</span></span>
+      <span class="chip">Verzonden<span class="n">3</span></span>
+    </div>
+    <input class="search" placeholder="Zoek op naam of onderwerp">
+  </div>
+
+  <div class="card">
+    <h2>Lopend en concept <span>4</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Campagne</th><th>Doelgroep</th><th>Status</th><th>Datum</th><th class="right">Acties</th></tr></thead>
+      <tbody>
+        <tr class="row">
+          <td><div class="name">Nieuwsbrief november 2026 <span class="badge b-amber tag">✦ Gepersonaliseerd</span></div><div class="muted">Wat AI deze maand voor [bedrijf] betekent</div></td>
+          <td>Klanten 48-7<div class="muted" style="color:#DC2626">Niet mailen: Uitgeschreven</div></td>
+          <td><span class="badge b-blue">Getest</span><div class="muted">12/19 bedrijven goedgekeurd</div></td>
+          <td>Aangemaakt 30 okt</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+        <tr class="row">
+          <td><div class="name">Test nieuwe nieuwsbrief <span class="badge b-amber tag">✦ Gepersonaliseerd</span></div><div class="muted">Drie AI-ontwikkelingen voor [bedrijf]</div></td>
+          <td>Interne test</td>
+          <td><span class="badge b-grey">Concept</span></td>
+          <td>Aangemaakt 30 okt</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+        <tr class="row">
+          <td><div class="name">Event-uitnodiging AI-lunch</div><div class="muted">Je bent uitgenodigd: AI-lunch op 20 november</div></td>
+          <td>Prospects, Klanten 48-7</td>
+          <td><span class="badge b-amber">Gepland</span></td>
+          <td>Gepland 12 nov, 09:00</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+        <tr class="row">
+          <td><div class="name">Follow-up webinar</div><div class="muted">De opname van het webinar</div></td>
+          <td>Webinar-deelnemers</td>
+          <td><span class="badge b-red">Mislukt</span><div class="muted" style="color:#DC2626">Resend: domein niet geverifieerd</div></td>
+          <td>Aangemaakt 22 okt</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>Verzonden <span>3</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Campagne</th><th>Doelgroep</th><th>Status</th><th>Datum</th><th class="right">Acties</th></tr></thead>
+      <tbody>
+        <tr class="row">
+          <td><div class="name">Nieuwsbrief oktober 2026</div><div class="muted">AI in de praktijk: drie cases</div></td>
+          <td>Alle marketingcontacten</td>
+          <td><span class="badge b-green">Verzonden</span><div class="muted">412 ontvangers</div></td>
+          <td>Verzonden 3 okt</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+        <tr class="row">
+          <td><div class="name">Nieuwsbrief september 2026</div><div class="muted">Na de zomer: wat er veranderde in AI</div></td>
+          <td>Alle marketingcontacten</td>
+          <td><span class="badge b-green">Verzonden</span><div class="muted">398 ontvangers</div></td>
+          <td>Verzonden 5 sep</td>
+          <td class="right"><span class="btn small">Openen</span><span class="kebab">⋯</span></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="muted">⋯ = Ontvangers bekijken · Verwijderen (alleen concept) · Dupliceren (optioneel). Testmail en verzenden zitten niet meer in het overzicht.</p>
+</div>
+
+<!-- ============ B. NIEUWE CAMPAGNE ============ -->
+<div class="screen-label">B · Nieuwe campagne: /admin/nieuwsbrieven/nieuw</div>
+<div class="frame">
+  <span class="back">← Alle nieuwsbrieven</span>
+  <div class="topbar"><div><h1>Nieuwe campagne</h1><div class="sub">Je maakt eerst een concept. Er wordt nog niets verstuurd.</div></div></div>
+
+  <div class="step">Stap 1 · Soort</div>
+  <div class="types">
+    <div class="type"><h3>Standaard (eigen HTML)</h3><p>Eén mail voor iedereen. Je plakt de HTML, plant een tijd en kunt automatische batches gebruiken.</p></div>
+    <div class="type on"><h3>✦ Gepersonaliseerd per bedrijf</h3><p>Items in secties, met een eigen intro en "waarom interessant" per bedrijf. Daarna review je per bedrijf en maak je social posts.</p></div>
+  </div>
+
+  <div class="step">Stap 2 · Basisgegevens</div>
+  <div class="form">
+    <div>
+      <label class="field">Interne naam<input class="input" placeholder="Nieuwsbrief december 2026"></label>
+      <label class="field">Onderwerp<input class="input" placeholder="Wat AI deze maand voor [bedrijf] betekent"></label>
+      <label class="field">Previewtekst<input class="input" placeholder="Drie ontwikkelingen, vertaald naar jouw praktijk"></label>
+      <div class="box"><b style="font-size:11px;text-transform:uppercase;color:var(--muted)">Mailen naar</b>
+        <label>☑ Klanten 48-7</label><label>☐ Prospects</label><label>☐ Interne test</label></div>
+      <div class="box"><b style="font-size:11px;text-transform:uppercase;color:var(--muted)">Niet mailen naar</b>
+        <label>☑ Uitgeschreven <span class="badge b-red">standaard</span></label><label>☐ Concurrenten</label></div>
+    </div>
+    <div>
+      <label class="field">Opzet<input class="input" placeholder="Combinatie: intro-hook plus regel bij de 1-2 meest relevante items"></label>
+      <label class="field">Kop bovenaan (optioneel)<input class="input" placeholder="Wat AI deze maand *voor het mkb* betekent"></label>
+      <label class="field">Kopbeeld (optioneel)<input class="input" placeholder="Upload of plak een URL"></label>
+      <label class="field">Algemene inleiding (optioneel)<textarea class="input" rows="4"></textarea></label>
+      <p class="muted">Bij "Standaard" staan hier de HTML-editor met preview, de verzenddatum en de automatische batches.</p>
+    </div>
+  </div>
+  <div class="actions"><span class="btn">Annuleren</span><span class="btn primary">Concept aanmaken →</span></div>
+</div>
+
+<!-- ============ C. CAMPAGNEPAGINA ============ -->
+<div class="screen-label">C · Campagnepagina: /admin/nieuwsbrieven/[id] (voorbeeld: standaardcampagne)</div>
+<div class="frame">
+  <span class="back">← Alle nieuwsbrieven</span>
+  <div class="topbar">
+    <div><h1>Event-uitnodiging AI-lunch <span class="badge b-blue tag">Getest</span></h1><div class="sub">Standaard (eigen HTML) · Je bent uitgenodigd: AI-lunch op 20 november</div></div>
+  </div>
+  <div class="actionbar">
+    <input class="search" placeholder="Testmail naar: dion@48-7.nl">
+    <span class="btn">Testmail</span>
+    <span class="btn">Ontvangers (86)</span>
+    <span class="btn primary">Plannen voor 12 nov, 09:00</span>
+  </div>
+  <div class="placeholder">BroadcastCampaignEditor: naam, onderwerp, previewtekst, verzendtijd, batches, doelgroep, uitsluitingen en HTML met preview, plus Opslaan.<br>Bij een gepersonaliseerde campagne staan hier CampaignSettings en de stappen 1 tot en met 4, zoals nu.</div>
+</div>
+
+</body>
+</html>

@@ -13,6 +13,7 @@ import PersonalizedFields, { LayoutSelect } from "@/components/newsletter/Person
 import { apiFetch } from "@/lib/api";
 import { campaignTargetIds } from "@/lib/newsletter-audience";
 import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
+import { DEFAULT_MAX_ITEM_LINES } from "@/lib/newsletter-relevance";
 import { useOrg } from "@/lib/org-context";
 
 const TYPES = [
@@ -51,6 +52,7 @@ function emptyCampaign() {
     scheduled_at: "",
     body_html: "",
     personalization_layout: "combined",
+    max_item_lines: String(DEFAULT_MAX_ITEM_LINES),
     headline: "",
     intro_text: "",
     hero_image_url: "",
@@ -61,7 +63,7 @@ function emptyCampaign() {
 // wordt per ontvanger opgebouwd. Het soort campagne ligt vast na aanmaken.
 function campaignPayload(mode, form) {
   if (mode !== "personalized") {
-    const { personalization_layout, headline, intro_text, hero_image_url, ...rest } = form;
+    const { personalization_layout, max_item_lines, headline, intro_text, hero_image_url, ...rest } = form;
     return { ...rest, mode: "broadcast" };
   }
   const { body_html, scheduled_at, ...rest } = form;

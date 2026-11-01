@@ -7,13 +7,16 @@ import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
 import PersonalizedFields, { LayoutSelect, inputClass, labelClass } from "@/components/newsletter/PersonalizedFields";
 import { personalizedSubject } from "@/lib/newsletter-subject";
 import { confirmDialog } from "@/components/Dialogs";
+import { maxItemLines } from "@/lib/newsletter-relevance";
 
-const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
+const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout", "max_item_lines"];
 
 function formFromCampaign(campaign) {
-  return Object.fromEntries(
-    FIELDS.map((field) => [field, campaign[field] || (field === "personalization_layout" ? "combined" : "")])
-  );
+  return {
+    ...Object.fromEntries(FIELDS.map((field) => [field, campaign[field] || ""])),
+    personalization_layout: campaign.personalization_layout || "combined",
+    max_item_lines: String(maxItemLines(campaign)),
+  };
 }
 
 // Alle vaste velden van een gepersonaliseerde campagne, altijd zichtbaar en
@@ -33,7 +36,7 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
     setForm(JSON.parse(persistedKey));
   }, [campaign.id, persistedKey]);
 
-  const dirty = FIELDS.some((field) => (form[field] || "") !== (formFromCampaign(campaign)[field] || ""));
+  const dirty = FIELDS.some((field) => String(form[field] ?? "") !== String(formFromCampaign(campaign)[field] ?? ""));
   const layoutChanged = form.personalization_layout !== (campaign.personalization_layout || "combined");
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 

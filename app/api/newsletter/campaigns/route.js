@@ -8,6 +8,7 @@ import {
   requireAdmin,
 } from "@/lib/newsletters";
 import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
+import { parseMaxItemLines } from "@/lib/newsletter-relevance";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +125,7 @@ export async function POST(request) {
         body_html: bodyHtml || null,
         mode,
         personalization_layout: layout,
+        ...("max_item_lines" in body ? { max_item_lines: parseMaxItemLines(body.max_item_lines) } : {}),
         headline: String(body.headline || "").trim() || null,
         intro_text: String(body.intro_text || "").trim() || null,
         hero_image_url: /^https:\/\//i.test(String(body.hero_image_url || "").trim()) ? String(body.hero_image_url).trim() : null,

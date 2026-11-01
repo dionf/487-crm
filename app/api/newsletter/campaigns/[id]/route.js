@@ -1,4 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { parseMaxItemLines } from "@/lib/newsletter-relevance";
+import { deleteItemScores } from "@/lib/newsletter-personalize";
 import {
   getCampaignForTenant,
   isMissingNewsletterTable,
@@ -103,6 +105,11 @@ export async function PATCH(request, { params }) {
       }
       patch.personalization_layout = body.personalization_layout;
     }
+    // Geldt voor de volgende generatie; bestaande teksten blijven staan.
+    if ("max_item_lines" in body) {
+      const max = parseMaxItemLines(body.max_item_lines);
+      if (max !== currentCampaign.max_item_lines) patch.max_item_lines = max;
+    }
     let includeSegments = null;
     if ("included_segment_ids" in body || "segment_id" in body) {
       const includedSegmentIds = normalizeSegmentIds(body.included_segment_ids || (body.segment_id ? [body.segment_id] : []));
@@ -192,6 +199,7 @@ export async function PATCH(request, { params }) {
         .eq("tenant", tenant)
         .eq("campaign_id", id);
       if (slotError) throw new Error(slotError.message);
+      await deleteItemScores(tenant, id);
     }
     return Response.json({ campaign: data });
   } catch (error) {

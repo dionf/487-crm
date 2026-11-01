@@ -18,8 +18,9 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const patch = normalizeItemInput(body, { partial: true });
     if (!Object.keys(patch).length) return Response.json({ error: "Niets te wijzigen" }, { status: 400 });
-    // Alleen een volgordewijziging verandert niets aan de inhoud.
-    const contentChanged = Object.keys(patch).some((key) => key !== "sort_order");
+    // Volgorde en "voor iedereen" veranderen niets aan de inhoud: bestaande
+    // teksten en goedkeuringen blijven staan.
+    const contentChanged = Object.keys(patch).some((key) => !["sort_order", "personalize_all"].includes(key));
     // updated_at volgt de inhoud: social posts tonen zo of hun item na genereren is gewijzigd.
     if (contentChanged) patch.updated_at = new Date().toISOString();
     // Het formulier stuurt de URL altijd mee; alleen een andere URL wordt opnieuw gelezen.

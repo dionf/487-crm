@@ -6,6 +6,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, RotateCcw, Sa
 import { apiFetch } from "@/lib/api";
 import CompanyLogo from "@/components/CompanyLogo";
 import SampleCompanies from "@/components/newsletter/SampleCompanies";
+import RelevanceOverview from "@/components/newsletter/RelevanceOverview";
 import { confirmDialog } from "@/components/Dialogs";
 
 const APPROVAL_BADGES = {
@@ -189,6 +190,10 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
   }
 
+  const openCompany = (companyId) => {
+    setOpen(companyId);
+    requestAnimationFrame(() => document.getElementById(`company-${companyId}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const withoutProfile = companies.filter((company) => !company.newsletter_profile);
   const missingCount = companies.filter((company) => company.approval === "missing" && company.newsletter_profile).length;
 
@@ -263,13 +268,25 @@ export default function PersonalizationReview({ campaign, editable, data, items,
 
       {companies.length === 0 && <p className="text-sm text-gray-500">Deze campagne heeft geen ontvangers in de gekozen doelgroep.</p>}
 
+      {companies.length > 0 && items.length > 0 && (campaign.personalization_layout || "combined") !== "intro" && (
+        <RelevanceOverview
+          campaign={campaign}
+          items={items}
+          companies={companies}
+          editable={editable}
+          disabled={Boolean(bulk) || Boolean(busy)}
+          onReload={onReload}
+          onOpenCompany={openCompany}
+        />
+      )}
+
       <div className="space-y-2">
         {companies.map((company) => {
           const isOpen = open === company.id;
           const badge = APPROVAL_BADGES[company.approval] || APPROVAL_BADGES.missing;
           const slots = orderedSlots(company, items);
           return (
-            <div key={company.id} className="rounded-xl border border-gray-100">
+            <div key={company.id} id={`company-${company.id}`} className="rounded-xl border border-gray-100 scroll-mt-4">
               <button
                 type="button"
                 onClick={() => setOpen(isOpen ? null : company.id)}

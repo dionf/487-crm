@@ -1,9 +1,10 @@
 "use client";
 
 import ImageField from "@/components/newsletter/ImageField";
+import { MAX_ITEM_LINES_LIMIT } from "@/lib/newsletter-relevance";
 
 export const LAYOUT_OPTIONS = [
-  { id: "combined", label: "Combinatie: intro-hook plus regel bij de 1-2 meest relevante items" },
+  { id: "combined", label: "Combinatie: intro-hook plus regel bij de items die sterk passen" },
   { id: "intro", label: "Alleen intro-hook bovenaan" },
   { id: "per_item", label: "Bij elk item een regel" },
 ];
@@ -18,17 +19,38 @@ function setter(setForm, field) {
   };
 }
 
-// Opzet van de personalisatie: waar de regels per bedrijf komen.
+// Opzet van de personalisatie: waar de regels per bedrijf komen. Bij de
+// combinatie hoort het maximum aantal blokken "Waarom dit interessant is".
 export function LayoutSelect({ form, setForm, disabled = false }) {
   return (
-    <label className={labelClass}>
-      Opzet
-      <select value={form.personalization_layout} onChange={setter(setForm, "personalization_layout")} disabled={disabled} className={inputClass}>
-        {LAYOUT_OPTIONS.map((option) => (
-          <option key={option.id} value={option.id}>{option.label}</option>
-        ))}
-      </select>
-    </label>
+    <>
+      <label className={labelClass}>
+        Opzet
+        <select value={form.personalization_layout} onChange={setter(setForm, "personalization_layout")} disabled={disabled} className={inputClass}>
+          {LAYOUT_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      {form.personalization_layout === "combined" && (
+        <label className={labelClass}>
+          Maximum blokken per bedrijf
+          <input
+            type="number"
+            min={0}
+            max={MAX_ITEM_LINES_LIMIT}
+            value={form.max_item_lines}
+            onChange={setter(setForm, "max_item_lines")}
+            disabled={disabled}
+            className={`${inputClass} max-w-[120px]`}
+          />
+          <span className="block mt-1 text-xs font-normal normal-case text-gray-500">
+            De AI schrijft een blok &quot;Waarom dit interessant is&quot; bij elk item dat sterk past, tot dit maximum.
+            Items die je op &quot;Voor iedereen&quot; zet, tellen mee en gaan voor.
+          </span>
+        </label>
+      )}
+    </>
   );
 }
 

@@ -2,12 +2,14 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/newsletters";
 import {
   fetchCampaignCompanies,
+  fetchCampaignItemScores,
   fetchCampaignItems,
   fetchCampaignPersonalizations,
   generatePersonalizationForLead,
   getPersonalizedCampaign,
   regenerateSlotForLead,
   resetCampaignTest,
+  slotItemId,
   summarizeCompanyApproval,
 } from "@/lib/newsletter-personalize";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -28,7 +30,10 @@ export async function GET(request, { params }) {
     const { id } = await params;
     const campaign = await getPersonalizedCampaign(tenant, id);
     const companies = await fetchCampaignCompanies(tenant, campaign, { includeSamples: true });
-    const slots = await fetchCampaignPersonalizations(tenant, id);
+    const [slots, scores] = await Promise.all([
+      fetchCampaignPersonalizations(tenant, id),
+      fetchCampaignItemScores(tenant, id),
+    ]);
     const result = companies.map((company) => ({
       id: company.id,
       company_name: company.company_name,
@@ -40,6 +45,9 @@ export async function GET(request, { params }) {
       recipients: company.recipients.map((recipient) => ({ email: recipient.email, name: recipient.name })),
       approval: summarizeCompanyApproval(company, slots),
       slots: slots.filter((slot) => slot.lead_id === company.id),
+      // Relevantie per item ({ [item_id]: { score, reason } }); leeg bij
+      // personalisaties van vóór de scores.
+      scores: scores[company.id] || {},
     }));
     // Voorbeeldbedrijven tellen niet mee: zij worden nooit verzonden.
     const real = result.filter((company) => !company.sample);
@@ -56,7 +64,12 @@ export async function GET(request, { params }) {
 
 // Genereert (opnieuw) de personalisatie voor één bedrijf: { lead_id }.
 // Met { lead_id, slot } wordt alleen dat ene onderdeel vernieuwd.
-// De UI loopt zelf over de bedrijven, zodat één request binnen de timeout blijft.
+// Met { lead_ids, slot: "item:<id>" } wordt bij een paar bedrijven tegelijk de
+// regel bij dat item geschreven, alleen waar hij nog ontbreekt (kolomactie in
+// het overzicht). De UI loopt zelf over de bedrijven, in kleine porties, zodat
+// één request binnen de timeout en de rate limit blijft.
+const MAX_BATCH_LEADS = 5;
+
 export async function POST(request, { params }) {
   try {
     const { tenant, userId, userName } = requireAdmin(request);
@@ -73,6 +86,7 @@ export async function POST(request, { params }) {
     const campaign = await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
     const companies = await fetchCampaignCompanies(tenant, campaign, { includeSamples: true });
+    if (Array.isArray(body.lead_ids)) return generateItemForLeads(tenant, campaign, companies, body, userName);
     const company = companies.find((candidate) => candidate.id === body.lead_id);
     if (!company) return Response.json({ error: "Dit bedrijf ontvangt deze campagne niet" }, { status: 404 });
 
@@ -87,6 +101,47 @@ export async function POST(request, { params }) {
     if (error instanceof Response) return error;
     return Response.json({ error: error.message }, { status: 502 });
   }
+}
+
+async function generateItemForLeads(tenant, campaign, companies, body, userName) {
+  const itemId = slotItemId(body.slot);
+  const leadIds = [...new Set(body.lead_ids)];
+  if (!itemId) return Response.json({ error: "Kies een item" }, { status: 400 });
+  if (!leadIds.length || leadIds.length > MAX_BATCH_LEADS) {
+    return Response.json({ error: `Kies 1 tot ${MAX_BATCH_LEADS} bedrijven per keer` }, { status: 400 });
+  }
+  const items = await fetchCampaignItems(tenant, campaign.id);
+  if (!items.some((item) => item.id === itemId)) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
+  const existing = await fetchCampaignPersonalizations(tenant, campaign.id, leadIds);
+  const done = new Set(existing.filter((slot) => slot.slot === body.slot).map((slot) => slot.lead_id));
+
+  const results = await Promise.allSettled(
+    leadIds.map(async (leadId) => {
+      const company = companies.find((candidate) => candidate.id === leadId);
+      if (!company) throw new Error("ontvangt deze campagne niet");
+      if (done.has(leadId)) return { company, slot: null };
+      return { company, slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName) };
+    })
+  );
+  const slots = [];
+  const failures = [];
+  let realChanged = false;
+  for (const [index, result] of results.entries()) {
+    if (result.status === "fulfilled") {
+      if (result.value.slot) {
+        slots.push(result.value.slot);
+        if (!result.value.company.sample) realChanged = true;
+      }
+      continue;
+    }
+    const name = companies.find((candidate) => candidate.id === leadIds[index])?.company_name || leadIds[index];
+    const reason = result.reason instanceof Response
+      ? (await result.reason.json().catch(() => ({}))).error || "mislukt"
+      : result.reason?.message || "mislukt";
+    failures.push(`${name}: ${reason}`);
+  }
+  if (realChanged) await resetCampaignTest(tenant, campaign.id);
+  return Response.json({ slots, failures });
 }
 
 // Bewerk of keur goed.

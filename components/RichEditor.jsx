@@ -19,6 +19,7 @@ import {
   Heading3,
   Quote,
 } from "lucide-react";
+import { promptDialog } from "@/components/Dialogs";
 
 function ToolbarButton({ onClick, active, disabled, children, title }) {
   return (
@@ -90,9 +91,13 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = "
 
   if (!editor) return null;
 
-  function addLink() {
-    const url = window.prompt("URL:", editor.getAttributes("link").href || "https://");
-    if (url === null) return;
+  async function addLink() {
+    const url = await promptDialog({
+      title: "Link toevoegen",
+      message: "Laat leeg om de link te verwijderen.",
+      defaultValue: editor.getAttributes("link").href || "https://",
+    });
+    if (url === null || editor.isDestroyed) return;
     if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
     } else {

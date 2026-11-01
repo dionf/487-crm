@@ -18,6 +18,7 @@ import {
   sendActionLabel,
   sendActionTitle,
 } from "@/lib/newsletter-status";
+import { confirmDialog } from "@/components/Dialogs";
 
 const inputClass = "w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber disabled:bg-gray-50";
 
@@ -155,7 +156,11 @@ export default function BroadcastCampaignEditor({
   async function sendCampaign(target) {
     const scheduled = isFutureDateTime(target.scheduled_at);
     const action = scheduled ? `plannen voor ${formatDateTime(target.scheduled_at)}` : "definitief verzenden";
-    if (!confirm(`Campagne "${target.name}" ${action}?`)) return false;
+    if (!(await confirmDialog({
+      title: `Campagne "${target.name}" ${action}?`,
+      message: scheduled ? "De campagne gaat op het geplande moment automatisch de deur uit." : "De campagne gaat nu naar alle ontvangers. Dit kan niet worden teruggedraaid.",
+      confirmLabel: scheduled ? "Plannen" : "Definitief verzenden",
+    }))) return false;
     const res = await apiFetch(`/api/newsletter/campaigns/${target.id}/send`, { method: "POST" });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Verzenden mislukt");

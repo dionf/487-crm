@@ -32,6 +32,7 @@ import {
   Loader2,
   Megaphone,
 } from "lucide-react";
+import { confirmDialog } from "@/components/Dialogs";
 
 const CALL_OUTCOME_LABELS = {
   voorstel_mailen: { label: "Voorstel mailen", color: "bg-blue-100 text-blue-700" },
@@ -177,7 +178,12 @@ export default function LeadsPage() {
 
   async function handleBulkDelete() {
     const count = selectedLeads.size;
-    if (!confirm(`Weet je zeker dat je ${count} lead${count > 1 ? "s" : ""} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    if (!(await confirmDialog({
+      title: `${count} lead${count > 1 ? "s" : ""} verwijderen?`,
+      message: "Dit kan niet ongedaan worden gemaakt.",
+      confirmLabel: "Verwijderen",
+      danger: true,
+    }))) return;
     setDeleting(true);
     const ids = [...selectedLeads];
     async function deleteLead(id) {

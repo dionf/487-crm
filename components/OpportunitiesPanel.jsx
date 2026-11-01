@@ -5,6 +5,7 @@ import { Plus, Trash2, FileText, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { SERVICE_TYPES, STATUS_COLORS, getLeadStatuses } from "@/lib/constants";
+import { confirmDialog } from "@/components/Dialogs";
 
 const EMPTY_FORM = { name: "", service_type: "", estimated_value: "" };
 
@@ -53,7 +54,7 @@ export default function OpportunitiesPanel({ leadId, tenant, opportunities, quot
   }
 
   async function deleteOpportunity(opportunity) {
-    if (!confirm(`Traject "${opportunity.name}" verwijderen?`)) return;
+    if (!(await confirmDialog({ title: `Traject "${opportunity.name}" verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
     await request(`/api/opportunities/${opportunity.id}`, { method: "DELETE" });
   }
 

@@ -58,6 +58,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { confirmDialog, notify, notifyError } from "@/components/Dialogs";
 
 const CALL_OUTCOMES = [
   { id: "voorstel_mailen", label: "Voorstel mailen", icon: MailPlus, color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" },
@@ -160,7 +161,12 @@ export default function LeadDetailPage() {
   }
 
   async function toggleCompanyNewsletter(subscribed) {
-    if (!subscribed && !confirm("Bedrijf uitschrijven? Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.")) return;
+    if (!subscribed && !(await confirmDialog({
+      title: "Bedrijf uitschrijven?",
+      message: "Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.",
+      confirmLabel: "Uitschrijven",
+      danger: true,
+    }))) return;
     setMarketingError("");
     try {
       await setCompanyNewsletter(params.id, subscribed, {
@@ -230,7 +236,7 @@ export default function LeadDetailPage() {
   }
 
   async function extendQuote(quoteId) {
-    if (!window.confirm("Offerte met 30 dagen verlengen?")) return;
+    if (!(await confirmDialog({ title: "Offerte met 30 dagen verlengen?", confirmLabel: "Verlengen" }))) return;
     const res = await apiFetch(`/api/quotes/${quoteId}/extend`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -238,14 +244,18 @@ export default function LeadDetailPage() {
     });
     const d = await res.json();
     if (!res.ok) {
-      alert(d.error || "Kon offerte niet verlengen");
+      notifyError(d.error || "Kon offerte niet verlengen");
       return;
     }
     fetchData();
   }
 
   async function duplicateQuote(quoteId) {
-    if (!window.confirm("Een kopie van deze offerte aanmaken als nieuwe concept?")) return;
+    if (!(await confirmDialog({
+      title: "Offerte dupliceren?",
+      message: "Er komt een kopie van deze offerte bij als nieuw concept.",
+      confirmLabel: "Dupliceren",
+    }))) return;
     const res = await apiFetch(`/api/quotes/${quoteId}/duplicate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -253,7 +263,7 @@ export default function LeadDetailPage() {
     });
     const d = await res.json();
     if (!res.ok) {
-      alert(d.error || "Kon offerte niet dupliceren");
+      notifyError(d.error || "Kon offerte niet dupliceren");
       return;
     }
     fetchData();
@@ -266,12 +276,12 @@ export default function LeadDetailPage() {
       const res = await apiFetch(`/api/hiphot/quote-items?quote_id=${quote.id}`);
       const d = await res.json();
       if (!res.ok) {
-        alert(d.error || "Kon regels niet ophalen");
+        notifyError(d.error || "Kon regels niet ophalen");
         return;
       }
       setOrderModalQuote({ quote, lineItems: d.items || [] });
     } catch (err) {
-      alert(`Fout: ${err.message}`);
+      notifyError(`Fout: ${err.message}`);
     } finally {
       setLoadingOrderModal(false);
     }
@@ -319,10 +329,11 @@ export default function LeadDetailPage() {
         fetchData();
       } else if (result.error) {
         console.error("AI summary error:", result.error);
-        alert(`AI analyse mislukt: ${result.error}`);
+        notifyError(`AI analyse mislukt: ${result.error}`);
       }
     } catch (err) {
       console.error("AI summary fetch failed:", err);
+      notifyError("AI analyse mislukt: geen verbinding met de server");
     }
     setAiLoading(false);
   }
@@ -1058,7 +1069,7 @@ export default function LeadDetailPage() {
                       l.status !== "offerte_gewonnen"
                     );
                     if (next) router.push(`/leads/${next.id}`);
-                    else alert("Geen ongebelde leads meer!");
+                    else notify("Geen ongebelde leads meer!");
                   }}
                   className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-semibold transition-colors"
                 >
@@ -1392,10 +1403,14 @@ export default function LeadDetailPage() {
                             {q.public_hash ? (
                               <>
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     const url = `${window.location.origin}/offerte/${q.public_hash}`;
-                                    navigator.clipboard.writeText(url);
-                                    alert("Link gekopieerd!");
+                                    try {
+                                      await navigator.clipboard.writeText(url);
+                                      notify("Link gekopieerd", { type: "success" });
+                                    } catch {
+                                      notifyError("Kopiëren lukte niet. Open de offerte en kopieer de link uit de adresbalk.");
+                                    }
                                   }}
                                   className="text-[10px] font-semibold px-2 py-0.5 rounded-pill bg-green-50 text-green-700 hover:bg-green-100 whitespace-nowrap"
                                 >

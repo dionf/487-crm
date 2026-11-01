@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { confirmDialog } from "@/components/Dialogs";
 
 export const NEWSLETTER_STATE_LABELS = {
   receives: { label: "Ontvangt nieuwsbrief", short: "Ontvangt", className: "bg-green-50 text-green-700 border-green-100" },
@@ -22,7 +23,7 @@ export async function setEmailNewsletter(email, subscribed) {
   let res = await send(false);
   let json = await res.json().catch(() => ({}));
   if (res.status === 409 && json.needs_force) {
-    if (!confirm(json.error)) return false;
+    if (!(await confirmDialog({ title: "Weer inschrijven?", message: json.error, confirmLabel: "Toch inschrijven" }))) return false;
     res = await send(true);
     json = await res.json().catch(() => ({}));
   }
@@ -34,7 +35,11 @@ export async function setEmailNewsletter(email, subscribed) {
 // Na een hard bounce staat het bedrijf geblokkeerd; weer aanzetten heft die
 // blokkade op na bevestiging. Geeft false terug als de gebruiker annuleert.
 export async function setCompanyNewsletter(leadId, subscribed, { hardBounced = false } = {}) {
-  if (subscribed && hardBounced && !confirm("Dit bedrijf is geblokkeerd na een hard bounce. Weet je zeker dat het weer de nieuwsbrief mag ontvangen?")) {
+  if (subscribed && hardBounced && !(await confirmDialog({
+    title: "Blokkade opheffen?",
+    message: "Dit bedrijf is geblokkeerd na een hard bounce. Weet je zeker dat het weer de nieuwsbrief mag ontvangen?",
+    confirmLabel: "Weer inschrijven",
+  }))) {
     return false;
   }
   const res = await apiFetch(`/api/leads/${leadId}`, {

@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { confirmDialog } from "@/components/Dialogs";
 
 // Nieuwsbrieven: overzicht van campagnes plus de tabbladen Resend, Segmenten
 // en Nog geen nieuwsbrief. Een campagne maken of bewerken gebeurt op een
@@ -165,7 +166,7 @@ export default function NieuwsbrievenPage() {
 
   async function deleteSegment(segment) {
     if (segment.default_excluded) return;
-    if (!confirm(`Segment "${segment.name}" verwijderen?`)) return;
+    if (!(await confirmDialog({ title: `Segment "${segment.name}" verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
     setBusy(`delete-segment-${segment.id}`);
     setError("");
     try {
@@ -187,7 +188,7 @@ export default function NieuwsbrievenPage() {
 
   async function deleteCampaign(campaign) {
     if (!canMutateCampaign(campaign)) return;
-    if (!confirm(`Campagne "${campaign.name}" verwijderen?`)) return;
+    if (!(await confirmDialog({ title: `Campagne "${campaign.name}" verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
     setBusy(`delete-campaign-${campaign.id}`);
     setError("");
     try {

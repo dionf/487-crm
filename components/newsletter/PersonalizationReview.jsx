@@ -6,6 +6,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, RotateCcw, Sa
 import { apiFetch } from "@/lib/api";
 import CompanyLogo from "@/components/CompanyLogo";
 import SampleCompanies from "@/components/newsletter/SampleCompanies";
+import { confirmDialog } from "@/components/Dialogs";
 
 const APPROVAL_BADGES = {
   approved: { label: "Goedgekeurd", className: "bg-green-50 text-green-700 border-green-100" },
@@ -81,9 +82,18 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
           )}
           {slot.slot !== "subject" && <button
             type="button"
-            onClick={() => {
-              if (dirty && !confirm("Je niet-opgeslagen wijziging gaat verloren. Toch vernieuwen?")) return;
-              if (!dirty && approved && !confirm("Deze tekst is goedgekeurd. Vervangen door een nieuwe versie (wordt weer concept)?")) return;
+            onClick={async () => {
+              if (dirty && !(await confirmDialog({
+                title: "Tekst vernieuwen?",
+                message: "Je niet-opgeslagen wijziging gaat verloren.",
+                confirmLabel: "Toch vernieuwen",
+                danger: true,
+              }))) return;
+              if (!dirty && approved && !(await confirmDialog({
+                title: "Goedgekeurde tekst vervangen?",
+                message: "Deze tekst is goedgekeurd. Er komt een nieuwe versie voor in de plaats, die weer concept wordt.",
+                confirmLabel: "Vernieuwen",
+              }))) return;
               onRegenerate();
             }}
             disabled={busy}
@@ -131,8 +141,13 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     }
   }
 
-  const generate = (company) => {
-    if (company.approval !== "missing" && !confirm(`Alle teksten van ${company.company_name} opnieuw laten schrijven? Bewerkingen en goedkeuringen vervallen. Wil je één tekst vernieuwen, gebruik dan Vernieuwen bij dat blok.`)) return;
+  const generate = async (company) => {
+    if (company.approval !== "missing" && !(await confirmDialog({
+      title: `Alle teksten van ${company.company_name} opnieuw laten schrijven?`,
+      message: "Bewerkingen en goedkeuringen vervallen. Wil je één tekst vernieuwen, gebruik dan Vernieuwen bij dat blok.",
+      confirmLabel: "Alles opnieuw schrijven",
+      danger: true,
+    }))) return;
     run(`generate-${company.id}`, () => request("POST", { lead_id: company.id }, "Genereren mislukt"));
   };
   const approveAll = (company) => run(`approve-${company.id}`, () => request("PATCH", { lead_id: company.id, approve_all: true }, "Goedkeuren mislukt"));
@@ -149,7 +164,12 @@ export default function PersonalizationReview({ campaign, editable, data, items,
   async function generateMany(onlyMissing) {
     const targets = companies.filter((company) => company.newsletter_profile && (!onlyMissing || company.approval === "missing"));
     if (!targets.length) return;
-    if (!onlyMissing && !confirm(`Personalisatie voor ${targets.length} bedrijven opnieuw genereren? Bestaande teksten en goedkeuringen worden vervangen.`)) return;
+    if (!onlyMissing && !(await confirmDialog({
+      title: `Personalisatie voor ${targets.length} bedrijven opnieuw genereren?`,
+      message: "Bestaande teksten en goedkeuringen worden vervangen.",
+      confirmLabel: "Opnieuw genereren",
+      danger: true,
+    }))) return;
     setError("");
     const failures = [];
     for (const [index, company] of targets.entries()) {

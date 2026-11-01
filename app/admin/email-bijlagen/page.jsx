@@ -7,6 +7,7 @@ import AppShell from "@/components/AppShell";
 import { apiFetch } from "@/lib/api";
 import { ArrowLeft, Upload, Trash2, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { confirmDialog } from "@/components/Dialogs";
 
 export default function EmailBijlagenPage() {
   const [attachments, setAttachments] = useState([]);
@@ -79,7 +80,7 @@ export default function EmailBijlagenPage() {
   }
 
   async function handleDelete(id, attName) {
-    if (!confirm(`"${attName}" verwijderen?`)) return;
+    if (!(await confirmDialog({ title: `"${attName}" verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
 
     try {
       const res = await apiFetch("/api/email-attachments", {

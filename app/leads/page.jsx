@@ -82,6 +82,8 @@ export default function LeadsPage() {
   const [assignAgents, setAssignAgents] = useState(new Set());
   const [polling, setPolling] = useState(false);
   const [pollResult, setPollResult] = useState(null); // { results: [...], error: string }
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState(null); // { deleted: number, failed: [{ id, company_name, error }] }
 
   const fetchLeads = useCallback(async () => {
     const params = new URLSearchParams();
@@ -176,10 +178,36 @@ export default function LeadsPage() {
   async function handleBulkDelete() {
     const count = selectedLeads.size;
     if (!confirm(`Weet je zeker dat je ${count} lead${count > 1 ? "s" : ""} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
-    for (const id of selectedLeads) {
-      await apiFetch(`/api/leads/${id}`, { method: "DELETE" });
+    setDeleting(true);
+    const ids = [...selectedLeads];
+    async function deleteLead(id) {
+      let res;
+      try {
+        res = await apiFetch(`/api/leads/${id}`, { method: "DELETE" });
+      } catch {
+        throw new Error("Geen verbinding met de server");
+      }
+      // 404 = al weg (bv. door een collega verwijderd), dat telt als gelukt
+      if (!res.ok && res.status !== 404) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Status ${res.status}`);
+      }
     }
-    setSelectedLeads(new Set());
+    // In groepjes van 5, zodat een grote selectie de server niet overspoelt
+    const results = [];
+    for (let i = 0; i < ids.length; i += 5) {
+      results.push(...(await Promise.allSettled(ids.slice(i, i + 5).map(deleteLead))));
+    }
+    setDeleting(false);
+    const failed = results
+      .map((r, i) => (r.status === "rejected" ? { id: ids[i], error: r.reason?.message || "Onbekende fout" } : null))
+      .filter(Boolean)
+      .map((f) => ({ ...f, company_name: leads.find((l) => l.id === f.id)?.company_name || "Onbekende lead" }));
+    // Mislukte leads blijven geselecteerd, zodat je het opnieuw kunt proberen
+    setSelectedLeads(new Set(failed.map((f) => f.id)));
+    if (failed.length > 0) {
+      setDeleteResult({ deleted: ids.length - failed.length, failed });
+    }
     fetchLeads();
   }
 
@@ -304,10 +332,11 @@ export default function LeadsPage() {
           )}
           <button
             onClick={handleBulkDelete}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ml-auto"
+            disabled={deleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ml-auto disabled:opacity-50"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            Verwijderen
+            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {deleting ? "Verwijderen..." : "Verwijderen"}
           </button>
         </div>
       )}
@@ -644,6 +673,44 @@ export default function LeadsPage() {
                 className="flex-1 py-2.5 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black disabled:opacity-50"
               >
                 {assigning ? "Verdelen..." : `Verdeel over ${assignAgents.size || "alle"} agents`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete failure modal */}
+      {deleteResult && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setDeleteResult(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center gap-2 mb-1">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                <h2 className="font-semibold text-lg">
+                  {deleteResult.failed.length} lead{deleteResult.failed.length === 1 ? "" : "s"} niet verwijderd
+                </h2>
+              </div>
+              <p className="text-sm text-gray-500">
+                {deleteResult.deleted > 0
+                  ? `${deleteResult.deleted} lead${deleteResult.deleted === 1 ? " is" : "s zijn"} wel verwijderd. `
+                  : ""}
+                De leads hieronder staan er nog en blijven geselecteerd.
+              </p>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-2">
+              {deleteResult.failed.map((f) => (
+                <div key={f.id} className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <p className="text-sm font-semibold text-red-700">{f.company_name}</p>
+                  <p className="text-xs text-red-600 mt-1">{f.error}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setDeleteResult(null)}
+                className="px-6 py-2 bg-brand-amber hover:bg-brand-amber-hover rounded-pill text-sm font-semibold text-brand-black"
+              >
+                Sluiten
               </button>
             </div>
           </div>

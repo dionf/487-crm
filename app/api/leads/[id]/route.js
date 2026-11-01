@@ -210,14 +210,24 @@ export async function DELETE(request, { params }) {
   const tenant = session.tenant;
   const { id } = await params;
 
-  const { error } = await supabaseAdmin
+  const { data: deleted, error } = await supabaseAdmin
     .from("leads")
     .delete()
     .eq("id", id)
-    .eq("tenant", tenant);
+    .eq("tenant", tenant)
+    .select("id");
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error(`[leads] Verwijderen van lead ${id} mislukt:`, error);
+    // 23503 = foreign key violation: er hangt nog iets aan deze lead
+    const message = error.code === "23503"
+      ? "Deze lead kan niet worden verwijderd omdat er nog gegevens aan gekoppeld zijn."
+      : "Verwijderen van de lead is mislukt.";
+    return Response.json({ error: message }, { status: error.code === "23503" ? 409 : 500 });
+  }
+
+  if (!deleted || deleted.length === 0) {
+    return Response.json({ error: "Lead niet gevonden" }, { status: 404 });
   }
 
   return Response.json({ success: true });

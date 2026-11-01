@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import AppShell from "@/components/AppShell";
-import { apiFetch, isAdminFromSession } from "@/lib/api";
+import { apiDelete, apiFetch, isAdminFromSession } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import {
   Sparkles,
@@ -83,7 +83,11 @@ export default function AIRegelsPage() {
   async function handleDelete(lesson) {
     if (!effectiveAdmin) return;
     if (!(await confirmDialog({ title: "Deze regel definitief verwijderen?", message: `"${lesson.lesson}"`, confirmLabel: "Verwijderen", danger: true }))) return;
-    await apiFetch(`/api/ai-lessons/${lesson.id}`, { method: "DELETE" });
+    const deleteError = await apiDelete(`/api/ai-lessons/${lesson.id}`, "Kon regel niet verwijderen");
+    if (deleteError) {
+      notifyError(deleteError);
+      return;
+    }
     fetchLessons();
   }
 

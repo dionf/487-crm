@@ -12,7 +12,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
-import { apiFetch } from "@/lib/api";
+import { apiDelete, apiFetch } from "@/lib/api";
+import { notifyError } from "@/components/Dialogs";
 
 const FILE_ICONS = {
   "application/pdf": FileText,
@@ -105,10 +106,12 @@ export default function AttachmentUpload({
   }
 
   async function handleDelete(attachmentId) {
-    try {
-      await apiFetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
-      onUploaded?.();
-    } catch {}
+    const deleteError = await apiDelete(`/api/attachments/${attachmentId}`, "Kon bijlage niet verwijderen");
+    if (deleteError) {
+      notifyError(deleteError);
+      return;
+    }
+    onUploaded?.();
   }
 
   const relevantAttachments = quoteId

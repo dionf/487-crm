@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import AppShell from "@/components/AppShell";
 import RichEditor from "@/components/RichEditor";
-import { apiFetch } from "@/lib/api";
+import { apiDelete, apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Plus, Trash2, FileText, Mail, Pencil } from "lucide-react";
 import { LANGUAGES } from "@/lib/translations/quote";
@@ -145,7 +145,13 @@ export default function HipHotTekstenPage() {
 
   async function deleteBranchText(id) {
     if (!(await confirmDialog({ title: "Branchetekst verwijderen?", confirmLabel: "Verwijderen", danger: true }))) return;
-    await apiFetch(`/api/hiphot/branch-texts/${id}`, { method: "DELETE" });
+    setMessage("");
+    setError("");
+    const deleteError = await apiDelete(`/api/hiphot/branch-texts/${id}`, "Kon branchetekst niet verwijderen");
+    if (deleteError) {
+      setError(deleteError);
+      return;
+    }
     fetchAll();
   }
 
@@ -193,7 +199,13 @@ export default function HipHotTekstenPage() {
 
   async function deleteEmailTemplate(id) {
     if (!(await confirmDialog({ title: "Template verwijderen?", confirmLabel: "Verwijderen", danger: true }))) return;
-    await apiFetch(`/api/email-templates/${id}`, { method: "DELETE" });
+    setMessage("");
+    setError("");
+    const deleteError = await apiDelete(`/api/email-templates/${id}`, "Kon template niet verwijderen");
+    if (deleteError) {
+      setError(deleteError);
+      return;
+    }
     fetchAll();
   }
 

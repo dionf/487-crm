@@ -82,18 +82,24 @@ export default function EmailBijlagenPage() {
   async function handleDelete(id, attName) {
     if (!(await confirmDialog({ title: `"${attName}" verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
 
+    setError("");
+    let res;
     try {
-      const res = await apiFetch("/api/email-attachments", {
+      res = await apiFetch("/api/email-attachments", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      await fetchAttachments();
-    } catch (err) {
-      setError(err.message);
+    } catch {
+      setError("Kon bijlage niet verwijderen: geen verbinding met de server");
+      return;
     }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      setError(data.error || "Kon bijlage niet verwijderen");
+      return;
+    }
+    await fetchAttachments();
   }
 
   function formatFileSize(bytes) {

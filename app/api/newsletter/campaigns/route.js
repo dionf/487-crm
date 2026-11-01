@@ -7,6 +7,7 @@ import {
   reconcileScheduledBroadcasts,
   requireAdmin,
 } from "@/lib/newsletters";
+import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
 
 export const dynamic = "force-dynamic";
 
@@ -81,16 +82,18 @@ export async function POST(request) {
   try {
     const { tenant, userName } = requireAdmin(request);
     const body = await request.json();
+    const mode = body.mode === "personalized" ? "personalized" : "broadcast";
     const name = String(body.name || body.subject || "").trim();
-    const subject = String(body.subject || "").trim();
+    // Gepersonaliseerd heeft een vast onderwerp (lib/newsletter-subject.js);
+    // de kolom is verplicht, dus bewaar het sjabloon.
+    const subject = mode === "personalized" ? PERSONALIZED_SUBJECT_TEMPLATE : String(body.subject || "").trim();
     const bodyHtml = String(body.body_html || "").trim();
     const scheduledAt = normalizeScheduledAt(body.scheduled_at);
     const recipientLimit = normalizeRecipientLimit(body.recipient_limit);
     const batchSettings = normalizeBatchSettings(body);
-    const mode = body.mode === "personalized" ? "personalized" : "broadcast";
     if (!name || !subject || (mode === "broadcast" && !bodyHtml)) {
       return Response.json(
-        { error: mode === "broadcast" ? "Naam, onderwerp en HTML zijn verplicht" : "Naam en onderwerp zijn verplicht" },
+        { error: mode === "broadcast" ? "Naam, onderwerp en HTML zijn verplicht" : "Naam is verplicht" },
         { status: 400 }
       );
     }

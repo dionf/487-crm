@@ -11,6 +11,7 @@ import CampaignSettings from "@/components/newsletter/CampaignSettings";
 import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
+import { campaignSubjectLabel } from "@/lib/newsletter-subject";
 
 const STATUS_LABELS = {
   draft: "Concept",
@@ -102,7 +103,7 @@ export default function NieuwsbriefCampagnePage() {
                 </div>
                 <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-1">
                   <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
-                  Gepersonaliseerd per bedrijf · {campaign.subject}
+                  Gepersonaliseerd per bedrijf · {campaignSubjectLabel(campaign)}
                 </p>
               </div>
               {campaign.test_sent_at && (

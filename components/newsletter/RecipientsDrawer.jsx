@@ -14,11 +14,12 @@ const RECIPIENT_STATUS_LABELS = {
   complained: "Spamklacht",
   suppressed: "Geblokkeerd",
   failed: "Mislukt",
+  unsubscribed: "Uitgeschreven",
 };
 
 function recipientStatusClass(status) {
   if (status === "delivered") return "text-green-700";
-  if (["bounced", "complained", "suppressed", "failed"].includes(status)) return "text-red-600";
+  if (["bounced", "complained", "suppressed", "failed", "unsubscribed"].includes(status)) return "text-red-600";
   return "text-gray-500";
 }
 

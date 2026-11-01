@@ -42,7 +42,7 @@ export function LayoutSelect({ form, setForm, disabled = false }) {
             value={form.max_item_lines}
             onChange={setter(setForm, "max_item_lines")}
             disabled={disabled}
-            className={`${inputClass} max-w-[120px]`}
+            className={`${inputClass} block max-w-[120px]`}
           />
           <span className="block mt-1 text-xs font-normal normal-case text-gray-500">
             De AI schrijft een blok &quot;Waarom dit interessant is&quot; bij elk item dat sterk past, tot dit maximum.

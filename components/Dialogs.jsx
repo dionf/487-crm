@@ -8,6 +8,7 @@ import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 // Bevestigingen en meldingen in de huisstijl, in plaats van de native
 // confirm/alert/prompt van de browser. De host hangt in de root-layout; de
 // functies hieronder werken daardoor overal, ook buiten React-componenten.
+// z-[100] houdt ze boven elke bestaande modal (EmailCompose zit op z-[70]).
 //
 //   if (!(await confirmDialog({ message: "Verwijderen?", danger: true }))) return;
 //   const url = await promptDialog({ title: "Link", defaultValue: "https://" });
@@ -88,7 +89,7 @@ export default function DialogHost() {
   return createPortal(
     <>
       {current && <Dialog key={current.id} dialog={current} onClose={(value) => close(current, value)} />}
-      <div aria-live="polite" className="fixed bottom-4 right-4 left-4 sm:left-auto z-[60] flex flex-col items-end gap-2 pointer-events-none">
+      <div aria-live="polite" className="fixed bottom-4 right-4 left-4 sm:left-auto z-[100] flex flex-col items-end gap-2 pointer-events-none">
         {toasts.map((toast) => <Toast key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />)}
       </div>
     </>,
@@ -149,7 +150,7 @@ function Dialog({ dialog, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] p-4"
       onMouseDown={(e) => {
         // Niet direct na openen: de tweede klik van een dubbelklik op de knop zou anders meteen annuleren.
         if (e.target === e.currentTarget && Date.now() - openedAt.current > 400) onClose(cancelValue);

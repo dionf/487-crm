@@ -5,41 +5,33 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, CheckCircle, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle, Code2, Loader2, Sparkles, Users } from "lucide-react";
 import AppShell from "@/components/AppShell";
+import BroadcastCampaignEditor from "@/components/newsletter/BroadcastCampaignEditor";
 import CampaignSettings from "@/components/newsletter/CampaignSettings";
 import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
+import RecipientsDrawer from "@/components/newsletter/RecipientsDrawer";
 import { apiFetch } from "@/lib/api";
+import { campaignTargetIds } from "@/lib/newsletter-audience";
+import { statusClass, statusLabel } from "@/lib/newsletter-status";
 import { useOrg } from "@/lib/org-context";
 
-const STATUS_LABELS = {
-  draft: "Concept",
-  tested: "Getest",
-  syncing: "Bezig met verzenden",
-  sent: "Verzonden",
-  failed: "Mislukt",
-};
-
-function statusClass(status) {
-  if (status === "sent") return "bg-green-50 text-green-700 border-green-100";
-  if (status === "tested") return "bg-blue-50 text-blue-700 border-blue-100";
-  if (status === "failed") return "bg-red-50 text-red-600 border-red-100";
-  return "bg-gray-50 text-gray-600 border-gray-100";
-}
-
-// Eén gepersonaliseerde nieuwsbrief: instellingen bovenaan, daaronder de
-// stappen inhoud, personalisatie en voorbeeld/verzenden.
+// Eén nieuwsbrief. Gepersonaliseerd: instellingen bovenaan, daaronder de
+// stappen inhoud, personalisatie, voorbeeld/verzenden en social posts.
+// Standaard: het formulier met HTML, testmail en verzenden.
 export default function NieuwsbriefCampagnePage() {
   const { id } = useParams();
   const { organization, user } = useOrg();
   const [campaign, setCampaign] = useState(null);
-  const [targetNames, setTargetNames] = useState([]);
+  const [segments, setSegments] = useState([]);
   const [resendReady, setResendReady] = useState(false);
   const [testEmail, setTestEmail] = useState(user?.email || "");
+  const [recipientsCampaign, setRecipientsCampaign] = useState(null);
   const [error, setError] = useState("");
   // Na opslaan van de instellingen: personalisatie en voorbeeld opnieuw laden.
   const [refreshKey, setRefreshKey] = useState(0);
   const accent = organization?.theme?.accent || "#F5A623";
+  const closeRecipients = useCallback(() => setRecipientsCampaign(null), []);
 
   useEffect(() => {
     if (user?.email && !testEmail) setTestEmail(user.email);
@@ -59,14 +51,10 @@ export default function NieuwsbriefCampagnePage() {
         segmentsRes.json(),
       ]);
       if (!campaignRes.ok) throw new Error(campaignJson.error || "Campagne laden mislukt");
-      const loaded = campaignJson.campaign;
-      if (loaded.mode !== "personalized") throw new Error("Deze pagina is voor gepersonaliseerde nieuwsbrieven");
-      setCampaign(loaded);
+      setCampaign(campaignJson.campaign);
       const s = settingsJson.settings;
       setResendReady(Boolean(s?.has_api_key && s.api_key_valid !== false && s.from_name && s.from_email && s.reply_to));
-      const ids = loaded.included_segment_ids?.length ? loaded.included_segment_ids : [loaded.segment_id].filter(Boolean);
-      const byId = new Map((segmentsJson.segments || []).map((segment) => [segment.id, segment.name]));
-      setTargetNames(ids.map((segmentId) => byId.get(segmentId)).filter(Boolean));
+      setSegments(segmentsJson.segments || []);
     } catch (err) {
       setError(err.message);
     }
@@ -75,6 +63,11 @@ export default function NieuwsbriefCampagnePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const personalized = campaign?.mode === "personalized";
+  const targetNames = campaign
+    ? campaignTargetIds(campaign).map((segmentId) => segments.find((segment) => segment.id === segmentId)?.name).filter(Boolean)
+    : [];
 
   return (
     <AppShell>
@@ -97,45 +90,77 @@ export default function NieuwsbriefCampagnePage() {
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold text-brand-black">{campaign.name}</h1>
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border ${statusClass(campaign.status)}`}>
-                    {STATUS_LABELS[campaign.status] || campaign.status}
+                    {statusLabel(campaign.status)}
                   </span>
                 </div>
                 <p className="flex items-center gap-1.5 text-sm text-gray-500 mt-1">
-                  <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
-                  Gepersonaliseerd per bedrijf · {campaign.subject}
+                  {personalized ? (
+                    <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                  ) : (
+                    <Code2 className="w-3.5 h-3.5 text-gray-400" />
+                  )}
+                  {personalized ? "Gepersonaliseerd per bedrijf" : "Standaard (eigen HTML)"} · {campaign.subject}
                 </p>
               </div>
-              {campaign.test_sent_at && (
-                <span className="flex items-center gap-1 text-xs font-semibold text-green-700">
-                  <CheckCircle className="w-4 h-4" />
-                  Test verstuurd
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {campaign.test_sent_at && (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-green-700">
+                    <CheckCircle className="w-4 h-4" />
+                    Test verstuurd
+                  </span>
+                )}
+                {personalized && (
+                  <button
+                    type="button"
+                    onClick={() => setRecipientsCampaign(campaign)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 bg-white hover:border-brand-amber"
+                  >
+                    <Users className="w-4 h-4" />
+                    Ontvangers
+                  </button>
+                )}
+              </div>
             </div>
 
-            <CampaignSettings
-              campaign={campaign}
-              targetNames={targetNames}
-              onSaved={(saved) => {
-                setCampaign(saved);
-                setRefreshKey((key) => key + 1);
-              }}
-            />
+            {personalized ? (
+              <>
+                <CampaignSettings
+                  campaign={campaign}
+                  targetNames={targetNames}
+                  onSaved={(saved) => {
+                    setCampaign(saved);
+                    setRefreshKey((key) => key + 1);
+                  }}
+                />
 
-            <div className="bg-white border border-gray-100 rounded-card p-5">
-              <PersonalizedCampaignPanel
+                <div className="bg-white border border-gray-100 rounded-card p-5">
+                  <PersonalizedCampaignPanel
+                    campaign={campaign}
+                    refreshKey={refreshKey}
+                    resendReady={resendReady}
+                    testEmail={testEmail}
+                    setTestEmail={setTestEmail}
+                    accent={accent}
+                    onCampaignChange={setCampaign}
+                  />
+                </div>
+              </>
+            ) : (
+              <BroadcastCampaignEditor
                 campaign={campaign}
-                refreshKey={refreshKey}
+                segments={segments}
                 resendReady={resendReady}
                 testEmail={testEmail}
                 setTestEmail={setTestEmail}
                 accent={accent}
                 onCampaignChange={setCampaign}
+                onShowRecipients={setRecipientsCampaign}
               />
-            </div>
+            )}
           </>
         )}
       </div>
+      <RecipientsDrawer campaign={recipientsCampaign} onClose={closeRecipients} />
     </AppShell>
   );
 }

@@ -2,168 +2,39 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
-import { LAYOUT_OPTIONS } from "@/components/newsletter/CampaignSettings";
-import ImageField from "@/components/newsletter/ImageField";
+import CampaignList from "@/components/newsletter/CampaignList";
 import PendingSubscriptions from "@/components/newsletter/PendingSubscriptions";
+import RecipientsDrawer from "@/components/newsletter/RecipientsDrawer";
 import { apiFetch } from "@/lib/api";
+import { SOURCE_TYPES, sourceTypeLabel } from "@/lib/newsletter-audience";
+import { canMutateCampaign } from "@/lib/newsletter-status";
 import { useOrg } from "@/lib/org-context";
 import {
   ArrowLeft,
-  CalendarClock,
-  CheckCircle,
-  Edit3,
   Loader2,
-  Mail,
-  Megaphone,
   Plus,
   Save,
-  Send,
   Settings,
-  Sparkles,
   Trash2,
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const SOURCE_TYPES = [
-  { id: "all_marketing", label: "Alle marketingcontacten" },
-  { id: "marketing_segment", label: "Marketingsegment bevat" },
-  { id: "without_marketing_segments", label: "Zonder marketingsegmenten" },
-  { id: "lead_status", label: "Leadstatus is" },
-  { id: "relationship_type", label: "Relatietype is" },
-  { id: "hubspot_deal_origin", label: "HubSpot-herkomst is" },
-  { id: "industry", label: "Branche is" },
-  { id: "recipient_email_in", label: "Exacte ontvanger e-mails" },
-  { id: "recipient_email_contains", label: "Ontvanger e-mail bevat" },
-  { id: "recent_order_days", label: "Recent besteld binnen dagen" },
-];
-
-const STATUS_LABELS = {
-  draft: "Concept",
-  tested: "Getest",
-  approved: "Goedgekeurd",
-  syncing: "Synchroniseren",
-  scheduled: "Gepland",
-  sent: "Verzonden",
-  failed: "Mislukt",
-  batch_waiting: "Batch wacht",
-  paused: "Gepauzeerd",
-};
-const MAX_RECIPIENT_LIMIT = 100000;
-
-function statusClass(status) {
-  if (status === "sent") return "bg-green-50 text-green-700 border-green-100";
-  if (status === "tested") return "bg-blue-50 text-blue-700 border-blue-100";
-  if (status === "syncing" || status === "scheduled" || status === "batch_waiting") return "bg-amber-50 text-brand-orange border-amber-100";
-  if (status === "failed" || status === "paused") return "bg-red-50 text-red-600 border-red-100";
-  return "bg-gray-50 text-gray-600 border-gray-100";
-}
-
-function normalizeIds(ids) {
-  return [...new Set((Array.isArray(ids) ? ids : []).filter(Boolean))];
-}
-
-function campaignTargetIds(campaign) {
-  const ids = normalizeIds(campaign?.included_segment_ids || []);
-  if (ids.length) return ids;
-  return campaign?.segment_id ? [campaign.segment_id] : [];
-}
-
-function emptyCampaign(includedSegmentIds = [], excludedSegmentIds = []) {
-  const targets = normalizeIds(includedSegmentIds);
-  return {
-    name: "",
-    subject: "",
-    preview_text: "",
-    segment_id: targets[0] || "",
-    included_segment_ids: targets,
-    excluded_segment_ids: excludedSegmentIds,
-    recipient_limit: "",
-    batch_mode: "automatic",
-    batch_size: "100",
-    batch_wait_hours: "4",
-    max_bounce_rate: "0.02",
-    max_complaint_rate: "0",
-    max_failed_rate: "0.03",
-    max_unsubscribe_rate: "0.05",
-    scheduled_at: "",
-    body_html: "",
-    mode: "broadcast",
-    personalization_layout: "combined",
-    headline: "",
-    intro_text: "",
-    hero_image_url: "",
-  };
-}
-
-function toDateTimeLocal(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (part) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function fromDateTimeLocal(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
-}
-
-function formatDateTime(value) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("nl-NL", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function isFutureDateTime(value) {
-  return Boolean(value) && new Date(value).getTime() > Date.now();
-}
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function sameIdList(a, b) {
-  const left = [...new Set((Array.isArray(a) ? a : []).filter(Boolean))].sort();
-  const right = [...new Set((Array.isArray(b) ? b : []).filter(Boolean))].sort();
-  return left.length === right.length && left.every((id, index) => id === right[index]);
-}
-
-function sameSegmentRule(a, b) {
-  if (!a || !b) return false;
-  return (
-    a.source_type === b.source_type &&
-    String(a.source_value || "").trim().toLowerCase() === String(b.source_value || "").trim().toLowerCase()
-  );
-}
-
-function segmentCanExclude(segment, includeSegments = []) {
-  if (!segment || segment.source_type === "all_marketing") return false;
-  if (includeSegments.some((includeSegment) => segment.id === includeSegment.id || sameSegmentRule(segment, includeSegment))) return false;
-  if (includeSegments.some((includeSegment) => includeSegment.source_type === "recipient_email_contains") && !segment.default_excluded) {
-    return segment.source_type === "recipient_email_contains";
-  }
-  return true;
-}
-
+// Nieuwsbrieven: overzicht van campagnes plus de tabbladen Resend, Segmenten
+// en Nog geen nieuwsbrief. Een campagne maken of bewerken gebeurt op een
+// eigen scherm (/admin/nieuwsbrieven/nieuw en /admin/nieuwsbrieven/[id]).
 export default function NieuwsbrievenPage() {
   const router = useRouter();
-  const { organization, user } = useOrg();
+  const { organization } = useOrg();
   const [settings, setSettings] = useState(null);
   const [segments, setSegments] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [segmentOptions, setSegmentOptions] = useState(null);
   const [setupRequired, setSetupRequired] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [recipients, setRecipients] = useState(null);
+  const [recipientsCampaign, setRecipientsCampaign] = useState(null);
   const [settingsForm, setSettingsForm] = useState({
     from_name: "",
     from_email: "",
@@ -172,8 +43,6 @@ export default function NieuwsbrievenPage() {
     resend_webhook_secret: "",
   });
   const [segmentForm, setSegmentForm] = useState({ name: "", source_type: "all_marketing", source_value: "" });
-  const [campaignForm, setCampaignForm] = useState(emptyCampaign());
-  const [editingCampaignId, setEditingCampaignId] = useState("");
   const [activeSection, setActiveSection] = useState("campaigns");
   const [pendingCounts, setPendingCounts] = useState(null);
 
@@ -184,82 +53,49 @@ export default function NieuwsbrievenPage() {
       .then((json) => json && setPendingCounts({ companies: json.company_count, addresses: json.address_count }))
       .catch(() => {});
   }, []);
-  const [editorMode, setEditorMode] = useState("html");
-  const [testEmail, setTestEmail] = useState(user?.email || "");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const accent = organization?.theme?.accent || "#F5A623";
-  const resendReady = Boolean(
-    settings?.has_api_key &&
-    settings.api_key_valid !== false &&
-    settings?.from_name &&
-    settings?.from_email &&
-    settings?.reply_to
-  );
-  const targetSegmentIds = useMemo(
-    () => campaignTargetIds(campaignForm),
-    [campaignForm]
-  );
-  const selectedTargetSegments = useMemo(
-    () => targetSegmentIds.map((id) => segments.find((segment) => segment.id === id)).filter(Boolean),
-    [segments, targetSegmentIds]
-  );
-  const defaultExcludedSegmentIds = useMemo(
-    () => segments.filter((segment) => segment.default_excluded).map((segment) => segment.id),
-    [segments]
-  );
-  const campaignExcludedIds = useMemo(
-    () => new Set([...(campaignForm.excluded_segment_ids || []), ...defaultExcludedSegmentIds]),
-    [campaignForm.excluded_segment_ids, defaultExcludedSegmentIds]
-  );
-  const availableExclusionSegments = useMemo(
-    () => segments.filter((segment) => segmentCanExclude(segment, selectedTargetSegments)),
-    [segments, selectedTargetSegments]
-  );
-  const availableTargetSegments = useMemo(
-    () => segments.filter((segment) => !segment.default_excluded),
-    [segments]
-  );
   const availableSourceValues = segmentOptions?.options?.[segmentForm.source_type] || [];
+  const closeRecipients = useCallback(() => setRecipientsCampaign(null), []);
 
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (user?.email && !testEmail) setTestEmail(user.email);
-  }, [user, testEmail]);
+  async function fetchCampaigns() {
+    const res = await apiFetch("/api/newsletter/campaigns");
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Kon campagnes niet laden");
+    setCampaigns(json.campaigns || []);
+  }
 
   async function fetchAll() {
     setLoading(true);
     setError("");
     try {
-      const [settingsRes, segmentsRes, campaignsRes] = await Promise.all([
+      const [settingsRes, segmentsRes, optionsRes] = await Promise.all([
         apiFetch("/api/newsletter/settings"),
         apiFetch("/api/newsletter/segments"),
-        apiFetch("/api/newsletter/campaigns"),
+        apiFetch("/api/newsletter/segment-options"),
+        fetchCampaigns(),
       ]);
-      const [settingsJson, segmentsJson, campaignsJson] = await Promise.all([
+      const [settingsJson, segmentsJson, optionsJson] = await Promise.all([
         settingsRes.json(),
         segmentsRes.json(),
-        campaignsRes.json(),
+        optionsRes.json(),
       ]);
       if (!settingsRes.ok) throw new Error(settingsJson.error || "Kon instellingen niet laden");
       if (!segmentsRes.ok) throw new Error(segmentsJson.error || "Kon segmenten niet laden");
-      if (!campaignsRes.ok) throw new Error(campaignsJson.error || "Kon campagnes niet laden");
-
-      const optionsRes = await apiFetch("/api/newsletter/segment-options");
-      const optionsJson = await optionsRes.json();
       if (optionsRes.ok) setSegmentOptions(optionsJson);
 
       setSetupRequired(false);
       setSettings(settingsJson.settings);
       setSegments(segmentsJson.segments || []);
-      setCampaigns(campaignsJson.campaigns || []);
       setSettingsForm({
         from_name: settingsJson.settings?.from_name || organization?.display_name || "",
         from_email: settingsJson.settings?.from_email || "",
@@ -267,14 +103,6 @@ export default function NieuwsbrievenPage() {
         resend_api_key: "",
         resend_webhook_secret: "",
       });
-      const defaultTarget = (segmentsJson.segments || []).find((segment) => !segment.default_excluded) || segmentsJson.segments?.[0];
-      if (!campaignTargetIds(campaignForm).length && defaultTarget) {
-        setCampaignForm((current) => ({
-          ...current,
-          segment_id: defaultTarget.id,
-          included_segment_ids: [defaultTarget.id],
-        }));
-      }
     } catch (err) {
       setError(err.message);
       setSetupRequired(/migrations\/016_multi_tenant_newsletters\.sql|Nieuwsbrief-tabellen ontbreken/i.test(err.message));
@@ -286,153 +114,6 @@ export default function NieuwsbrievenPage() {
   function flash(text) {
     setMessage(text);
     setTimeout(() => setMessage(""), 2500);
-  }
-
-  function toggleExcludedSegment(segmentId) {
-    const segment = segments.find((item) => item.id === segmentId);
-    if (!segmentCanExclude(segment, selectedTargetSegments)) return;
-    const current = new Set(campaignForm.excluded_segment_ids || []);
-    if (current.has(segmentId)) current.delete(segmentId);
-    else current.add(segmentId);
-    setCampaignForm({ ...campaignForm, excluded_segment_ids: [...current] });
-  }
-
-  function toggleTargetSegment(segmentId) {
-    setCampaignForm((current) => {
-      const currentTargets = new Set(campaignTargetIds(current));
-      if (currentTargets.has(segmentId)) {
-        if (currentTargets.size === 1) return current;
-        currentTargets.delete(segmentId);
-      } else {
-        currentTargets.add(segmentId);
-      }
-      const targets = [...currentTargets];
-      return {
-        ...current,
-        segment_id: targets[0] || "",
-        included_segment_ids: targets,
-        excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segmentId),
-      };
-    });
-  }
-
-  function excludedSegmentNames(campaign) {
-    const ids = new Set([...(campaign.excluded_segment_ids || []), ...defaultExcludedSegmentIds]);
-    const includeSegments = campaignTargetIds(campaign).map((id) => segments.find((item) => item.id === id)).filter(Boolean);
-    return segments
-      .filter((segment) => ids.has(segment.id))
-      .filter((segment) => segmentCanExclude(segment, includeSegments))
-      .map((segment) => segment.name);
-  }
-
-  function targetSegmentNames(campaign) {
-    const ids = campaignTargetIds(campaign);
-    if (!ids.length) return ["Alle marketingcontacten"];
-    return ids
-      .map((id) => segments.find((segment) => segment.id === id)?.name)
-      .filter(Boolean);
-  }
-
-  function canMutateCampaign(campaign) {
-    return ["draft", "tested", "failed"].includes(campaign.status);
-  }
-
-  function canSendCampaign(campaign) {
-    return Boolean(campaign.test_sent_at) && !["sent", "scheduled", "syncing", "batch_waiting", "paused"].includes(campaign.status) && !hasExpiredSchedule(campaign);
-  }
-
-  function formNeedsRetest(campaign, form) {
-    if (!campaign) return false;
-    return (
-      normalizeText(campaign.subject) !== normalizeText(form.subject) ||
-      normalizeText(campaign.preview_text) !== normalizeText(form.preview_text) ||
-      normalizeText(campaign.body_html) !== normalizeText(form.body_html) ||
-      !sameIdList(campaignTargetIds(campaign), campaignTargetIds(form)) ||
-      Number(campaign.recipient_limit || 0) !== Number(form.recipient_limit || 0) ||
-      String(campaign.batch_mode || "single") !== String(form.batch_mode || "single") ||
-      Number(campaign.batch_size || 0) !== Number(form.batch_size || 0) ||
-      Number(campaign.batch_wait_hours || 0) !== Number(form.batch_wait_hours || 0) ||
-      !sameIdList(campaign.excluded_segment_ids, form.excluded_segment_ids)
-    );
-  }
-
-  function canSaveAndPlanFromForm() {
-    return Boolean(
-      editingCampaignId &&
-      selected?.id === editingCampaignId &&
-      selected?.test_sent_at &&
-      targetSegmentIds.length &&
-      isFutureDateTime(campaignForm.scheduled_at) &&
-      !formNeedsRetest(selected, campaignForm) &&
-      resendReady
-    );
-  }
-
-  function hasExpiredSchedule(campaign) {
-    return Boolean(campaign.scheduled_at) && !isFutureDateTime(campaign.scheduled_at) && !["sent", "scheduled"].includes(campaign.status);
-  }
-
-  function sendActionLabel(campaign) {
-    if (hasExpiredSchedule(campaign)) return "Tijd verlopen";
-    if (campaign.batch_mode === "automatic") return "Start batches";
-    return isFutureDateTime(campaign.scheduled_at) ? "Plannen" : "Verzenden";
-  }
-
-  function sendActionTitle(campaign) {
-    if (!campaign.test_sent_at) return "Eerst testmail sturen";
-    if (hasExpiredSchedule(campaign)) return "Kies eerst een nieuwe toekomstige verzendtijd";
-    if (campaign.batch_mode === "automatic") return "Automatische batchverzending starten";
-    return isFutureDateTime(campaign.scheduled_at) ? "Definitief plannen" : "Definitief verzenden";
-  }
-
-  function scheduledAtLabel(campaign) {
-    if (campaign.status === "scheduled") return "Gepland";
-    if (isFutureDateTime(campaign.scheduled_at)) return "Verzendtijd";
-    return "Verzendtijd verstreken";
-  }
-
-  function startEditCampaign(campaign) {
-    if (!canMutateCampaign(campaign)) return;
-    // Gepersonaliseerde nieuwsbrieven bewerk je op hun eigen pagina.
-    if (campaign.mode === "personalized") {
-      router.push(`/admin/nieuwsbrieven/${campaign.id}`);
-      return;
-    }
-    const targetIds = campaignTargetIds(campaign);
-    setEditingCampaignId(campaign.id);
-    setCampaignForm({
-      name: campaign.name || "",
-      subject: campaign.subject || "",
-      preview_text: campaign.preview_text || "",
-      segment_id: targetIds[0] || "",
-      included_segment_ids: targetIds,
-      excluded_segment_ids: campaign.excluded_segment_ids || [],
-      recipient_limit: campaign.recipient_limit || "",
-      batch_mode: campaign.batch_mode || "single",
-      batch_size: campaign.batch_size || "",
-      batch_wait_hours: campaign.batch_wait_hours || "4",
-      max_bounce_rate: campaign.max_bounce_rate ?? "0.02",
-      max_complaint_rate: campaign.max_complaint_rate ?? "0",
-      max_failed_rate: campaign.max_failed_rate ?? "0.03",
-      max_unsubscribe_rate: campaign.max_unsubscribe_rate ?? "0.05",
-      scheduled_at: campaign.scheduled_at || "",
-      body_html: campaign.body_html || "",
-      mode: campaign.mode || "broadcast",
-      personalization_layout: campaign.personalization_layout || "combined",
-      headline: campaign.headline || "",
-      intro_text: campaign.intro_text || "",
-      hero_image_url: campaign.hero_image_url || "",
-    });
-    setEditorMode("html");
-    setActiveSection("campaigns");
-    setSelected(campaign);
-    setRecipients(null);
-  }
-
-  function cancelEditCampaign() {
-    const fallbackTargetIds = campaignTargetIds(campaignForm);
-    setEditingCampaignId("");
-    setCampaignForm(emptyCampaign(fallbackTargetIds, []));
   }
 
   async function saveSettings(e) {
@@ -473,14 +154,6 @@ export default function NieuwsbrievenPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Segment opslaan mislukt");
       setSegments((current) => [...current, json.segment]);
-      // Eerste doelgroep direct kiezen in het campagneformulier.
-      if (!json.segment.default_excluded) {
-        setCampaignForm((current) => (
-          campaignTargetIds(current).length
-            ? current
-            : { ...current, segment_id: json.segment.id, included_segment_ids: [json.segment.id] }
-        ));
-      }
       setSegmentForm({ name: "", source_type: "all_marketing", source_value: "" });
       flash("Segment toegevoegd");
     } catch (err) {
@@ -502,98 +175,9 @@ export default function NieuwsbrievenPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Segment verwijderen mislukt");
       setSegments((current) => current.filter((item) => item.id !== segment.id));
-      setCampaigns((current) => current.map((campaign) => (
-        canMutateCampaign(campaign)
-          ? {
-              ...campaign,
-              status: "draft",
-              test_sent_at: null,
-              included_segment_ids: campaignTargetIds(campaign).filter((id) => id !== segment.id),
-              segment_id: campaignTargetIds(campaign).filter((id) => id !== segment.id)[0] || null,
-              excluded_segment_ids: (campaign.excluded_segment_ids || []).filter((id) => id !== segment.id),
-              newsletter_segments: campaign.segment_id === segment.id ? null : campaign.newsletter_segments,
-            }
-          : campaign
-      )));
-      setCampaignForm((current) => ({
-        ...current,
-        included_segment_ids: campaignTargetIds(current).filter((id) => id !== segment.id),
-        segment_id: campaignTargetIds(current).filter((id) => id !== segment.id)[0] || "",
-        excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segment.id),
-      }));
-      if (selected && canMutateCampaign(selected)) {
-        setSelected((current) => current ? {
-          ...current,
-          status: "draft",
-          test_sent_at: null,
-          included_segment_ids: campaignTargetIds(current).filter((id) => id !== segment.id),
-          segment_id: campaignTargetIds(current).filter((id) => id !== segment.id)[0] || null,
-          excluded_segment_ids: (current.excluded_segment_ids || []).filter((id) => id !== segment.id),
-          newsletter_segments: current.segment_id === segment.id ? null : current.newsletter_segments,
-        } : current);
-      }
+      // De server haalt het segment ook uit open campagnes en zet die terug naar concept.
+      await fetchCampaigns();
       flash("Segment verwijderd");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  // Gepersonaliseerd verstuurt (nog) in één keer en zonder planning; de HTML
-  // wordt per ontvanger opgebouwd. Het soort campagne ligt vast na aanmaken.
-  function campaignPayload(form) {
-    if (form.mode !== "personalized") {
-      const { mode, personalization_layout, headline, intro_text, hero_image_url, ...rest } = form;
-      return editingCampaignId ? rest : { ...rest, mode: "broadcast" };
-    }
-    const { body_html, scheduled_at, mode, ...rest } = form;
-    return { ...rest, ...(editingCampaignId ? {} : { mode }), batch_mode: "single" };
-  }
-
-  async function createCampaign(e) {
-    e.preventDefault();
-    return saveCampaign({ testAfterSave: false });
-  }
-
-  async function saveCampaign({ testAfterSave = false, sendAfterSave = false } = {}) {
-    setBusy("campaign");
-    setError("");
-    try {
-      const isEditing = Boolean(editingCampaignId);
-      const res = await apiFetch(
-        isEditing ? `/api/newsletter/campaigns/${editingCampaignId}` : "/api/newsletter/campaigns",
-        {
-          method: isEditing ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(campaignPayload(campaignForm)),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || (isEditing ? "Campagne wijzigen mislukt" : "Campagne opslaan mislukt"));
-      // Een nieuwe gepersonaliseerde nieuwsbrief gaat direct verder op zijn eigen pagina.
-      if (!isEditing && json.campaign.mode === "personalized") {
-        router.push(`/admin/nieuwsbrieven/${json.campaign.id}`);
-        return;
-      }
-      setCampaigns((current) => (
-        isEditing
-          ? current.map((item) => (item.id === json.campaign.id ? json.campaign : item))
-          : [json.campaign, ...current]
-      ));
-      setSelected(json.campaign);
-      setEditingCampaignId("");
-      setCampaignForm(emptyCampaign(campaignTargetIds(campaignForm), campaignForm.excluded_segment_ids));
-      setRecipients(null);
-      if (testAfterSave) {
-        await sendTest(json.campaign);
-        return;
-      }
-      if (sendAfterSave) {
-        await sendCampaign(json.campaign);
-        return;
-      }
-      flash(isEditing ? "Campagne bijgewerkt" : "Campagne aangemaakt");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -614,86 +198,7 @@ export default function NieuwsbrievenPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Campagne verwijderen mislukt");
       setCampaigns((current) => current.filter((item) => item.id !== campaign.id));
-      if (selected?.id === campaign.id) {
-        setSelected(null);
-        setRecipients(null);
-      }
-      if (editingCampaignId === campaign.id) {
-        setEditingCampaignId("");
-        setCampaignForm(emptyCampaign(campaignTargetIds(campaignForm), campaignForm.excluded_segment_ids));
-      }
       flash("Campagne verwijderd");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  function openCampaign(campaign) {
-    router.push(`/admin/nieuwsbrieven/${campaign.id}`);
-  }
-
-  async function previewRecipients(campaign) {
-    setBusy(`preview-${campaign.id}`);
-    setError("");
-    try {
-      const res = await apiFetch(`/api/newsletter/campaigns/${campaign.id}/recipients`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Preview mislukt");
-      setSelected(campaign);
-      setRecipients(json);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function sendTest(campaign) {
-    if (!resendReady) {
-      setActiveSection("resend");
-      setError("Sla eerst de Resend API-key opnieuw op bij Resend instellingen.");
-      return;
-    }
-    if (!testEmail) {
-      setError("Vul eerst een testmailadres in");
-      return;
-    }
-    setBusy(`test-${campaign.id}`);
-    setError("");
-    try {
-      const res = await apiFetch(`/api/newsletter/campaigns/${campaign.id}/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: testEmail }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Testmail mislukt");
-      setCampaigns((current) => current.map((item) => (item.id === campaign.id ? json.campaign : item)));
-      setSelected(json.campaign);
-      flash("Testmail verzonden");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function sendCampaign(campaign) {
-    const scheduled = isFutureDateTime(campaign.scheduled_at);
-    const action = scheduled ? `plannen voor ${formatDateTime(campaign.scheduled_at)}` : "definitief verzenden";
-    if (!confirm(`Campagne "${campaign.name}" ${action}?`)) return;
-    setBusy(`send-${campaign.id}`);
-    setError("");
-    try {
-      const res = await apiFetch(`/api/newsletter/campaigns/${campaign.id}/send`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Verzenden mislukt");
-      setCampaigns((current) => current.map((item) => (item.id === campaign.id ? json.campaign : item)));
-      setSelected(json.campaign);
-      setRecipients(null);
-      flash(json.campaign?.status === "scheduled" ? "Campagne gepland" : "Campagne verzonden");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -711,15 +216,21 @@ export default function NieuwsbrievenPage() {
         Terug
       </button>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-brand-black">Nieuwsbrieven</h1>
           <p className="text-sm text-gray-500 mt-0.5">{organization?.display_name}</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Megaphone className="w-4 h-4" />
-          {campaigns.length} campagnes
-        </div>
+        {activeSection === "campaigns" && !setupRequired && (
+          <Link
+            href="/admin/nieuwsbrieven/nieuw"
+            className="flex items-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold text-white"
+            style={{ backgroundColor: accent }}
+          >
+            <Plus className="w-4 h-4" />
+            Nieuwe campagne
+          </Link>
+        )}
       </div>
 
       {error && <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
@@ -748,7 +259,7 @@ export default function NieuwsbrievenPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="inline-flex items-center gap-1 rounded-xl border border-gray-100 bg-white p-1">
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-gray-100 bg-white p-1">
             {[
               { id: "campaigns", label: "Campagnes" },
               { id: "resend", label: "Resend" },
@@ -774,7 +285,16 @@ export default function NieuwsbrievenPage() {
           </div>
 
           <div className="space-y-6">
-          <div className="space-y-6">
+            {activeSection === "campaigns" && (
+              <CampaignList
+                campaigns={campaigns}
+                segments={segments}
+                busy={busy}
+                onShowRecipients={setRecipientsCampaign}
+                onDelete={deleteCampaign}
+              />
+            )}
+
             {activeSection === "resend" && (
             <form onSubmit={saveSettings} className="bg-white border border-gray-100 rounded-card p-5 max-w-2xl">
               <div className="flex items-center gap-2 mb-4">
@@ -940,7 +460,7 @@ export default function NieuwsbrievenPage() {
                           <div className="min-w-0">
                             <p className="font-medium truncate">{segment.name}</p>
                             <p className="text-xs text-gray-400 truncate">
-                              {SOURCE_TYPES.find((type) => type.id === segment.source_type)?.label || segment.source_type}
+                              {sourceTypeLabel(segment.source_type)}
                               {segment.source_value ? `: ${segment.source_value}` : ""}
                             </p>
                           </div>
@@ -971,666 +491,10 @@ export default function NieuwsbrievenPage() {
               </div>
             </form>
             )}
-
-            {activeSection === "campaigns" && (
-            <form onSubmit={createCampaign} className="bg-white border border-gray-100 rounded-card p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-500" />
-                  <h2 className="font-semibold">{editingCampaignId ? "Campagne bewerken" : "Nieuwe campagne"}</h2>
-                </div>
-                {editingCampaignId && (
-                  <button
-                    type="button"
-                    onClick={cancelEditCampaign}
-                    className="text-xs font-semibold text-gray-500 hover:text-brand-black"
-                  >
-                    Annuleren
-                  </button>
-                )}
-              </div>
-              {!editingCampaignId && (
-                <div className="inline-flex items-center gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1 mb-4">
-                  {[
-                    { id: "broadcast", label: "Standaard (eigen HTML)" },
-                    { id: "personalized", label: "Gepersonaliseerd per bedrijf" },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setCampaignForm({ ...campaignForm, mode: item.id })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                        campaignForm.mode === item.id ? "bg-white text-brand-orange shadow-sm" : "text-gray-500 hover:text-brand-black"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-5 items-start">
-                <div className="space-y-3">
-                <input
-                  value={campaignForm.name}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
-                  placeholder="Interne campagnenaam"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                />
-                <input
-                  value={campaignForm.subject}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, subject: e.target.value })}
-                  placeholder="Titel / onderwerp"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                />
-                <input
-                  value={campaignForm.preview_text}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, preview_text: e.target.value })}
-                  placeholder="Previewtekst"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                />
-                {campaignForm.mode !== "personalized" && (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase">Verzenddatum en tijd</label>
-                  <div className="relative">
-                    <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="datetime-local"
-                      value={toDateTimeLocal(campaignForm.scheduled_at)}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, scheduled_at: fromDateTimeLocal(e.target.value) })}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
-                    />
-                  </div>
-                  {editingCampaignId && (
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        type="button"
-                        onClick={() => saveCampaign()}
-                        disabled={busy === "campaign" || setupRequired || !targetSegmentIds.length}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-pill text-xs font-semibold border border-gray-200 bg-white hover:border-brand-amber disabled:opacity-60"
-                      >
-                        <Save className="w-4 h-4" />
-                        Tijd opslaan
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => saveCampaign({ sendAfterSave: true })}
-                        disabled={busy === "campaign" || busy.startsWith("send-") || setupRequired || !canSaveAndPlanFromForm()}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-pill text-xs font-semibold text-white disabled:opacity-60"
-                        style={{ backgroundColor: accent }}
-                        title={
-                          canSaveAndPlanFromForm()
-                            ? "Tijd opslaan en daarna definitief plannen"
-                            : formNeedsRetest(selected, campaignForm)
-                              ? "Na inhoud of doelgroep wijzigen eerst opnieuw testmail sturen"
-                              : "Kies een toekomstige tijd en stuur eerst een testmail"
-                        }
-                      >
-                        <Send className="w-4 h-4" />
-                        Opslaan en plannen
-                      </button>
-                    </div>
-                  )}
-                  {editingCampaignId && formNeedsRetest(selected, campaignForm) && (
-                    <p className="text-xs text-brand-orange">
-                      Inhoud of doelgroep is gewijzigd. Stuur na opslaan opnieuw een testmail voordat je kunt plannen.
-                    </p>
-                  )}
-                </div>
-                )}
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase">Mailen naar</label>
-                    <span className="text-xs text-gray-400">{targetSegmentIds.length} gekozen</span>
-                  </div>
-                  {availableTargetSegments.length ? (
-                    <div className="space-y-2 max-h-48 overflow-auto">
-                      {availableTargetSegments.map((segment) => {
-                        const checked = targetSegmentIds.includes(segment.id);
-                        return (
-                          <label key={segment.id} className="flex items-center justify-between gap-3 text-sm">
-                            <span className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleTargetSegment(segment.id)}
-                                className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
-                              />
-                              <span className="truncate">{segment.name}</span>
-                            </span>
-                            <span className="shrink-0 text-[10px] font-semibold uppercase text-gray-400">
-                              {SOURCE_TYPES.find((type) => type.id === segment.source_type)?.label || segment.source_type}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">Maak eerst een doelgroepsegment aan.</p>
-                  )}
-                  <p className="text-xs text-gray-500">
-                    Meerdere doelgroepen worden samengevoegd. Dubbele e-mailadressen worden bij verzending automatisch ontdubbeld.
-                  </p>
-                </div>
-                {campaignForm.mode !== "personalized" && (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">Automatische batches</p>
-                      <p className="text-xs text-gray-500">CRM verstuurt pas verder na een groene health-check.</p>
-                    </div>
-                    <label className="inline-flex items-center gap-2 text-sm font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={campaignForm.batch_mode === "automatic"}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, batch_mode: e.target.checked ? "automatic" : "single" })}
-                        className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
-                      />
-                      Aan
-                    </label>
-                  </div>
-                  {campaignForm.batch_mode === "automatic" ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-xs font-semibold text-gray-500">
-                        Batchgrootte
-                        <input
-                          type="number"
-                          min="1"
-                          max={MAX_RECIPIENT_LIMIT}
-                          step="1"
-                          value={campaignForm.batch_size}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, batch_size: e.target.value })}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
-                        />
-                      </label>
-                      <label className="text-xs font-semibold text-gray-500">
-                        Wachturen
-                        <input
-                          type="number"
-                          min="0.25"
-                          step="0.25"
-                          value={campaignForm.batch_wait_hours}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, batch_wait_hours: e.target.value })}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
-                        />
-                      </label>
-                      <label className="text-xs font-semibold text-gray-500">
-                        Max bounce
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.001"
-                          value={campaignForm.max_bounce_rate}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, max_bounce_rate: e.target.value })}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
-                        />
-                      </label>
-                      <label className="text-xs font-semibold text-gray-500">
-                        Max complaints
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.001"
-                          value={campaignForm.max_complaint_rate}
-                          onChange={(e) => setCampaignForm({ ...campaignForm, max_complaint_rate: e.target.value })}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal text-brand-black focus:outline-none focus:border-brand-amber"
-                        />
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <label className="block text-xs font-semibold text-gray-500 uppercase">Max totaal ontvangers</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max={MAX_RECIPIENT_LIMIT}
-                        step="1"
-                        value={campaignForm.recipient_limit}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, recipient_limit: e.target.value })}
-                        placeholder="Geen limiet"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber"
-                      />
-                    </div>
-                  )}
-                </div>
-                )}
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Niet mailen naar</p>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Deze segmenten worden van de gekozen doelgroep(en) afgehaald.
-                  </p>
-                  {availableExclusionSegments.length ? (
-                    <div className="space-y-2 max-h-44 overflow-auto">
-                      {availableExclusionSegments.map((segment) => {
-                        const isDefault = segment.default_excluded;
-                        const checked = campaignExcludedIds.has(segment.id);
-                        return (
-                          <label key={segment.id} className="flex items-center justify-between gap-3 text-sm">
-                            <span className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={isDefault}
-                                onChange={() => toggleExcludedSegment(segment.id)}
-                                className="rounded border-gray-300 text-brand-orange focus:ring-brand-amber"
-                              />
-                              <span className="truncate">{segment.name}</span>
-                            </span>
-                            {isDefault && (
-                              <span className="shrink-0 text-[10px] font-bold uppercase text-red-600 bg-red-50 border border-red-100 rounded-pill px-2 py-0.5">
-                                standaard
-                              </span>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">Nog geen segmenten om uit te sluiten.</p>
-                  )}
-                </div>
-                </div>
-                <div className="space-y-3">
-                {campaignForm.mode === "personalized" ? (
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
-                    <p className="text-sm text-gray-600">
-                      De mail wordt per bedrijf opgebouwd uit items in drie secties, met een eigen onderwerpregel,
-                      intro en &quot;waarom interessant&quot;-regels. Na het aanmaken voeg je de items toe en review je de
-                      personalisatie per bedrijf. Verzenden gaat in één keer, zonder planning.
-                    </p>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase">
-                      Opzet
-                      <select
-                        value={campaignForm.personalization_layout}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, personalization_layout: e.target.value })}
-                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
-                      >
-                        {LAYOUT_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase">
-                      Kop bovenaan (optioneel)
-                      <input
-                        value={campaignForm.headline}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, headline: e.target.value })}
-                        placeholder="Bijv. Wat AI deze maand *voor het mkb* betekent"
-                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
-                      />
-                    </label>
-                    <p className="text-xs text-gray-500 -mt-2">Zet woorden tussen *sterretjes* voor het oranje accent.</p>
-                    <div className="block text-xs font-semibold text-gray-500 uppercase">
-                      Kopbeeld (optioneel)
-                      <div className="mt-1">
-                        <ImageField
-                          value={campaignForm.hero_image_url}
-                          onChange={(url) => setCampaignForm((current) => ({ ...current, hero_image_url: url }))}
-                        />
-                      </div>
-                    </div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase">
-                      Algemene inleiding (optioneel, voor iedereen gelijk)
-                      <textarea
-                        value={campaignForm.intro_text}
-                        onChange={(e) => setCampaignForm({ ...campaignForm, intro_text: e.target.value })}
-                        rows={4}
-                        className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                <>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
-                    {[
-                      { id: "html", label: "HTML" },
-                      { id: "preview", label: "Preview" },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setEditorMode(item.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                          editorMode === item.id ? "bg-white text-brand-orange shadow-sm" : "text-gray-500 hover:text-brand-black"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {campaignForm.body_html ? "Preview gebruikt de huidige HTML" : "Nog geen HTML"}
-                  </p>
-                </div>
-                {editorMode === "html" ? (
-                  <textarea
-                    value={campaignForm.body_html}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, body_html: e.target.value })}
-                    placeholder="HTML uit Codex of Claude"
-                    rows={18}
-                    className="w-full min-h-[440px] px-3 py-2 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-brand-amber"
-                  />
-                ) : (
-                  <div className="w-full min-h-[440px] rounded-xl border border-gray-200 bg-white overflow-hidden">
-                    {campaignForm.body_html ? (
-                      <iframe
-                        title="Nieuwsbrief preview"
-                        sandbox=""
-                        srcDoc={campaignForm.body_html}
-                        className="w-full h-[440px] bg-white"
-                      />
-                    ) : (
-                      <div className="h-[440px] flex items-center justify-center text-sm text-gray-400">
-                        Plak of laad eerst HTML om de preview te bekijken.
-                      </div>
-                    )}
-                  </div>
-                )}
-                </>
-                )}
-                <button
-                  type="submit"
-                  disabled={busy === "campaign" || setupRequired || !targetSegmentIds.length}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold text-white disabled:opacity-60"
-                  style={{ backgroundColor: accent }}
-                >
-                  {busy === "campaign" ? <Loader2 className="w-4 h-4 animate-spin" /> : editingCampaignId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  {editingCampaignId ? "Wijzigingen opslaan" : "Campagne aanmaken"}
-                </button>
-                {editingCampaignId && campaignForm.mode !== "personalized" && (
-                  <button
-                    type="button"
-                    onClick={() => saveCampaign({ testAfterSave: true })}
-                    disabled={busy === "campaign" || !testEmail || setupRequired || !resendReady || !targetSegmentIds.length}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-60"
-                  >
-                    <Mail className="w-4 h-4" />
-                    Opslaan en testmail versturen
-                  </button>
-                )}
-                </div>
-              </div>
-            </form>
-            )}
           </div>
-
-          {activeSection === "campaigns" && (
-          <div className="space-y-6">
-            <div className="bg-white border border-gray-100 rounded-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                <h2 className="font-semibold">Campagnes</h2>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="email"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    placeholder="Testmail naar"
-                    className="w-64 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => selected && sendTest(selected)}
-                    disabled={!selected || !canMutateCampaign(selected) || !testEmail || !resendReady || busy === `test-${selected?.id}`}
-                    className="flex items-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 hover:border-brand-amber disabled:opacity-40"
-                    title={resendReady ? "Testmail versturen" : "Resend API-key opnieuw opslaan"}
-                  >
-                    {selected && busy === `test-${selected.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                    Testmail versturen
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Campagne</th>
-                      <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Doelgroep</th>
-                      <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Status</th>
-                      <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Acties</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="text-center text-sm text-gray-400 py-10">Nog geen campagnes</td>
-                      </tr>
-                    ) : campaigns.map((campaign) => (
-                      <tr key={campaign.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-semibold">
-                            {campaign.name}
-                            {campaign.mode === "personalized" && (
-                              <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase text-brand-orange bg-amber-50 border border-amber-100 rounded-pill px-2 py-0.5 align-middle">
-                                <Sparkles className="w-3 h-3" />
-                                Gepersonaliseerd
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-500">{campaign.subject}</p>
-                          {campaign.scheduled_at && (
-                            <p className="text-xs text-brand-orange mt-1">
-                              {scheduledAtLabel(campaign)}: {formatDateTime(campaign.scheduled_at)}
-                            </p>
-                          )}
-                          {campaign.batch_mode === "automatic" ? (
-                            <p className="text-xs text-gray-400 mt-1">
-                              Batches: {campaign.batch_current_number || 0}/{campaign.batch_total_count || "?"}
-                              {campaign.batch_next_run_at ? ` · volgende check ${formatDateTime(campaign.batch_next_run_at)}` : ""}
-                            </p>
-                          ) : campaign.recipient_limit && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              Max: {campaign.recipient_limit} ontvangers
-                            </p>
-                          )}
-                          {campaign.batch_pause_reason && (
-                            <p className="text-xs text-red-500 mt-1">{campaign.batch_pause_reason}</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          <p>
-                            {targetSegmentNames(campaign).join(", ") || "Geen doelgroep"}
-                          </p>
-                          {excludedSegmentNames(campaign).length > 0 && (
-                            <p className="text-xs text-red-500 mt-1">
-                              Niet mailen: {excludedSegmentNames(campaign).join(", ")}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-pill border ${statusClass(campaign.status)}`}>
-                            {STATUS_LABELS[campaign.status] || campaign.status}
-                          </span>
-                          {campaign.recipient_count > 0 && (
-                            <span className="ml-2 text-xs text-gray-400">{campaign.recipient_count} verzonden</span>
-                          )}
-                          {campaign.batch_last_health && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              Laatste check: {campaign.batch_last_health.counts?.bounced || 0} bounce,
-                              {" "}{campaign.batch_last_health.counts?.complained || 0} complaint
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={() => startEditCampaign(campaign)}
-                              disabled={!canMutateCampaign(campaign)}
-                              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30"
-                              title={canMutateCampaign(campaign) ? "Campagne bewerken" : "Verzonden campagnes kunnen niet worden bewerkt"}
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => previewRecipients(campaign)}
-                              disabled={busy === `preview-${campaign.id}`}
-                              className="p-2 rounded-lg text-gray-400 hover:text-brand-orange hover:bg-amber-50 disabled:opacity-50"
-                              title="Ontvangers bekijken"
-                            >
-                              {busy === `preview-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                            </button>
-                            {campaign.mode === "personalized" ? (
-                              <button
-                                onClick={() => openCampaign(campaign)}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-brand-orange hover:bg-amber-50"
-                                title="Inhoud, personalisatie, testmail en verzenden"
-                              >
-                                <Sparkles className="w-4 h-4" />
-                                Openen
-                              </button>
-                            ) : (
-                            <>
-                            <button
-                              onClick={() => sendTest(campaign)}
-                              disabled={busy === `test-${campaign.id}` || !canMutateCampaign(campaign) || !resendReady}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-                              title={resendReady ? "Testmail sturen" : "Resend API-key opnieuw opslaan"}
-                            >
-                              {busy === `test-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                              Testmail
-                            </button>
-                            <button
-                              onClick={() => sendCampaign(campaign)}
-                              disabled={busy === `send-${campaign.id}` || !canSendCampaign(campaign)}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-green-600 hover:bg-green-50 disabled:opacity-50"
-                              title={sendActionTitle(campaign)}
-                            >
-                              {busy === `send-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                              {sendActionLabel(campaign)}
-                            </button>
-                            </>
-                            )}
-                            <button
-                              onClick={() => deleteCampaign(campaign)}
-                              disabled={busy === `delete-campaign-${campaign.id}` || !canMutateCampaign(campaign)}
-                              className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
-                              title={canMutateCampaign(campaign) ? "Campagne verwijderen" : "Verzonden campagnes kunnen niet worden verwijderd"}
-                            >
-                              {busy === `delete-campaign-${campaign.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {selected && (
-              <div className="bg-white border border-gray-100 rounded-card p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="font-semibold">{selected.name}</h2>
-                    <p className="text-sm text-gray-500">{selected.subject}</p>
-                  </div>
-                  {selected.test_sent_at && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-green-700">
-                      <CheckCircle className="w-4 h-4" />
-                      Test verstuurd
-                    </span>
-                  )}
-                </div>
-                {selected.mode === "personalized" && !recipients ? (
-                  <button
-                    type="button"
-                    onClick={() => openCampaign(selected)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 hover:border-brand-amber"
-                  >
-                    <Sparkles className="w-4 h-4 text-brand-orange" />
-                    Nieuwsbrief openen
-                  </button>
-                ) : (
-                <>
-                {canMutateCampaign(selected) && selected.mode !== "personalized" && (
-                  <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                      <input
-                        type="email"
-                        value={testEmail}
-                        onChange={(e) => setTestEmail(e.target.value)}
-                        placeholder="Testmail naar"
-                        className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-amber"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => sendTest(selected)}
-                        disabled={busy === `test-${selected.id}` || !testEmail || !resendReady}
-                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold text-white disabled:opacity-60"
-                        style={{ backgroundColor: accent }}
-                        title={resendReady ? "Testmail versturen" : "Resend API-key opnieuw opslaan"}
-                      >
-                        {busy === `test-${selected.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                        Testmail versturen
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {recipients ? (
-                  <>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {recipients.count} unieke ontvangers
-                          {recipients.limited && recipients.total_count > recipients.count
-                            ? ` van ${recipients.total_count}`
-                            : ""}
-                        </p>
-                        {selected.batch_mode === "automatic" ? (
-                          <p className="text-xs text-gray-500">
-                            Automatisch: batches van {selected.batch_size || 100}, check na {selected.batch_wait_hours || 4} uur
-                          </p>
-                        ) : recipients.recipient_limit && (
-                          <p className="text-xs text-gray-500">
-                            Limiet: max. {recipients.recipient_limit} ontvangers
-                          </p>
-                        )}
-                        {recipients.deduplicated_count > 0 && (
-                          <p className="text-xs text-amber-700">
-                            {recipients.deduplicated_count} dubbele kandidaatadressen verwijderd
-                            {recipients.candidate_count ? ` uit ${recipients.candidate_count} kandidaten` : ""}.
-                          </p>
-                        )}
-                        {recipients.suppressed_count > 0 && (
-                          <p className="text-xs text-red-600">
-                            {recipients.suppressed_count} persoonlijk uitgeschreven/geblokkeerde adres(sen) uitgesloten.
-                          </p>
-                        )}
-                        {recipients.duplicate_address_count > 0 && (
-                          <p className="text-xs text-gray-500">
-                            {recipients.duplicate_address_count} adres(sen) kwamen meer dan 1 keer voor.
-                          </p>
-                        )}
-                      </div>
-                      {recipients.truncated && <p className="text-xs text-gray-400">Eerste 250 getoond</p>}
-                    </div>
-                    <div className="max-h-80 overflow-auto border border-gray-100 rounded-xl">
-                      <table className="w-full">
-                        <tbody>
-                          {recipients.recipients.map((recipient) => (
-                            <tr key={recipient.email} className="border-b border-gray-50">
-                              <td className="px-3 py-2 text-sm font-medium">{recipient.email}</td>
-                              <td className="px-3 py-2 text-sm text-gray-500">{recipient.name || "—"}</td>
-                              <td className="px-3 py-2 text-sm text-gray-500">{recipient.company_name || "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-gray-500">Bekijk ontvangers met de gebruikersknop in de campagnelijst.</p>
-                )}
-                </>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-        </div>
         </div>
       )}
+      <RecipientsDrawer campaign={recipientsCampaign} onClose={closeRecipients} />
     </AppShell>
   );
 }

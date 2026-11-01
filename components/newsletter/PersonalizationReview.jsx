@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, RotateCcw, Save, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, EyeOff, Eye, Loader2, RotateCcw, Save, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import CompanyLogo from "@/components/CompanyLogo";
 import RelevanceOverview from "@/components/newsletter/RelevanceOverview";
 import { confirmDialog } from "@/components/Dialogs";
+import { canSkipSlot } from "@/lib/newsletter-relevance";
 
 const APPROVAL_BADGES = {
   approved: { label: "Goedgekeurd", className: "bg-green-50 text-green-700 border-green-100" },
@@ -46,10 +47,35 @@ function orderedSlots(company, items) {
   return rows;
 }
 
-function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, onRegenerate }) {
+function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onStatus, onRegenerate }) {
   const [text, setText] = useState(slot.content?.text || "");
   const dirty = text.trim() !== (slot.content?.text || "").trim();
   const approved = slot.status === "approved";
+  const skipped = slot.status === "skipped";
+
+  if (skipped) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase line-through">{slot.label}</p>
+          <span className="flex items-center gap-1 text-xs font-semibold text-gray-500"><EyeOff className="w-3.5 h-3.5" />Weggelaten</span>
+        </div>
+        <p className="text-sm text-gray-400 line-through whitespace-pre-line">{slot.content?.text}</p>
+        <p className="text-xs text-gray-500">Dit blok staat niet in de mail van dit bedrijf. Het item zelf blijft staan, en opnieuw genereren zet het blok niet terug.</p>
+        {editable && (
+          <button
+            type="button"
+            onClick={() => onStatus("draft")}
+            disabled={busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:border-brand-amber disabled:opacity-50"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            Toch tonen
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-xl border p-3 space-y-2 ${approved ? "border-green-100 bg-green-50/30" : "border-gray-100 bg-white"}`}>
@@ -65,7 +91,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
         className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber disabled:bg-gray-50"
       />
       {editable && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {dirty ? (
             <button
               type="button"
@@ -79,8 +105,9 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
           ) : (
             <button
               type="button"
-              onClick={onToggle}
+              onClick={() => onStatus(approved ? "draft" : "approved")}
               disabled={busy}
+              title={approved ? "De tekst blijft in de mail, maar moet opnieuw worden nagekeken" : undefined}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border disabled:opacity-50 ${
                 approved ? "border-gray-200 text-gray-500 hover:text-brand-black" : "border-green-200 text-green-700 hover:bg-green-50"
               }`}
@@ -112,6 +139,18 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onToggle, 
             {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             Vernieuwen
           </button>}
+          {canSkipSlot(slot.slot) && (
+            <button
+              type="button"
+              onClick={() => onStatus("skipped")}
+              disabled={busy}
+              title="Dit blok niet in de mail van dit bedrijf zetten; het item zelf blijft staan"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 text-gray-500 hover:text-brand-black disabled:opacity-50"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              Weglaten
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -153,7 +192,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
   const generate = async (company) => {
     if (company.approval !== "missing" && !(await confirmDialog({
       title: `Alle teksten van ${company.company_name} opnieuw laten schrijven?`,
-      message: "Bewerkingen en goedkeuringen vervallen. Wil je één tekst vernieuwen, gebruik dan Vernieuwen bij dat blok.",
+      message: "Bewerkingen en goedkeuringen vervallen; weggelaten blokken blijven weggelaten. Wil je één tekst vernieuwen, gebruik dan Vernieuwen bij dat blok.",
       confirmLabel: "Alles opnieuw schrijven",
       danger: true,
     }))) return;
@@ -163,9 +202,9 @@ export default function PersonalizationReview({ campaign, editable, data, items,
   const saveText = (company, slot, text) => run(`slot-${slot.id}`, () => request("PATCH", { lead_id: company.id, slot: slot.slot, text }, "Opslaan mislukt"));
   const regenerateSlot = (company, slot) =>
     run(`regen-${slot.id}`, () => request("POST", { lead_id: company.id, slot: slot.slot }, "Vernieuwen mislukt"));
-  const toggle = (company, slot) => run(`slot-${slot.id}`, () => request(
+  const setStatus = (company, slot, status) => run(`slot-${slot.id}`, () => request(
     "PATCH",
-    { lead_id: company.id, slot: slot.slot, status: slot.status === "approved" ? "draft" : "approved" },
+    { lead_id: company.id, slot: slot.slot, status },
     "Status wijzigen mislukt"
   ));
 
@@ -193,7 +232,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
     if (!targets.length) return;
     if (!onlyMissing && !(await confirmDialog({
       title: `Personalisatie voor ${targets.length} bedrijven opnieuw genereren?`,
-      message: "Bestaande teksten en goedkeuringen worden vervangen.",
+      message: "Bestaande teksten en goedkeuringen worden vervangen; weggelaten blokken blijven weggelaten.",
       confirmLabel: "Opnieuw genereren",
       danger: true,
     }))) return;
@@ -389,7 +428,7 @@ export default function PersonalizationReview({ campaign, editable, data, items,
                         busy={Boolean(busy) || Boolean(bulk)}
                         regenerating={busy === `regen-${slot.id}`}
                         onSaveText={(text) => saveText(company, slot, text)}
-                        onToggle={() => toggle(company, slot)}
+                        onStatus={(status) => setStatus(company, slot, status)}
                         onRegenerate={() => regenerateSlot(company, slot)}
                       />
                     ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Loader2, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, Check, EyeOff, Loader2, Sparkles, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { confirmDialog, notify } from "@/components/Dialogs";
 import { itemLinePlan } from "@/lib/newsletter-relevance";
@@ -18,12 +18,16 @@ async function readJson(res, fallback) {
 
 // Wat er in een vakje staat. Twijfel = de AI koos geen tekst terwijl het item
 // wel (mogelijk of sterk) past: dat wil je nakijken.
+// Weggelaten = er is een tekst, maar die staat bewust niet in de mail; dat
+// is geen twijfelgeval en wordt niet aangevuld.
 function cellState(company, item) {
-  const hasText = company.slots.some((slot) => slot.slot === `item:${item.id}` && slot.content?.text);
+  const slot = company.slots.find((entry) => entry.slot === `item:${item.id}`);
+  const skipped = slot?.status === "skipped";
+  const hasText = Boolean(slot?.content?.text) && !skipped;
   const assessment = company.scores?.[item.id] || null;
   const generated = company.approval !== "missing";
-  const doubt = generated && !hasText && (assessment?.score === "mogelijk" || assessment?.score === "sterk");
-  return { hasText, assessment, generated, doubt };
+  const doubt = generated && !hasText && !skipped && (assessment?.score === "mogelijk" || assessment?.score === "sterk");
+  return { hasText, skipped, assessment, generated, doubt };
 }
 
 function cellTitle(company, item, state, canGenerate) {
@@ -34,6 +38,7 @@ function cellTitle(company, item, state, canGenerate) {
     parts.push("Geen score (gegenereerd vóór de relevantiescore)");
   }
   if (!state.generated) parts.push("Nog niet gegenereerd");
+  else if (state.skipped) parts.push("Weggelaten: staat niet in de mail. Klik om te bekijken of terug te zetten.");
   else if (state.hasText) parts.push("Heeft een tekst. Klik om te bekijken.");
   else parts.push(canGenerate ? "Geen tekst. Klik om alleen deze tekst te schrijven." : "Geen tekst");
   return parts.join("\n");
@@ -64,7 +69,7 @@ export default function RelevanceOverview({ campaign, items, companies, editable
   const missingFor = (item) =>
     companies.filter((company) => {
       const state = states.get(company.id).get(item.id);
-      return state.generated && !state.hasText && company.newsletter_profile;
+      return state.generated && !state.hasText && !state.skipped && company.newsletter_profile;
     });
 
   async function generateCell(company, item) {
@@ -244,19 +249,21 @@ export default function RelevanceOverview({ campaign, items, companies, editable
                 </th>
                 {items.map((item) => {
                   const state = states.get(company.id).get(item.id);
-                  const canGenerate = editable && state.generated && !state.hasText && Boolean(company.newsletter_profile);
+                  const canGenerate = editable && state.generated && !state.hasText && !state.skipped && Boolean(company.newsletter_profile);
                   const key = `${company.id}:${item.id}`;
                   return (
                     <td key={item.id} className="border-b border-gray-100 p-0.5">
                       <button
                         type="button"
                         onClick={() => (state.hasText || !canGenerate ? onOpenCompany(company.id) : generateCell(company, item))}
-                        disabled={locked && !state.hasText}
+                        disabled={locked && !state.hasText && !state.skipped}
                         title={cellTitle(company, item, state, canGenerate)}
                         className={`w-full h-7 flex items-center justify-center gap-1.5 rounded-md border text-[10px] font-semibold ${
                           state.hasText
                             ? "border-green-100 bg-green-50 text-green-700"
-                            : state.doubt
+                            : state.skipped
+                              ? "border-gray-200 bg-gray-100 text-gray-400 line-through"
+                              : state.doubt
                               ? "border-dashed border-brand-orange bg-amber-50 text-brand-orange"
                               : "border-transparent text-gray-300 hover:border-gray-200"
                         } ${canGenerate ? "hover:border-brand-orange" : ""}`}
@@ -265,6 +272,8 @@ export default function RelevanceOverview({ campaign, items, companies, editable
                           <Loader2 className="w-3 h-3 animate-spin" />
                         ) : state.hasText ? (
                           <Check className="w-3 h-3" />
+                        ) : state.skipped ? (
+                          <><EyeOff className="w-3 h-3" />weg</>
                         ) : state.doubt ? (
                           "?"
                         ) : !state.generated ? (
@@ -291,6 +300,7 @@ export default function RelevanceOverview({ campaign, items, companies, editable
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
         <span className="flex items-center gap-1"><Check className="w-3 h-3 text-green-700" />tekst</span>
         <span className="flex items-center gap-1"><span className="px-1 rounded border border-dashed border-brand-orange text-brand-orange font-semibold">?</span>twijfel: past, maar geen tekst</span>
+        <span className="flex items-center gap-1"><span className="flex items-center gap-0.5 px-1 rounded border border-gray-200 bg-gray-100 text-gray-400 line-through"><EyeOff className="w-3 h-3" />weg</span>weggelaten</span>
         {Object.entries(SCORE_LABELS).map(([score, label]) => (
           <span key={score} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${SCORE_DOTS[score]}`} />{label.toLowerCase()}</span>
         ))}

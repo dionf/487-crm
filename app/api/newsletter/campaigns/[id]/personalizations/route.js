@@ -14,6 +14,7 @@ import {
   summarizeCompanyApproval,
 } from "@/lib/newsletter-personalize";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { canSkipSlot } from "@/lib/newsletter-relevance";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -165,8 +166,9 @@ async function generateItemForLeads(tenant, campaign, companies, body, userName)
 
 // Bewerk of keur goed.
 //   { lead_id, slot, text }            tekst aanpassen (blijft/wordt concept)
-//   { lead_id, slot, status }          één slot goedkeuren of terugzetten
-//   { lead_id, approve_all: true }     alle slots van een bedrijf goedkeuren
+//   { lead_id, slot, status }          één slot goedkeuren, terugzetten naar
+//                                      concept, weglaten (skipped) of weer tonen
+//   { lead_id, approve_all: true }     alle niet-weggelaten slots goedkeuren
 export async function PATCH(request, { params }) {
   try {
     const { tenant, userName } = requireAdmin(request);
@@ -187,7 +189,8 @@ export async function PATCH(request, { params }) {
         .update({ status: "approved", updated_at: now, edited_by: userName })
         .eq("tenant", tenant)
         .eq("campaign_id", id)
-        .eq("lead_id", body.lead_id);
+        .eq("lead_id", body.lead_id)
+        .neq("status", "skipped");
     } else {
       if (!body.slot) return Response.json({ error: "slot is verplicht" }, { status: 400 });
       const patch = { updated_at: now, edited_by: userName };
@@ -198,8 +201,11 @@ export async function PATCH(request, { params }) {
         patch.status = "draft";
       }
       if ("status" in body) {
-        if (!["draft", "approved"].includes(body.status)) {
+        if (!["draft", "approved", "skipped"].includes(body.status)) {
           return Response.json({ error: "Ongeldige status" }, { status: 400 });
+        }
+        if (body.status === "skipped" && !canSkipSlot(body.slot)) {
+          return Response.json({ error: "Dit onderdeel kun je niet weglaten" }, { status: 400 });
         }
         patch.status = body.status;
       }
@@ -212,11 +218,21 @@ export async function PATCH(request, { params }) {
         .eq("slot", body.slot);
     }
 
+    // Weglaten of weer tonen verandert de mail zelf; dat zie je pas in een
+    // nieuwe testmail.
+    let visibilityChanged = false;
+    if (!body.approve_all && "status" in body) {
+      const [current] = await fetchCampaignPersonalizations(tenant, id, [body.lead_id]).then((rows) =>
+        rows.filter((row) => row.slot === body.slot)
+      );
+      visibilityChanged = Boolean(current) && (current.status === "skipped") !== (body.status === "skipped");
+    }
+
     const { data, error } = await query.select("*");
     if (error) throw new Error(error.message);
     if (!data?.length) return Response.json({ error: "Geen personalisatie gevonden" }, { status: 404 });
     // Gewijzigde tekst moet eerst in een testmail gezien worden.
-    if ("text" in body) await resetCampaignTest(tenant, id);
+    if ("text" in body || visibilityChanged) await resetCampaignTest(tenant, id);
     return Response.json({ slots: data });
   } catch (error) {
     if (error instanceof Response) return error;

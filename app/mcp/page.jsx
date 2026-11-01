@@ -132,7 +132,13 @@ function McpContent() {
   async function revoke(connection) {
     const who = connection.user_name && connection.user_id !== user?.id ? ` van ${connection.user_name}` : "";
     if (!(await confirmDialog({ title: `Koppeling met ${connection.client_name}${who} intrekken?`, message: "Claude heeft daarna geen toegang meer tot het CRM tot er opnieuw wordt ingelogd.", confirmLabel: "Intrekken", danger: true }))) return;
-    const res = await apiFetch(`/api/account/connections?id=${connection.id}`, { method: "DELETE" });
+    let res;
+    try {
+      res = await apiFetch(`/api/account/connections?id=${connection.id}`, { method: "DELETE" });
+    } catch {
+      setError("Intrekken mislukt: geen verbinding met de server");
+      return;
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Intrekken mislukt");

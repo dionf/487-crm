@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiDelete, apiFetch } from "@/lib/api";
 import NewsletterHistory, { historySummaryText } from "@/components/NewsletterHistory";
 import { NEWSLETTER_STATE_LABELS, setEmailNewsletter } from "@/components/newsletter/contactNewsletter";
 import {
@@ -16,7 +16,7 @@ import {
   Megaphone,
   UserCircle,
 } from "lucide-react";
-import { confirmDialog } from "@/components/Dialogs";
+import { confirmDialog, notifyError } from "@/components/Dialogs";
 
 const normalize = (email) => String(email || "").trim().toLowerCase();
 
@@ -67,7 +67,11 @@ export default function ContactsPanel({ leadId, contacts = [], onUpdate }) {
   }
 
   async function handleDelete(id) {
-    await apiFetch(`/api/contacts/${id}`, { method: "DELETE" });
+    const deleteError = await apiDelete(`/api/contacts/${id}`, "Kon contactpersoon niet verwijderen");
+    if (deleteError) {
+      notifyError(deleteError);
+      return;
+    }
     onUpdate?.();
   }
 

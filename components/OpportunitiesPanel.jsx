@@ -20,7 +20,13 @@ export default function OpportunitiesPanel({ leadId, tenant, opportunities, quot
 
   async function request(url, options) {
     setError("");
-    const res = await apiFetch(url, options);
+    let res;
+    try {
+      res = await apiFetch(url, options);
+    } catch {
+      setError("Geen verbinding met de server");
+      return false;
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Er ging iets mis");

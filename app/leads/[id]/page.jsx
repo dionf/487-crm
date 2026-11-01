@@ -57,7 +57,7 @@ import {
   Hash,
   Megaphone,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiDelete, apiFetch } from "@/lib/api";
 import { confirmDialog, notify, notifyError } from "@/components/Dialogs";
 
 const CALL_OUTCOMES = [
@@ -188,7 +188,11 @@ export default function LeadDetailPage() {
   }
 
   async function deleteNote(noteId) {
-    await apiFetch(`/api/notes/${noteId}`, { method: "DELETE" });
+    const deleteError = await apiDelete(`/api/notes/${noteId}`, "Kon notitie niet verwijderen");
+    if (deleteError) {
+      notifyError(deleteError);
+      return;
+    }
     fetchData();
   }
 
@@ -203,7 +207,11 @@ export default function LeadDetailPage() {
   }
 
   async function deleteQuote(quoteId) {
-    await apiFetch(`/api/quotes/${quoteId}`, { method: "DELETE" });
+    const deleteError = await apiDelete(`/api/quotes/${quoteId}`, "Kon offerte niet verwijderen");
+    if (deleteError) {
+      notifyError(deleteError);
+      return;
+    }
     fetchData();
   }
 

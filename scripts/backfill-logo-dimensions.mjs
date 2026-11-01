@@ -18,7 +18,7 @@ const args = process.argv.slice(2);
 const COMMIT = args.includes("--commit");
 const tenant = args.find((arg) => arg.startsWith("--tenant="))?.slice("--tenant=".length) || null;
 const PAGE_SIZE = 500;
-const CONCURRENCY = 8;
+const CONCURRENCY = 3;
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env.local");
@@ -54,7 +54,14 @@ async function fetchLeads() {
 }
 
 async function dimensions(logoUrl) {
-  const res = await fetch(logoUrl, { signal: AbortSignal.timeout(15000) });
+  let res;
+  // Storage geeft bij veel verzoeken 429: even wachten en opnieuw.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    res = await fetch(logoUrl, { signal: AbortSignal.timeout(15000) });
+    if (res.status !== 429) break;
+    await res.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
   if (!meta.width || !meta.height) throw new Error("Afmetingen onbekend");

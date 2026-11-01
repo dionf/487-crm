@@ -10,11 +10,11 @@ import {
   getPersonalizedCampaign,
   regenerateSlotForLead,
   resetCampaignTest,
-  SKIPPABLE_SLOT,
   slotItemId,
   summarizeCompanyApproval,
 } from "@/lib/newsletter-personalize";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { canSkipSlot } from "@/lib/newsletter-relevance";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -204,7 +204,7 @@ export async function PATCH(request, { params }) {
         if (!["draft", "approved", "skipped"].includes(body.status)) {
           return Response.json({ error: "Ongeldige status" }, { status: 400 });
         }
-        if (body.status === "skipped" && !SKIPPABLE_SLOT(body.slot)) {
+        if (body.status === "skipped" && !canSkipSlot(body.slot)) {
           return Response.json({ error: "Dit onderdeel kun je niet weglaten" }, { status: 400 });
         }
         patch.status = body.status;

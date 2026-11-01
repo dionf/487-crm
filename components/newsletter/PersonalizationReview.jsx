@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import CompanyLogo from "@/components/CompanyLogo";
 import RelevanceOverview from "@/components/newsletter/RelevanceOverview";
 import { confirmDialog } from "@/components/Dialogs";
+import { canSkipSlot } from "@/lib/newsletter-relevance";
 
 const APPROVAL_BADGES = {
   approved: { label: "Goedgekeurd", className: "bg-green-50 text-green-700 border-green-100" },
@@ -45,9 +46,6 @@ function orderedSlots(company, items) {
   }
   return rows;
 }
-
-// Intro en de regels bij items kun je per bedrijf weglaten; de preheader niet.
-const canSkip = (slot) => slot === "intro" || slot.startsWith("item:");
 
 function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onStatus, onRegenerate }) {
   const [text, setText] = useState(slot.content?.text || "");
@@ -141,7 +139,7 @@ function SlotEditor({ slot, editable, busy, regenerating, onSaveText, onStatus, 
             {regenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             Vernieuwen
           </button>}
-          {canSkip(slot.slot) && (
+          {canSkipSlot(slot.slot) && (
             <button
               type="button"
               onClick={() => onStatus("skipped")}

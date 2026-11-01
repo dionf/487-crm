@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/newsletters";
 import {
   fetchCampaignCompanies,
+  fetchArticles,
   fetchCampaignItemScores,
   fetchCampaignItems,
   fetchCampaignPersonalizations,
@@ -114,13 +115,14 @@ async function generateItemForLeads(tenant, campaign, companies, body, userName)
   if (!items.some((item) => item.id === itemId)) return Response.json({ error: "Item niet gevonden" }, { status: 404 });
   const existing = await fetchCampaignPersonalizations(tenant, campaign.id, leadIds);
   const done = new Set(existing.filter((slot) => slot.slot === body.slot).map((slot) => slot.lead_id));
+  const articles = await fetchArticles(tenant, items);
 
   const results = await Promise.allSettled(
     leadIds.map(async (leadId) => {
       const company = companies.find((candidate) => candidate.id === leadId);
       if (!company) throw new Error("ontvangt deze campagne niet");
       if (done.has(leadId)) return { company, slot: null };
-      return { company, slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName) };
+      return { company, slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName, articles) };
     })
   );
   const slots = [];

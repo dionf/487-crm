@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { MAX_ITEM_LINES_LIMIT } from "@/lib/newsletter-relevance";
+import { parseMaxItemLines } from "@/lib/newsletter-relevance";
+import { deleteItemScores } from "@/lib/newsletter-personalize";
 import {
   getCampaignForTenant,
   isMissingNewsletterTable,
@@ -106,10 +107,7 @@ export async function PATCH(request, { params }) {
     }
     // Geldt voor de volgende generatie; bestaande teksten blijven staan.
     if ("max_item_lines" in body) {
-      const max = Number.parseInt(body.max_item_lines, 10);
-      if (!Number.isFinite(max) || max < 0 || max > MAX_ITEM_LINES_LIMIT) {
-        return Response.json({ error: `Maximum aantal blokken moet tussen 0 en ${MAX_ITEM_LINES_LIMIT} liggen` }, { status: 400 });
-      }
+      const max = parseMaxItemLines(body.max_item_lines);
       if (max !== currentCampaign.max_item_lines) patch.max_item_lines = max;
     }
     let includeSegments = null;
@@ -201,6 +199,7 @@ export async function PATCH(request, { params }) {
         .eq("tenant", tenant)
         .eq("campaign_id", id);
       if (slotError) throw new Error(slotError.message);
+      await deleteItemScores(tenant, id);
     }
     return Response.json({ campaign: data });
   } catch (error) {

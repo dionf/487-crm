@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Loader2, Mail, Save, Send, Users } from "lucide-react";
 import AudienceFields from "@/components/newsletter/AudienceFields";
+import CampaignActionBar, { actionButtonClass } from "@/components/newsletter/CampaignActionBar";
+import CampaignResults from "@/components/newsletter/CampaignResults";
 import { BatchFields, HtmlEditor, ScheduleField } from "@/components/newsletter/BroadcastFields";
 import { apiFetch } from "@/lib/api";
 import { campaignTargetIds, sameIdList } from "@/lib/newsletter-audience";
@@ -10,6 +12,7 @@ import {
   canMutateCampaign,
   canSendCampaign,
   formatDateTime,
+  hasSendStarted,
   isFutureDateTime,
   scheduledAtLabel,
   sendActionLabel,
@@ -200,29 +203,32 @@ export default function BroadcastCampaignEditor({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white border border-gray-100 rounded-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
-        <input
-          type="email"
-          value={testEmail}
-          onChange={(e) => setTestEmail(e.target.value)}
-          placeholder="Testmail naar"
-          disabled={!editable}
-          className={`flex-1 ${inputClass}`}
-        />
-        <button
-          type="button"
-          onClick={onTest}
-          disabled={!editable || !resendReady || !testEmail || !targetIds.length || Boolean(busy)}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 bg-white hover:border-brand-amber disabled:opacity-50"
-          title={!resendReady ? "Resend API-key opnieuw opslaan" : dirty ? "Wijzigingen opslaan en testmail versturen" : "Testmail versturen"}
-        >
-          {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-          {dirty ? "Opslaan en testmail" : "Testmail"}
-        </button>
+      <CampaignActionBar>
+        {editable && (
+          <>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="Testmail naar"
+              className={`flex-1 ${inputClass}`}
+            />
+            <button
+              type="button"
+              onClick={onTest}
+              disabled={!resendReady || !testEmail || !targetIds.length || Boolean(busy)}
+              className={actionButtonClass}
+              title={!resendReady ? "Resend API-key opnieuw opslaan" : dirty ? "Wijzigingen opslaan en testmail versturen" : "Testmail versturen"}
+            >
+              {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              {dirty ? "Opslaan en testmail" : "Testmail"}
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={() => onShowRecipients(campaign)}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold border border-gray-200 bg-white hover:border-brand-amber"
+          className={actionButtonClass}
         >
           <Users className="w-4 h-4" />
           Ontvangers
@@ -240,32 +246,17 @@ export default function BroadcastCampaignEditor({
             {sendActionLabel(campaign)}
           </button>
         )}
-      </div>
+      </CampaignActionBar>
 
       {error && <div className="px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
       {message && <div className="px-4 py-3 rounded-xl bg-green-50 text-green-700 text-sm">{message}</div>}
 
-      {!editable && (
+      {hasSendStarted(campaign) ? (
+        <CampaignResults campaign={campaign} />
+      ) : !editable && (
         <div className="bg-white border border-gray-100 rounded-card p-4 text-sm text-gray-600 space-y-1">
-          <p className="font-semibold text-brand-black">Deze campagne is niet meer te wijzigen.</p>
-          {campaign.recipient_count > 0 && <p>{campaign.recipient_count} ontvangers</p>}
-          {campaign.sent_at && <p>Verzonden {formatDateTime(campaign.sent_at)}</p>}
-          {campaign.scheduled_at && campaign.status !== "sent" && (
-            <p>{scheduledAtLabel(campaign)}: {formatDateTime(campaign.scheduled_at)}</p>
-          )}
-          {campaign.batch_mode === "automatic" && (
-            <p>
-              Batches: {campaign.batch_current_number || 0}/{campaign.batch_total_count || "?"}
-              {campaign.batch_next_run_at ? ` · volgende check ${formatDateTime(campaign.batch_next_run_at)}` : ""}
-            </p>
-          )}
-          {campaign.batch_last_health && (
-            <p>
-              Laatste check: {campaign.batch_last_health.counts?.bounced || 0} bounce,
-              {" "}{campaign.batch_last_health.counts?.complained || 0} complaint
-            </p>
-          )}
-          {campaign.batch_pause_reason && <p className="text-red-600">{campaign.batch_pause_reason}</p>}
+          <p className="font-semibold text-brand-black">Deze campagne is ingepland en niet meer te wijzigen.</p>
+          {campaign.scheduled_at && <p>{scheduledAtLabel(campaign)}: {formatDateTime(campaign.scheduled_at)}</p>}
         </div>
       )}
 

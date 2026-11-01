@@ -9,8 +9,7 @@ import { ArrowLeft, Code2, Loader2, Plus, Sparkles } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import AudienceFields from "@/components/newsletter/AudienceFields";
 import { BatchFields, HtmlEditor, ScheduleField } from "@/components/newsletter/BroadcastFields";
-import { LAYOUT_OPTIONS } from "@/components/newsletter/CampaignSettings";
-import ImageField from "@/components/newsletter/ImageField";
+import PersonalizedFields, { LayoutSelect } from "@/components/newsletter/PersonalizedFields";
 import { apiFetch } from "@/lib/api";
 import { campaignTargetIds } from "@/lib/newsletter-audience";
 import { PERSONALIZED_SUBJECT_TEMPLATE } from "@/lib/newsletter-subject";
@@ -32,8 +31,6 @@ const TYPES = [
 ];
 
 const inputClass = "w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber";
-const labelClass = "block text-xs font-semibold text-gray-500 uppercase";
-const labeledInputClass = "mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber";
 
 function emptyCampaign() {
   return {
@@ -198,37 +195,8 @@ export default function NieuweCampagnePage() {
                           intro en &quot;waarom interessant&quot;-regels. Na het aanmaken voeg je de items toe en review je de
                           personalisatie per bedrijf. Verzenden gaat in één keer, zonder planning.
                         </p>
-                        <label className={labelClass}>
-                          Opzet
-                          <select value={form.personalization_layout} onChange={set("personalization_layout")} className={labeledInputClass}>
-                            {LAYOUT_OPTIONS.map((option) => (
-                              <option key={option.id} value={option.id}>{option.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className={labelClass}>
-                          Kop bovenaan (optioneel)
-                          <input
-                            value={form.headline}
-                            onChange={set("headline")}
-                            placeholder="Bijv. Wat AI deze maand *voor het mkb* betekent"
-                            className={labeledInputClass}
-                          />
-                        </label>
-                        <p className="text-xs text-gray-500 -mt-2">Zet woorden tussen *sterretjes* voor het oranje accent.</p>
-                        <div className={labelClass}>
-                          Kopbeeld (optioneel)
-                          <div className="mt-1">
-                            <ImageField
-                              value={form.hero_image_url}
-                              onChange={(url) => setForm((current) => ({ ...current, hero_image_url: url }))}
-                            />
-                          </div>
-                        </div>
-                        <label className={labelClass}>
-                          Algemene inleiding (optioneel, voor iedereen gelijk)
-                          <textarea value={form.intro_text} onChange={set("intro_text")} rows={4} className={labeledInputClass} />
-                        </label>
+                        <LayoutSelect form={form} setForm={setForm} />
+                        <PersonalizedFields form={form} setForm={setForm} />
                       </div>
                     ) : (
                       <HtmlEditor

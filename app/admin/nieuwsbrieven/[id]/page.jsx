@@ -2,18 +2,20 @@
 
 export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, CheckCircle, Code2, Loader2, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle, Code2, Loader2, Send, Sparkles, Users } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import BroadcastCampaignEditor from "@/components/newsletter/BroadcastCampaignEditor";
+import CampaignActionBar, { actionButtonClass } from "@/components/newsletter/CampaignActionBar";
+import CampaignResults from "@/components/newsletter/CampaignResults";
 import CampaignSettings from "@/components/newsletter/CampaignSettings";
 import PersonalizedCampaignPanel from "@/components/newsletter/PersonalizedCampaignPanel";
 import RecipientsDrawer from "@/components/newsletter/RecipientsDrawer";
 import { apiFetch } from "@/lib/api";
 import { campaignTargetIds } from "@/lib/newsletter-audience";
-import { statusClass, statusLabel } from "@/lib/newsletter-status";
+import { canMutateCampaign, hasSendStarted, statusClass, statusLabel } from "@/lib/newsletter-status";
 import { useOrg } from "@/lib/org-context";
 import { campaignSubjectLabel } from "@/lib/newsletter-subject";
 
@@ -31,6 +33,11 @@ export default function NieuwsbriefCampagnePage() {
   const [error, setError] = useState("");
   // Na opslaan van de instellingen: personalisatie en voorbeeld opnieuw laden.
   const [refreshKey, setRefreshKey] = useState(0);
+  // Stap van de gepersonaliseerde werkruimte; de actiebalk springt naar stap 3.
+  const [personalizedTab, setPersonalizedTab] = useState("content");
+  const [progress, setProgress] = useState(null);
+  const panelRef = useRef(null);
+  const [panelJump, setPanelJump] = useState(0);
   const accent = organization?.theme?.accent || "#F5A623";
   const closeRecipients = useCallback(() => setRecipientsCampaign(null), []);
 
@@ -64,6 +71,12 @@ export default function NieuwsbriefCampagnePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Na "Naar testmail en verzenden": direct (niet smooth) naar de werkruimte
+  // scrollen, want de voorbeeldstap laadt en verandert de paginahoogte.
+  useEffect(() => {
+    if (panelJump) panelRef.current?.scrollIntoView({ block: "start" });
+  }, [panelJump]);
 
   const personalized = campaign?.mode === "personalized";
   const targetNames = campaign
@@ -110,21 +123,43 @@ export default function NieuwsbriefCampagnePage() {
                     Test verstuurd
                   </span>
                 )}
-                {personalized && (
-                  <button
-                    type="button"
-                    onClick={() => setRecipientsCampaign(campaign)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-pill text-xs font-semibold border border-gray-200 bg-white hover:border-brand-amber"
-                  >
-                    <Users className="w-4 h-4" />
-                    Ontvangers
-                  </button>
-                )}
               </div>
             </div>
 
             {personalized ? (
               <>
+                <CampaignActionBar>
+                  <p className="flex-1 text-sm text-gray-600">
+                    {campaign.status === "sent"
+                      ? "Verzonden. Het resultaat staat hieronder."
+                      : hasSendStarted(campaign)
+                        ? "Bezig met verzenden. Het resultaat vult zich hieronder."
+                        : progress
+                          ? `${progress.approved}/${progress.total} bedrijven goedgekeurd${campaign.test_sent_at ? " · testmail verstuurd" : ""}`
+                          : "Gepersonaliseerd per bedrijf"}
+                  </p>
+                  <button type="button" onClick={() => setRecipientsCampaign(campaign)} className={actionButtonClass}>
+                    <Users className="w-4 h-4" />
+                    Ontvangers
+                  </button>
+                  {canMutateCampaign(campaign) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPersonalizedTab("preview");
+                        setPanelJump((count) => count + 1);
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-pill text-sm font-semibold text-white"
+                      style={{ backgroundColor: accent }}
+                    >
+                      <Send className="w-4 h-4" />
+                      Naar testmail en verzenden
+                    </button>
+                  )}
+                </CampaignActionBar>
+
+                {hasSendStarted(campaign) && <CampaignResults campaign={campaign} />}
+
                 <CampaignSettings
                   campaign={campaign}
                   targetNames={targetNames}
@@ -134,7 +169,7 @@ export default function NieuwsbriefCampagnePage() {
                   }}
                 />
 
-                <div className="bg-white border border-gray-100 rounded-card p-5">
+                <div ref={panelRef} className="bg-white border border-gray-100 rounded-card p-5 scroll-mt-24">
                   <PersonalizedCampaignPanel
                     campaign={campaign}
                     refreshKey={refreshKey}
@@ -143,6 +178,9 @@ export default function NieuwsbriefCampagnePage() {
                     setTestEmail={setTestEmail}
                     accent={accent}
                     onCampaignChange={setCampaign}
+                    tab={personalizedTab}
+                    onTabChange={setPersonalizedTab}
+                    onProgress={setProgress}
                   />
                 </div>
               </>

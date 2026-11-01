@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
 import ImageField from "@/components/newsletter/ImageField";
 import { personalizedSubject } from "@/lib/newsletter-subject";
 
@@ -13,7 +14,6 @@ export const LAYOUT_OPTIONS = [
 ];
 
 const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
-const EDITABLE_STATUSES = new Set(["draft", "tested", "failed"]);
 
 const labelClass = "block text-xs font-semibold text-gray-500 uppercase";
 const inputClass = "mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-normal normal-case text-brand-black focus:outline-none focus:border-brand-amber disabled:bg-gray-50";

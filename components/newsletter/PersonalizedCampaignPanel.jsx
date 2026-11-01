@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
 import PersonalizedContentEditor from "@/components/newsletter/PersonalizedContentEditor";
 import PersonalizationReview from "@/components/newsletter/PersonalizationReview";
 import PersonalizedPreview from "@/components/newsletter/PersonalizedPreview";
@@ -13,7 +14,6 @@ const TABS = [
   { id: "preview", label: "3. Voorbeeld en verzenden" },
   { id: "social", label: "4. Social posts (optioneel)" },
 ];
-const EDITABLE_STATUSES = new Set(["draft", "tested", "failed"]);
 
 // Werkruimte voor een gepersonaliseerde campagne: items schrijven,
 // personalisatie per bedrijf reviewen, voorbeeld bekijken en verzenden, en

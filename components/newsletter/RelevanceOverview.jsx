@@ -240,7 +240,6 @@ export default function RelevanceOverview({ campaign, items, companies, editable
                 <th className="sticky left-0 z-10 bg-white border-b border-r border-gray-100 px-2 py-1 text-left font-normal">
                   <button type="button" onClick={() => onOpenCompany(company.id)} className="flex items-center gap-1.5 max-w-[200px] hover:text-brand-orange">
                     <span className="truncate">{company.company_name}</span>
-                    {company.sample && <span className="shrink-0 text-[9px] font-bold uppercase text-blue-700">vb</span>}
                   </button>
                 </th>
                 {items.map((item) => {

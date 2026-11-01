@@ -18,19 +18,13 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function isSampleOnly(tenant, campaign, leadId) {
-  if (!(campaign.sample_lead_ids || []).includes(leadId)) return false;
-  const companies = await fetchCampaignCompanies(tenant, campaign);
-  return !companies.some((company) => company.id === leadId);
-}
-
 // Overzicht per ontvangend bedrijf: profiel, ontvangers, slots en reviewstatus.
 export async function GET(request, { params }) {
   try {
     const { tenant } = requireAdmin(request);
     const { id } = await params;
     const campaign = await getPersonalizedCampaign(tenant, id);
-    const companies = await fetchCampaignCompanies(tenant, campaign, { includeSamples: true });
+    const companies = await fetchCampaignCompanies(tenant, campaign);
     const [slots, scores] = await Promise.all([
       fetchCampaignPersonalizations(tenant, id),
       fetchCampaignItemScores(tenant, id),
@@ -40,7 +34,6 @@ export async function GET(request, { params }) {
       company_name: company.company_name,
       logo_url: company.logo_url,
       website_url: company.website_url,
-      sample: company.sample,
       newsletter_profile: company.newsletter_profile,
       newsletter_profile_status: company.newsletter_profile_status,
       recipients: company.recipients.map((recipient) => ({ email: recipient.email, name: recipient.name })),
@@ -50,12 +43,10 @@ export async function GET(request, { params }) {
       // personalisaties van vóór de scores.
       scores: scores[company.id] || {},
     }));
-    // Voorbeeldbedrijven tellen niet mee: zij worden nooit verzonden.
-    const real = result.filter((company) => !company.sample);
-    const approved = real.filter((company) => company.approval === "approved").length;
+    const approved = result.filter((company) => company.approval === "approved").length;
     return Response.json({
       companies: result,
-      progress: { approved, total: real.length, ready: real.length > 0 && approved === real.length },
+      progress: { approved, total: result.length, ready: result.length > 0 && approved === result.length },
     });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -88,7 +79,7 @@ export async function POST(request, { params }) {
     const { id } = await params;
     const campaign = await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
-    const companies = await fetchCampaignCompanies(tenant, campaign, { includeSamples: true });
+    const companies = await fetchCampaignCompanies(tenant, campaign);
     if (Array.isArray(body.lead_ids)) {
       return await (body.slot
         ? generateItemForLeads(tenant, campaign, companies, body, userName)
@@ -101,8 +92,7 @@ export async function POST(request, { params }) {
     const result = body.slot
       ? { slot: await regenerateSlotForLead(tenant, campaign, items, company, body.slot, userName) }
       : { slots: await generatePersonalizationForLead(tenant, campaign, items, company, userName) };
-    // Een voorbeeldbedrijf wordt niet verzonden; de testmail blijft geldig.
-    if (!company.sample) await resetCampaignTest(tenant, id);
+    await resetCampaignTest(tenant, id);
     return Response.json(result);
   } catch (error) {
     if (error instanceof Response) return error;
@@ -131,12 +121,12 @@ async function runForLeads(tenant, campaign, companies, leadIds, work) {
   );
   const slots = [];
   const failures = [];
-  let realChanged = false;
+  let changed = false;
   for (const [index, result] of results.entries()) {
     if (result.status === "fulfilled") {
       if (result.value.slots) {
         slots.push(...result.value.slots);
-        if (!result.value.company.sample) realChanged = true;
+        changed = true;
       }
       continue;
     }
@@ -146,7 +136,7 @@ async function runForLeads(tenant, campaign, companies, leadIds, work) {
       : result.reason?.message || "mislukt";
     failures.push(`${name}: ${reason}`);
   }
-  if (realChanged) await resetCampaignTest(tenant, campaign.id);
+  if (changed) await resetCampaignTest(tenant, campaign.id);
   return Response.json({ slots, failures });
 }
 
@@ -184,6 +174,10 @@ export async function PATCH(request, { params }) {
     const campaign = await getPersonalizedCampaign(tenant, id, { editable: true });
     const body = await request.json();
     if (!body.lead_id) return Response.json({ error: "lead_id is verplicht" }, { status: 400 });
+    const companies = await fetchCampaignCompanies(tenant, campaign);
+    if (!companies.some((company) => company.id === body.lead_id)) {
+      return Response.json({ error: "Dit bedrijf ontvangt deze campagne niet" }, { status: 404 });
+    }
     const now = new Date().toISOString();
 
     let query;
@@ -221,9 +215,8 @@ export async function PATCH(request, { params }) {
     const { data, error } = await query.select("*");
     if (error) throw new Error(error.message);
     if (!data?.length) return Response.json({ error: "Geen personalisatie gevonden" }, { status: 404 });
-    // Gewijzigde tekst moet eerst in een testmail gezien worden (behalve bij
-    // een voorbeeldbedrijf dat geen echte ontvanger is).
-    if ("text" in body && !(await isSampleOnly(tenant, campaign, body.lead_id))) await resetCampaignTest(tenant, id);
+    // Gewijzigde tekst moet eerst in een testmail gezien worden.
+    if ("text" in body) await resetCampaignTest(tenant, id);
     return Response.json({ slots: data });
   } catch (error) {
     if (error instanceof Response) return error;

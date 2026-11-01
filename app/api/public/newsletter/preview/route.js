@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { fetchCampaignItems, fetchCampaignPersonalizations } from "@/lib/newsletter-personalize";
+import { fetchCampaignCompanies, fetchCampaignItems, fetchCampaignPersonalizations } from "@/lib/newsletter-personalize";
 import { renderPersonalizedNewsletter } from "@/lib/newsletter-render";
 import { previewUnsubscribeUrl } from "@/lib/newsletter-unsubscribe";
 import { verifyPreviewSignature } from "@/lib/newsletter-preview-link";
@@ -11,6 +11,20 @@ function notFound() {
     status: 404,
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
+}
+
+// Alleen bedrijven die de campagne (gaan) ontvangen hebben een webversie. Na
+// verzending telt de vastgelegde ontvangerslijst, anders de huidige doelgroep.
+async function isCampaignRecipient(campaign, leadId) {
+  const { data: snapshot, error } = await supabaseAdmin
+    .from("newsletter_campaign_recipients")
+    .select("lead_id")
+    .eq("tenant", campaign.tenant)
+    .eq("campaign_id", campaign.id);
+  if (error) throw new Error(error.message);
+  if (snapshot?.length) return snapshot.some((row) => row.lead_id === leadId);
+  const companies = await fetchCampaignCompanies(campaign.tenant, campaign);
+  return companies.some((company) => company.id === leadId);
 }
 
 // Webversie van een gepersonaliseerde nieuwsbrief: ?c=campagne&l=bedrijf&s=handtekening.
@@ -34,6 +48,7 @@ export async function GET(request) {
     .eq("tenant", campaign.tenant)
     .maybeSingle();
   if (!company) return notFound();
+  if (!(await isCampaignRecipient(campaign, company.id).catch(() => false))) return notFound();
 
   const [items, slots] = await Promise.all([
     fetchCampaignItems(campaign.tenant, campaign.id),

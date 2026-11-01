@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Plus, Trash2, FileText, Mail, Pencil } from "lucide-react";
 import { LANGUAGES } from "@/lib/translations/quote";
+import { confirmDialog } from "@/components/Dialogs";
 
 const BRANCH_KEYS = [
   { key: "scholen", label: "Scholen / onderwijs" },
@@ -143,7 +144,7 @@ export default function HipHotTekstenPage() {
   }
 
   async function deleteBranchText(id) {
-    if (!confirm("Branchetekst verwijderen?")) return;
+    if (!(await confirmDialog({ title: "Branchetekst verwijderen?", confirmLabel: "Verwijderen", danger: true }))) return;
     await apiFetch(`/api/hiphot/branch-texts/${id}`, { method: "DELETE" });
     fetchAll();
   }
@@ -191,7 +192,7 @@ export default function HipHotTekstenPage() {
   }
 
   async function deleteEmailTemplate(id) {
-    if (!confirm("Template verwijderen?")) return;
+    if (!(await confirmDialog({ title: "Template verwijderen?", confirmLabel: "Verwijderen", danger: true }))) return;
     await apiFetch(`/api/email-templates/${id}`, { method: "DELETE" });
     fetchAll();
   }

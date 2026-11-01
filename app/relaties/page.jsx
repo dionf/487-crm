@@ -12,6 +12,7 @@ import { NEWSLETTER_STATE_LABELS, setCompanyNewsletter, setEmailNewsletter } fro
 import { apiFetch } from "@/lib/api";
 import { useOrg } from "@/lib/org-context";
 import { getLeadStatuses, getRelationTypes, relationLabel } from "@/lib/constants";
+import { confirmDialog } from "@/components/Dialogs";
 
 const PAGE_SIZE = 50;
 const SCOPES = [
@@ -192,13 +193,13 @@ export default function RelatiesPage() {
 
   const toggleContact = (company, contact, subscribed) =>
     run(`contact-${contact.email}`, company.id, async () => {
-      if (!subscribed && !confirm(`${contact.email} uitschrijven voor de nieuwsbrief?`)) return;
+      if (!subscribed && !(await confirmDialog({ title: `${contact.email} uitschrijven voor de nieuwsbrief?`, confirmLabel: "Uitschrijven", danger: true }))) return;
       await setEmailNewsletter(contact.email, subscribed);
     });
 
   const toggleCompany = (company, subscribed) =>
     run(`company-${company.id}`, company.id, async () => {
-      if (!subscribed && !confirm(`${company.company_name} uitschrijven? Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.`)) return;
+      if (!subscribed && !(await confirmDialog({ title: `${company.company_name} uitschrijven?`, message: "Geen enkel adres van dit bedrijf ontvangt dan nog de nieuwsbrief.", confirmLabel: "Uitschrijven", danger: true }))) return;
       await setCompanyNewsletter(company.id, subscribed, { hardBounced: company.hard_bounced });
     });
 

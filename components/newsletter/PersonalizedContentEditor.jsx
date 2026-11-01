@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Edit3, Loader2, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import ImageField from "@/components/newsletter/ImageField";
+import { confirmDialog } from "@/components/Dialogs";
 
 export const SECTIONS = [
   { id: "company_news", label: "Nieuws van 48-7", hint: "Projecten, producten en diensten" },
@@ -157,8 +158,13 @@ export default function PersonalizedContentEditor({ campaign, editable, onChange
     );
   }
 
-  function deleteItem(item) {
-    if (!confirm(`Item "${item.title}" verwijderen? De personalisaties van dit item vervallen ook.`)) return;
+  async function deleteItem(item) {
+    if (!(await confirmDialog({
+      title: `Item "${item.title}" verwijderen?`,
+      message: "De personalisaties van dit item vervallen ook.",
+      confirmLabel: "Verwijderen",
+      danger: true,
+    }))) return;
     return mutate(`delete-${item.id}`, () => apiFetch(`${base}/${item.id}`, { method: "DELETE" }), "Verwijderen mislukt");
   }
 

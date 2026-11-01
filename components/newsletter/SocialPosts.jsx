@@ -5,6 +5,7 @@ import { Check, Copy, ExternalLink, Loader2, RefreshCw, Save, Sparkles, Trash2 }
 import { apiFetch } from "@/lib/api";
 import { SECTIONS } from "@/components/newsletter/PersonalizedContentEditor";
 import { SOCIAL_CHANNELS, formatSocialPost, normalizeHashtags } from "@/lib/newsletter-social-shared";
+import { confirmDialog } from "@/components/Dialogs";
 
 const inputClass = "w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-brand-amber";
 const CHANNEL_LABELS = Object.fromEntries(SOCIAL_CHANNELS.map((channel) => [channel.id, channel.label]));
@@ -55,7 +56,12 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
   }
 
   async function remove() {
-    if (!confirm(`${CHANNEL_LABELS[post.channel]}-post bij "${item?.title || "dit item"}" verwijderen?`)) return;
+    if (!(await confirmDialog({
+      title: `${CHANNEL_LABELS[post.channel]}-post verwijderen?`,
+      message: `De post bij "${item?.title || "dit item"}" wordt verwijderd.`,
+      confirmLabel: "Verwijderen",
+      danger: true,
+    }))) return;
     setBusy("delete");
     setError("");
     try {
@@ -79,8 +85,13 @@ function PostCard({ campaignId, post, item, onSaved, onDeleted, onRegenerate, re
     }
   }
 
-  function regenerate() {
-    if (dirty && !confirm("Je niet-opgeslagen wijzigingen gaan verloren. Toch opnieuw genereren?")) return;
+  async function regenerate() {
+    if (dirty && !(await confirmDialog({
+      title: "Opnieuw genereren?",
+      message: "Je niet-opgeslagen wijzigingen gaan verloren.",
+      confirmLabel: "Toch opnieuw genereren",
+      danger: true,
+    }))) return;
     onRegenerate(post.item_id, post.channel);
   }
 

@@ -8,6 +8,7 @@ import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, X, Save, Shield, User, ArrowLeft } from "lucide-react";
+import { confirmDialog } from "@/components/Dialogs";
 
 export default function UserManagementPage() {
   const { isAdmin, organization } = useOrg();
@@ -64,7 +65,7 @@ export default function UserManagementPage() {
   }
 
   async function deleteUser(id) {
-    if (!confirm("Weet je zeker dat je deze gebruiker wilt verwijderen?")) return;
+    if (!(await confirmDialog({ title: "Gebruiker verwijderen?", message: "Weet je zeker dat je deze gebruiker wilt verwijderen?", confirmLabel: "Verwijderen", danger: true }))) return;
     await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
     fetchUsers();
   }

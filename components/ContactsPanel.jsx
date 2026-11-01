@@ -16,6 +16,7 @@ import {
   Megaphone,
   UserCircle,
 } from "lucide-react";
+import { confirmDialog } from "@/components/Dialogs";
 
 const normalize = (email) => String(email || "").trim().toLowerCase();
 
@@ -72,7 +73,7 @@ export default function ContactsPanel({ leadId, contacts = [], onUpdate }) {
 
   // Megafoon = dit adres ontvangt de nieuwsbrief (adresblokkade aan/uit).
   async function toggleNewsletter(contact, addressOn) {
-    if (addressOn && !confirm(`${contact.email} uitschrijven voor de nieuwsbrief?`)) return;
+    if (addressOn && !(await confirmDialog({ title: `${contact.email} uitschrijven voor de nieuwsbrief?`, confirmLabel: "Uitschrijven", danger: true }))) return;
     setNewsletterError("");
     try {
       await setEmailNewsletter(contact.email, !addressOn);

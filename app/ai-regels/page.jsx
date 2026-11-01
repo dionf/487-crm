@@ -17,6 +17,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { confirmDialog, notify, notifyError } from "@/components/Dialogs";
 
 const FILTER_OPTIONS = [
   { id: "active", label: "Actief" },
@@ -70,18 +71,18 @@ export default function AIRegelsPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Kon niet flaggen");
+      notifyError(data.error || "Kon niet flaggen");
       return;
     }
     if (data.auto_deactivated) {
-      alert(`Regel is nu gedeactiveerd na ${data.flag_count} flags.`);
+      notify(`Regel is nu gedeactiveerd na ${data.flag_count} flags.`);
     }
     fetchLessons();
   }
 
   async function handleDelete(lesson) {
     if (!effectiveAdmin) return;
-    if (!confirm(`Deze regel definitief verwijderen?\n\n"${lesson.lesson}"`)) return;
+    if (!(await confirmDialog({ title: "Deze regel definitief verwijderen?", message: `"${lesson.lesson}"`, confirmLabel: "Verwijderen", danger: true }))) return;
     await apiFetch(`/api/ai-lessons/${lesson.id}`, { method: "DELETE" });
     fetchLessons();
   }

@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { EDITABLE_STATUSES } from "@/lib/newsletter-status";
 import PersonalizedFields, { LayoutSelect, inputClass, labelClass } from "@/components/newsletter/PersonalizedFields";
 import { personalizedSubject } from "@/lib/newsletter-subject";
+import { confirmDialog } from "@/components/Dialogs";
 
 const FIELDS = ["name", "preview_text", "headline", "hero_image_url", "intro_text", "personalization_layout"];
 
@@ -37,7 +38,12 @@ export default function CampaignSettings({ campaign, targetNames = [], onSaved }
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
   async function save() {
-    if (layoutChanged && !confirm("Een andere opzet wist alle gegenereerde personalisatie. Doorgaan?")) return;
+    if (layoutChanged && !(await confirmDialog({
+      title: "Andere opzet kiezen?",
+      message: "Een andere opzet wist alle gegenereerde personalisatie.",
+      confirmLabel: "Doorgaan",
+      danger: true,
+    }))) return;
     setBusy(true);
     setError("");
     try {

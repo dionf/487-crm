@@ -8,6 +8,7 @@ import { useOrg } from "@/lib/org-context";
 import { apiFetch } from "@/lib/api";
 import { MCP_TOOL_DOCS } from "@/lib/mcp/tool-docs";
 import { Bot, Check, Copy, Link2, ShieldCheck, Terminal, Trash2, Monitor } from "lucide-react";
+import { confirmDialog } from "@/components/Dialogs";
 
 function CopyField({ label, value, mono = true }) {
   const [copied, setCopied] = useState(false);
@@ -130,7 +131,7 @@ function McpContent() {
 
   async function revoke(connection) {
     const who = connection.user_name && connection.user_id !== user?.id ? ` van ${connection.user_name}` : "";
-    if (!confirm(`Koppeling met ${connection.client_name}${who} intrekken? Claude heeft daarna geen toegang meer tot het CRM tot er opnieuw wordt ingelogd.`)) return;
+    if (!(await confirmDialog({ title: `Koppeling met ${connection.client_name}${who} intrekken?`, message: "Claude heeft daarna geen toegang meer tot het CRM tot er opnieuw wordt ingelogd.", confirmLabel: "Intrekken", danger: true }))) return;
     const res = await apiFetch(`/api/account/connections?id=${connection.id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Copy, ExternalLink, Loader2, Mail, Send } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { confirmDialog, promptDialog } from "@/components/Dialogs";
 
 const SENDABLE_STATUSES = new Set(["draft", "tested", "failed"]);
 
@@ -84,13 +85,24 @@ export default function PersonalizedPreview({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Kopieer de link", preview.preview_url);
+      await promptDialog({
+        title: "Kopieer de link",
+        message: "Automatisch kopiëren lukte niet. Selecteer de link en kopieer hem zelf.",
+        defaultValue: preview.preview_url,
+        readOnly: true,
+        confirmLabel: "Sluiten",
+        cancelLabel: null,
+      });
     }
   }
 
   async function send() {
     const recipientCount = realCompanies.reduce((sum, company) => sum + company.recipients.length, 0);
-    if (!confirm(`"${campaign.name}" nu definitief versturen naar ${recipientCount} ontvangers bij ${realCompanies.length} bedrijven?`)) return;
+    if (!(await confirmDialog({
+      title: `"${campaign.name}" nu definitief versturen?`,
+      message: `De nieuwsbrief gaat naar ${recipientCount} ontvangers bij ${realCompanies.length} bedrijven. Dit kan niet worden teruggedraaid.`,
+      confirmLabel: "Definitief versturen",
+    }))) return;
     setBusy("send");
     setError("");
     setMessage("");

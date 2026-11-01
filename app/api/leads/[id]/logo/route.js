@@ -1,6 +1,6 @@
 import { getVerifiedSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { importImageFromUrl, importLogoFromWebsite, readUploadedFile, uploadPublicImage } from "@/lib/media";
+import { importLogoFromUrl, importLogoFromWebsite, readUploadedFile, uploadLogo } from "@/lib/media";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +18,18 @@ async function loadLead(tenant, id) {
   return data;
 }
 
-async function saveLogo(tenant, id, logoUrl) {
+async function saveLogo(tenant, id, logo) {
   const { data, error } = await supabaseAdmin
     .from("leads")
-    .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
+    .update({
+      logo_url: logo?.url || null,
+      logo_width: logo?.width || null,
+      logo_height: logo?.height || null,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .eq("tenant", tenant)
-    .select("id, logo_url")
+    .select("id, logo_url, logo_width, logo_height")
     .single();
   if (error) throw new Error(error.message);
   return data;
@@ -47,22 +52,22 @@ export async function POST(request, { params }) {
 
     const { id } = await params;
     const lead = await loadLead(session.tenant, id);
-    let logoUrl;
+    let logo;
     if ((request.headers.get("content-type") || "").includes("multipart/form-data")) {
       const buffer = await readUploadedFile(await request.formData());
-      logoUrl = await uploadPublicImage({ tenant: session.tenant, folder: "logos", buffer });
+      logo = await uploadLogo({ tenant: session.tenant, buffer });
     } else {
       const body = await request.json();
       if (body.source === "website") {
         if (!lead.website_url) throw new Error("Dit bedrijf heeft geen website");
-        logoUrl = await importLogoFromWebsite({ tenant: session.tenant, websiteUrl: lead.website_url });
+        logo = await importLogoFromWebsite({ tenant: session.tenant, websiteUrl: lead.website_url });
       } else if (body.url) {
-        logoUrl = await importImageFromUrl({ tenant: session.tenant, folder: "logos", url: String(body.url).trim() });
+        logo = await importLogoFromUrl({ tenant: session.tenant, url: String(body.url).trim() });
       } else {
         throw new Error("Geef een bestand, een URL of source: website");
       }
     }
-    return Response.json({ lead: await saveLogo(session.tenant, id, logoUrl) });
+    return Response.json({ lead: await saveLogo(session.tenant, id, logo), source: logo.source || null });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: error.message }, { status: 400 });

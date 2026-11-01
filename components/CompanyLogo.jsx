@@ -90,7 +90,7 @@ export default function CompanyLogo({ leadId, logoUrl, websiteUrl, onChange, siz
       <input
         ref={fileRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
         className="hidden"
         onChange={(e) => {
           upload(e.target.files?.[0]);
